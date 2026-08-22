@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Verified research tools for the Yang–Zhang 23-Wang-tile reduction"
 requires-python = ">=3.11"
 dependencies = [
-    "z3-solver>=4.15,<5",
+    "z3-solver>=4.15,<6",
 ]
 
 [dependency-groups]
