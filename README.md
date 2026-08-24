@@ -166,7 +166,7 @@ tileability.
 
 ## Current status
 
-Implemented and tested as of 24 August 2026:
+Implemented and tested as of 25 August 2026:
 
 - canonical static definition of the 23 atomic Wang tiles;
 - generalized-tile family metadata kept outside solver semantics;
@@ -243,6 +243,9 @@ Implemented and tested as of 24 August 2026:
 - a JSON Lines comparison suite over fixed `.cm13` inputs, with separate
   prepared-Region and file-to-verified-decision scopes for the native
   reference, native optimized, Boolean Z3, and Wang Z3 paths;
+- a provenance-pinned PAP Render snapshot under `renderer/`, preserving its
+  standalone Python 3.14 project and 144-test suite without coupling its
+  graphical dependencies to the native core or Python reference tools;
 - C17/OpenMP build scaffold and GitHub Actions CI with strict GCC/Clang,
   ASan, UBSan, GCC static analysis, Memcheck, and Cachegrind paths.
 
@@ -283,6 +286,19 @@ Run the complete current check:
 make clean
 make check
 ```
+
+The imported renderer remains a separate locked Python project. Its Pillow and
+NumPy dependencies are not installed by the root project or exercised by
+`make check`. Run its 144 tests independently:
+
+```sh
+cd renderer
+uv run --locked pytest -q
+```
+
+CI mirrors that command in a separate read-only Python 3.14 job. Snapshot
+provenance and update instructions are recorded in
+[`renderer/UPSTREAM.md`](renderer/UPSTREAM.md).
 
 Useful individual targets:
 

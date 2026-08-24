@@ -51,6 +51,26 @@ jobs:
       - name: Build and test
         run: make check
 
+  renderer-tests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          python-version: "3.14"
+
+      - name: Test renderer
+        working-directory: renderer
+        run: uv run --locked pytest -q
+
   strict-compilers:
     runs-on: ubuntu-latest
 

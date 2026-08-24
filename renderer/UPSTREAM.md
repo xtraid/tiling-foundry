@@ -40,9 +40,9 @@ renderer environment under `renderer/.venv`; its local `.gitignore` excludes
 that environment and generated Python/build files.
 
 The preserved `renderer/.github/workflows/ci.yml` is nested upstream evidence;
-GitHub does not run it as a workflow of the containing repository. Adding a
-separate top-level renderer CI job is deliberately outside this snapshot-only
-import.
+GitHub does not run it as a workflow of the containing repository. The
+top-level `.github/workflows/ci.yml` instead runs the same locked suite in a
+separate read-only Python 3.14 job.
 
 ## Updating the snapshot
 
