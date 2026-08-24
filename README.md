@@ -104,6 +104,14 @@ Boolean Z3 solves the original formula rather than the Wang region, so its row
 is not a speedup claim. The much faster UNSAT rows use deliberately shallow
 contradictions, not hard UNSAT search.
 
+The Wang Z3 oracle now models one finite edge-tuple relation per active cell
+and shares a single color term across each internal edge. A controlled
+single-sample SAT comparison on the same CPU reduced the prepared-Region path
+from 10.666 s to 2.605 s and the complete-file path from 10.560 s to 2.620 s,
+while peak process RSS decreased slightly. The model, duplicate-tile semantics,
+test evidence, command, and measurement limits are recorded in the
+[edge-table report](docs/wang_z3_edge_table_2026-08-24.md).
+
 ## Goal
 
 The intended end-to-end pipeline is:
@@ -158,7 +166,7 @@ tileability.
 
 ## Current status
 
-Implemented and tested as of 21 August 2026:
+Implemented and tested as of 24 August 2026:
 
 - canonical static definition of the 23 atomic Wang tiles;
 - generalized-tile family metadata kept outside solver semantics;
@@ -206,7 +214,8 @@ Implemented and tested as of 21 August 2026:
   the native `TILESET` symbol without importing ctypes into models or oracles;
 - independent Boolean and Wang witness checkers plus Z3 oracles: the Boolean
   path preserves repeated clause positions, while the Wang path consumes the
-  copied `Region`, enforces boundary and oriented adjacency constraints, and
+  copied `Region`, constrains each active cell to a finite edge-tuple relation,
+  shares color terms across active internal edges, enforces boundaries, and
   returns a dense tiling only for SAT;
 - a shared `libwang.so` build and tested C-to-Python formula and region
   adapters that copy results into immutable Python storage, report native

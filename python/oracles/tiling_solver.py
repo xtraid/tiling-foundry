@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from enum import Enum
 
-from z3 import ArithRef, Implies, Int, Or, Solver, sat, unsat
+from z3 import And, ArithRef, Int, Or, Solver, sat, unsat
 
 from model.region import Region
 from model.tileset import (
@@ -12,6 +12,7 @@ from model.tileset import (
     DIR_COUNT,
     E,
     S,
+    Tile,
     Tileset,
 )
 
@@ -49,94 +50,85 @@ def _validate_tileset(tileset: Tileset) -> None:
             raise ValueError("tile contains an invalid color")
 
 
-def solve_tiling(region: Region, tileset: Tileset) -> TilingSolveResult:
-    """Solve an existing region without parsing or rebuilding its reduction.
-
-    The immutable tileset is validated before use. SAT returns one dense
-    row-major tile ID per active cell and ``None`` for inactive cells; UNSAT
-    and UNKNOWN return no tiling.
-    """
-    _validate_tileset(tileset)
-
-    solver = Solver()
-    variables: list[ArithRef | None] = [
-        Int(f"tile_{index}") if active else None
-        for index, active in enumerate(region.active)
-    ]
-    compatibility = {
-        direction: tuple(
-            tuple(
-                adjacent_id
-                for adjacent_id, adjacent in enumerate(tileset)
-                if tile[direction]
-                == adjacent[(direction + 2) % DIR_COUNT]
-            )
-            for tile in tileset
-        )
-        for direction in (E, S)
-    }
-
-    for index, variable in enumerate(variables):
-        if variable is None:
-            continue
-
-        solver.add(
-            Or(
-                *(variable == tile_id for tile_id in range(len(tileset)))
-            )
-        )
-        for direction, required_color in enumerate(region.boundary[index]):
-            if required_color != COLOR_NONE:
-                solver.add(
-                    Or(
-                        *(
-                            variable == tile_id
-                            for tile_id, tile in enumerate(tileset)
-                            if tile[direction] == required_color
-                        )
-                    )
-                )
+def _edge_terms(
+    region: Region,
+) -> tuple[tuple[ArithRef, ArithRef, ArithRef, ArithRef] | None, ...]:
+    """Create one color term per exposed edge and share every internal edge."""
+    terms: list[
+        tuple[ArithRef, ArithRef, ArithRef, ArithRef] | None
+    ] = [None] * len(region.active)
 
     for y in range(region.height):
         for x in range(region.width):
             index = y * region.width + x
-            variable = variables[index]
-            if variable is None:
+            if not region.active[index]:
                 continue
 
-            neighbors = []
-            if x + 1 < region.width:
-                neighbors.append((E, index + 1))
-            if y + 1 < region.height:
-                neighbors.append((S, index + region.width))
+            above = terms[index - region.width] if y > 0 else None
+            left = terms[index - 1] if x > 0 else None
+            north = above[S] if above is not None else Int(f"edge_{index}_n")
+            west = left[E] if left is not None else Int(f"edge_{index}_w")
+            terms[index] = (
+                north,
+                Int(f"edge_{index}_e"),
+                Int(f"edge_{index}_s"),
+                west,
+            )
 
-            for direction, neighbor_index in neighbors:
-                neighbor = variables[neighbor_index]
-                if neighbor is None:
-                    continue
-                for tile_id, adjacent_ids in enumerate(
-                    compatibility[direction]
-                ):
-                    solver.add(
-                        Implies(
-                            variable == tile_id,
-                            Or(
-                                *(
-                                    neighbor == adjacent_id
-                                    for adjacent_id in adjacent_ids
-                                )
-                            ),
-                        )
+    return tuple(terms)
+
+
+def solve_tiling(region: Region, tileset: Tileset) -> TilingSolveResult:
+    """Solve an existing region without parsing or rebuilding its reduction.
+
+    Each cell is constrained to one tileset edge tuple and adjacent cells
+    share their internal edge-color term. SAT returns one dense row-major tile
+    ID per active cell and ``None`` for inactive cells; UNSAT and UNKNOWN
+    return no tiling. Duplicate edge tuples remain valid, constraint-equivalent
+    tile IDs.
+    """
+    _validate_tileset(tileset)
+
+    solver = Solver()
+    edges = _edge_terms(region)
+    tile_id_by_edges: dict[Tile, int] = {}
+    for tile_id, tile in enumerate(tileset):
+        tile_id_by_edges.setdefault(tile, tile_id)
+
+    for index, cell_edges in enumerate(edges):
+        if cell_edges is None:
+            continue
+
+        solver.add(
+            Or(
+                *(
+                    And(
+                        *(
+                            cell_edges[direction] == color
+                            for direction, color in enumerate(tile)
+                        ),
                     )
+                    for tile in tile_id_by_edges
+                )
+            )
+        )
+        for direction, required_color in enumerate(region.boundary[index]):
+            if required_color != COLOR_NONE:
+                solver.add(cell_edges[direction] == required_color)
 
     status = solver.check()
     if status == sat:
         model = solver.model()
         tiling = tuple(
             None
-            if variable is None
-            else model.eval(variable, model_completion=True).as_long()
-            for variable in variables
+            if cell_edges is None
+            else tile_id_by_edges[
+                tuple(
+                    model.eval(edge, model_completion=True).as_long()
+                    for edge in cell_edges
+                )
+            ]
+            for cell_edges in edges
         )
         return TilingSolveResult(TilingSolveStatus.SAT, tiling)
 
