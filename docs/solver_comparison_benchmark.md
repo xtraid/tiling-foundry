@@ -6,7 +6,7 @@ description: Reproducible protocol for comparing the native and Python Z3 decisi
 section: Cross-engine benchmarks
 document_kind: Benchmark protocol
 status: Current protocol
-updated: 2026-08-21
+updated: 2026-08-24
 nav_order: 10
 ---
 
@@ -146,3 +146,9 @@ two runs are treated as a controlled comparison.
 records the first seven-sample, CPU-pinned smoke baseline, including complete
 timing ranges, process RSS, correctness results, the shallow-UNSAT explanation,
 and the limits on cross-problem interpretation.
+
+The later
+[Wang Z3 edge-table report]({{ '/wang_z3_edge_table_2026-08-24/' | relative_url }})
+records the oracle's constraint-model refactor and its directly comparable
+single-sample before/after check. It does not rewrite the historical baseline
+or introduce a timing threshold.

@@ -1,4 +1,8 @@
+from itertools import product
 import unittest
+from unittest.mock import Mock, patch
+
+from z3 import unknown
 
 from model.region import Region
 from model.tileset import (
@@ -8,20 +12,46 @@ from model.tileset import (
     COLOR_NONE,
     COLOR_V,
     COLOR_V0_A,
+    E,
+    N,
+    S,
     TILESET,
     TILE_F0,
     TILE_F1,
     TILE_L0,
+    Tileset,
+    W,
 )
 from oracles.tiling_check import is_valid_tiling
 from oracles.tiling_solver import (
     TilingSolveResult,
     TilingSolveStatus,
+    _edge_terms,
     solve_tiling,
 )
 
 
 NO_BOUNDARY = (COLOR_NONE, COLOR_NONE, COLOR_NONE, COLOR_NONE)
+
+
+def _is_brute_force_sat(region: Region, tileset: Tileset) -> bool:
+    active_indices = tuple(
+        index for index, active in enumerate(region.active) if active
+    )
+    for selected_tiles in product(
+        range(len(tileset)),
+        repeat=len(active_indices),
+    ):
+        tiling: list[int | None] = [None] * len(region.active)
+        for index, tile_id in zip(
+            active_indices,
+            selected_tiles,
+            strict=True,
+        ):
+            tiling[index] = tile_id
+        if is_valid_tiling(region, tileset, tiling):
+            return True
+    return False
 
 
 class TilingSolveResultTests(unittest.TestCase):
@@ -113,6 +143,51 @@ class TilingCheckerTests(unittest.TestCase):
 
 
 class TilingSolverTests(unittest.TestCase):
+    def test_shares_exactly_the_active_internal_edge_terms(self) -> None:
+        region = Region(
+            width=2,
+            height=2,
+            active=(True,) * 4,
+            boundary=(NO_BOUNDARY,) * 4,
+        )
+
+        edges = _edge_terms(region)
+        top_left = edges[0]
+        top_right = edges[1]
+        bottom_left = edges[2]
+        bottom_right = edges[3]
+        assert top_left is not None
+        assert top_right is not None
+        assert bottom_left is not None
+        assert bottom_right is not None
+
+        self.assertIs(top_left[E], top_right[W])
+        self.assertIs(top_left[S], bottom_left[N])
+        self.assertIs(top_right[S], bottom_right[N])
+        self.assertIs(bottom_left[E], bottom_right[W])
+
+    def test_does_not_share_constraints_across_an_inactive_cell(self) -> None:
+        all_b = (COLOR_B, COLOR_B, COLOR_B, COLOR_B)
+        all_v = (COLOR_V, COLOR_V, COLOR_V, COLOR_V)
+        tileset = (all_b, all_v)
+        region = Region(
+            width=3,
+            height=1,
+            active=(True, False, True),
+            boundary=(
+                (COLOR_NONE, COLOR_NONE, COLOR_NONE, COLOR_B),
+                NO_BOUNDARY,
+                (COLOR_NONE, COLOR_V, COLOR_NONE, COLOR_NONE),
+            ),
+        )
+
+        result = solve_tiling(region, tileset)
+
+        self.assertEqual(result.status, TilingSolveStatus.SAT)
+        self.assertEqual(result.tiling, (0, None, 1))
+        self.assertIsNotNone(result.tiling)
+        self.assertTrue(is_valid_tiling(region, tileset, result.tiling))
+
     def test_solves_a_single_forced_tile(self) -> None:
         region = Region(
             width=1,
@@ -191,6 +266,98 @@ class TilingSolverTests(unittest.TestCase):
 
                 self.assertEqual(result.status, TilingSolveStatus.UNSAT)
                 self.assertIsNone(result.tiling)
+
+    def test_matches_brute_force_on_small_generic_tilesets(self) -> None:
+        generic_tileset = (
+            (COLOR_B, COLOR_B, COLOR_B, COLOR_B),
+            (COLOR_B, COLOR_V, COLOR_B, COLOR_V),
+            (COLOR_V, COLOR_B, COLOR_V, COLOR_B),
+            (COLOR_B, COLOR_B, COLOR_B, COLOR_B),
+        )
+        regions = (
+            Region(
+                width=2,
+                height=1,
+                active=(True, True),
+                boundary=(NO_BOUNDARY, NO_BOUNDARY),
+            ),
+            Region(
+                width=2,
+                height=1,
+                active=(True, True),
+                boundary=(
+                    (COLOR_NONE, COLOR_NONE, COLOR_NONE, COLOR_B),
+                    (COLOR_NONE, COLOR_V, COLOR_NONE, COLOR_NONE),
+                ),
+            ),
+            Region(
+                width=1,
+                height=2,
+                active=(True, True),
+                boundary=(
+                    (COLOR_B, COLOR_NONE, COLOR_NONE, COLOR_NONE),
+                    (COLOR_NONE, COLOR_NONE, COLOR_V, COLOR_NONE),
+                ),
+            ),
+            Region(
+                width=3,
+                height=1,
+                active=(True, False, True),
+                boundary=(NO_BOUNDARY,) * 3,
+            ),
+        )
+
+        for region in regions:
+            with self.subTest(
+                width=region.width,
+                height=region.height,
+                active=region.active,
+            ):
+                result = solve_tiling(region, generic_tileset)
+                expected = _is_brute_force_sat(region, generic_tileset)
+
+                self.assertEqual(
+                    result.status is TilingSolveStatus.SAT,
+                    expected,
+                )
+                if result.tiling is not None:
+                    self.assertTrue(
+                        is_valid_tiling(region, generic_tileset, result.tiling)
+                    )
+
+    def test_returns_an_equivalent_id_for_duplicate_tiles(self) -> None:
+        duplicated_tile = (COLOR_B, COLOR_0, COLOR_B, COLOR_0)
+        tileset = (duplicated_tile, duplicated_tile)
+        region = Region(
+            width=1,
+            height=1,
+            active=(True,),
+            boundary=((COLOR_B, COLOR_0, COLOR_B, COLOR_0),),
+        )
+
+        result = solve_tiling(region, tileset)
+
+        self.assertEqual(result.status, TilingSolveStatus.SAT)
+        self.assertIn(result.tiling, ((0,), (1,)))
+        self.assertIsNotNone(result.tiling)
+        self.assertTrue(is_valid_tiling(region, tileset, result.tiling))
+
+    def test_preserves_unknown_without_requesting_a_model(self) -> None:
+        solver = Mock()
+        solver.check.return_value = unknown
+        region = Region(
+            width=1,
+            height=1,
+            active=(True,),
+            boundary=(NO_BOUNDARY,),
+        )
+
+        with patch("oracles.tiling_solver.Solver", return_value=solver):
+            result = solve_tiling(region, TILESET)
+
+        self.assertEqual(result.status, TilingSolveStatus.UNKNOWN)
+        self.assertIsNone(result.tiling)
+        solver.model.assert_not_called()
 
     def test_rejects_invalid_tileset_storage(self) -> None:
         region = Region(

@@ -6,7 +6,7 @@ description: How Tiling Foundry separates source data, derived state, native lif
 section: Architecture and correctness
 document_kind: Architecture reference
 status: Current implementation
-updated: 2026-08-21
+updated: 2026-08-24
 nav_order: 10
 ---
 
@@ -149,9 +149,12 @@ There are two distinct oracle contracts:
 - Boolean Z3 (implemented): `Formula -> Boolean constraints ->
   SAT/UNSAT/UNKNOWN` and an assignment only for SAT. It performs no parsing,
   I/O, ctypes work, region construction, or reduction.
-- Wang Z3 (implemented): `Region + canonical TILESET -> tiling constraints ->
-  SAT/UNSAT/UNKNOWN` and a dense tiling only for SAT. It receives the same
-  concrete region as the native solver and does not rebuild Yang–Zhang.
+- Wang Z3 (implemented): `Region + TILESET -> per-cell edge-table constraints
+  with shared internal edge terms -> SAT/UNSAT/UNKNOWN` and a dense tiling only
+  for SAT. It receives the same concrete region as the native solver and does
+  not rebuild Yang–Zhang. For generic duplicate edge tuples, witness recovery
+  returns a valid positional tile ID from the constraint-equivalent entries;
+  the public contract does not select one duplicate over another.
 
 The Boolean witness checker remains pure Python and counts clause positions,
 not unique variables: `(x, x, y)` counts `x` twice. The Wang checker separately
