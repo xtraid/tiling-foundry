@@ -3,6 +3,7 @@ AR ?= ar
 UV ?= uv
 PYTHON ?= python3
 VALGRIND ?= valgrind
+PAGES_BUILD_DIR ?= build/pages
 UV_CACHE_DIR ?= $(CURDIR)/.uv-cache
 export UV_CACHE_DIR
 
@@ -83,6 +84,7 @@ SHARED_LIBRARY := $(LIB_DIR)/libwang.so
 OPENMP_LIBRARY := $(LIB_DIR)/libwang_openmp.a
 
 .PHONY: all setup serial shared openmp check c-check python-check pages-check \
+	generated-pages-check \
 	strict-check sanitizer-check analyzer-check valgrind-check \
 	cachegrind-check benchmark benchmark-smoke benchmark-compare \
 	benchmark-compare-smoke coverage coverage-c coverage-python \
@@ -160,6 +162,9 @@ check: pages-check c-check openmp python-check benchmark-smoke benchmark-compare
 
 pages-check:
 	$(PYTHON) tools/check_pages.py
+
+generated-pages-check:
+	$(PYTHON) tools/check_generated_pages.py $(PAGES_BUILD_DIR)
 
 c-check: serial $(C_TEST_BINS)
 	@set -e; \

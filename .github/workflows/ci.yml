@@ -36,6 +36,9 @@ jobs:
           source: ./docs
           destination: ./build/pages
 
+      - name: Check generated GitHub Pages site
+        run: make generated-pages-check
+
   build-and-test:
     runs-on: ubuntu-latest
 
