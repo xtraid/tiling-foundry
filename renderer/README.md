@@ -6,6 +6,10 @@ A command-line pixel art renderer that composites a scene from a tile-based back
 
 **Status**: feature-complete. The code works and is tested; any future changes will be refactoring, cleanup, or optimization.
 
+Tiling Foundry also supplies a separate presentation-only Wang square backend.
+It consumes the versioned JSON boundary without importing the solver or
+changing this legacy pixel-art pipeline.
+
 ## Output
 
 ![example render](output/example.png)
@@ -32,6 +36,29 @@ python main.py <palette.json> <scene.json> <tiles.bin> <sprites.bin> <output.png
 | `tiles.bin` | packed binary tile sheet (32768 bytes) |
 | `sprites.bin` | packed binary sprite sheet (32768 bytes) |
 | `output.png` | rendered output |
+
+### Wang square diagnostic rendering
+
+From this directory, render a `wang-solution-v1` square document with:
+
+```bash
+uv run --locked python wang_square.py \
+  ../tests/fixtures/wang_solution_v1_square_sat.json \
+  output/wang-square.png
+```
+
+Optional `--pixels-per-cell N` and `--margin N` arguments control the dynamic
+canvas. Inclusive coordinate offsets, including negative origins, do not alter
+dense row-major placement. Holes use a neutral checkerboard. Each logical edge
+color receives a deterministic, distinct RGB value, so the backend does not
+collapse the contract's unbounded color IDs into the legacy 16-color palette.
+
+The backend renders every active cell from its named `N`, `E`, `S`, and `W`
+edge colors and writes the PNG with an atomic same-directory replace. It does
+not use `boundary` or `metadata` to select pixels, check edge matching, validate
+SAT correctness, or load `libwang.so`/Z3. A successful PNG is presentation,
+not a proof; correctness remains the responsibility of the independent Tiling
+Foundry verifier before export.
 
 ## Input Format
 
@@ -177,9 +204,12 @@ Raises `RenderingException` on pipeline errors.
 ├── main.py               # CLI entry point
 ├── classes.py            # Palette, VirtualVRAM, SceneParser, Blitter, RenderingPipeline
 ├── tests.py              # Test suite (144 tests, all passing)
+├── wang_square.py         # Separate wang-solution-v1 square backend and CLI
+├── test_wang_square.py    # Wang loader, raster, isolation, CLI, and failure tests
 ├── input/                # Example input files (palette, scene, tiles, sprites)
 ├── output/               # Rendered PNG output goes here
 ├── test_data/
+│   ├── wang_solution_v1_square_sat.png # Decoded-pixel golden for the Wang fixture
 │   ├── palette_ok.json             # Valid 16-color palette
 │   ├── palette_wrong_count.json    # Only 3 colors (invalid)
 │   ├── palette_wrong_value.json    # Component > 255 (invalid)
@@ -192,10 +222,17 @@ Raises `RenderingException` on pipeline errors.
 ## Tests
 
 ```bash
-uv run pytest tests.py -v
+uv run --locked pytest -q
 ```
 
-144 tests covering all classes:
+The complete isolated suite has 189 tests: the 144 preserved legacy tests
+below and 45 Wang square tests. To run only the original upstream suite:
+
+```bash
+uv run --locked pytest tests.py -v
+```
+
+The 144 legacy tests cover all original classes:
 
 **Palette (18 tests)**
 - Happy path: load, `__getitem__` first/last, boundary values (0 and 255)
