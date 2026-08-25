@@ -230,6 +230,9 @@ Implemented and tested as of 25 August 2026:
 - a scoped Python cross-check coordinator that connects Boolean Z3 to native
   witness extension, extracts assignments from native or Wang-Z3 tilings, and
   retains copied counterexamples across native cleanup;
+- a solver-neutral Python tiling-result model and a native-only coordinator
+  that solves either serial path, copies the result out of its native lifetime,
+  and requires the independent Python checker without importing Z3;
 - exhaustive witness-level evidence over all 1,701 canonical formulas through
   three variables, every one of their `2^n` assignments, and both native solver
   entry points: direct Boolean validity agrees with extension SAT, and every
@@ -243,6 +246,10 @@ Implemented and tested as of 25 August 2026:
 - a JSON Lines comparison suite over fixed `.cm13` inputs, with separate
   prepared-Region and file-to-verified-decision scopes for the native
   reference, native optimized, Boolean Z3, and Wang Z3 paths;
+- the closed `wang-solution-v1` square SAT contract, its dependency-free
+  semantic validator, and a deterministic Python exporter that validates SAT
+  status, dense cells, canonical tile IDs, boundary constraints, and
+  adjacency before writing a self-contained JSON document;
 - a provenance-pinned PAP Render snapshot under `renderer/`, preserving its
   standalone Python 3.14 project and 144-test suite without coupling its
   graphical dependencies to the native core or Python reference tools;
@@ -253,7 +260,7 @@ Not implemented yet:
 
 - native OpenMP solver;
 - square-to-hex translation and verification;
-- JSON export and renderer integration.
+- Wang square and hex renderer integration.
 
 ## Next milestones
 
@@ -266,7 +273,7 @@ Development proceeds through small, testable modules:
 3. evaluate propagation scheduling and OpenMP only after the serial mechanisms
    meet their gates;
 4. implement and verify the square-to-hex translation;
-5. stabilize JSON and renderer integration last.
+5. connect verified solution documents to the isolated renderer last.
 
 The implementation follows a deliberately small design rule: each datum has one
 owner, derived state is computed when needed, and future metadata is not added to
@@ -378,6 +385,7 @@ src/verify/      independent tiling verification
 src/io/          formula parsing and serialization
 python/model/    pure Python data contracts
 python/native/   C ABI adapters and ownership boundaries
+python/formats/  versioned solution validation and deterministic export
 python/crosscheck/ scoped native/Z3 witness orchestration
 python/oracles/  independent Z3 oracles and witness checks
 python/hex/      square-to-hex translation and verifier
@@ -391,9 +399,11 @@ The C parser is canonical for native input. Native adapters copy data into
 Python-owned models and never expose C pointers. Oracles accept models rather
 than paths: the Boolean oracle consumes `Formula`, while the Wang oracle
 consumes `Region + TILESET`. Both witness checkers are pure Python and
-independent of Z3. The cross-check layer alone coordinates those components
-with scoped native lifetimes; Python does not duplicate parsing or the
-Yang–Zhang reduction.
+independent of Z3. The cross-check layer coordinates Boolean/Wang witness
+relations, while the smaller native-only solve coordinator supplies verified
+tilings to producers without importing either Z3 oracle. Both paths keep
+native lifetimes scoped; Python does not duplicate parsing or the Yang–Zhang
+reduction.
 
 ## Documentation
 
