@@ -6,7 +6,7 @@ description: Data flow, geometry, ownership, and tested invariants of the implem
 section: Yang–Zhang reduction
 document_kind: Implementation contract
 status: Current implementation
-updated: 2026-08-21
+updated: 2026-08-25
 nav_order: 20
 ---
 
@@ -14,21 +14,25 @@ nav_order: 20
 
 ## Purpose and scope
 
-This document records the implemented design contract for turning a validated
-Cubic Monotone 1-in-3 SAT instance into the colored region used by the fixed
-23-tile Yang–Zhang reduction.
+The builder consumes a validated canonical Cubic Monotone 1-in-3 SAT formula.
+It constructs the colored simply connected `Region` used by the fixed 23-tile
+Yang–Zhang reduction and returns the exact adjacent-swap trace in the same
+transactional result.
 
-The paper remains the source of truth for the mathematical construction and the
-fixed tileset. Implemented public headers and black-box tests are authoritative
-for API behavior; this page explains the rationale, invariants, geometry, and
-ownership obligations behind them.
+This is the implementation contract for builder input validation, routing,
+coordinates, active geometry, exposed boundary colors, ownership, and
+black-box obligations. In the pipeline, it sits after native parsing and
+before every generic solver or oracle that consumes the resulting region.
 
-The formula representation, public reduction API, validation, routing, region
-construction, boundary coloring, ownership behavior, and builder tests are
-implemented. The solver-level integration suite checks complete SAT and UNSAT
-reductions against an independent Boolean oracle. Focused tests cover the
-atomic forwarder, left-anchor, right-anchor, and crossover generalized tiles.
-Whole-block solver regressions cover the obligation in Section 11.4.
+The paper remains authoritative for the mathematical construction and fixed
+tileset. Public headers and black-box tests are authoritative for API behavior.
+Use the [reduction note]({{ '/reduction_notes/' | relative_url }}) for the
+paper/project convention boundary; this page is not an intuitive tutorial.
+
+The complete builder contract is implemented. Solver-level integration checks
+SAT and UNSAT reductions against an independent Boolean oracle. Focused tests
+cover the atomic forwarder, both anchors, and crossover generalized tiles.
+Section 11.4 records the whole-block solver regressions.
 
 Primary source:
 
@@ -36,18 +40,16 @@ Primary source:
   Connected Regions with a Fixed Set of Wang Tiles*, arXiv:2405.01017v2,
   especially Figures 1--4 and the proof of Theorem 3.
 
-This document covers only formula representation, logical routing, region
-construction, boundary colors, ownership, and builder tests. It does not cover
-DIMACS/text parsing, solving, verification, OpenMP scheduling, Z3, JSON, or
-rendering.
+Text parsing, solving, independent verification, scheduling, oracles, solution
+transport, and rendering have separate contracts.
 
 ## 1. Module boundary
 
 `yang_zhang` is a deterministic reduction builder:
 
 ```text
-validated canonical CM1-in-3 formula -> colored simply connected Region
-                                      + exact adjacent-swap trace
+validated canonical Cubic Monotone 1-in-3 formula
+    -> colored simply connected Region + exact adjacent-swap trace
 ```
 
 The builder performs these stages:
@@ -61,14 +63,13 @@ The builder performs these stages:
 6. color every exposed unit edge of the region;
 7. return the region and the exact swap array transactionally.
 
-The builder does not:
+Responsibilities outside the builder are:
 
-- parse text or repair/normalize invalid parser output;
-- solve the SAT instance;
-- select any Wang tile;
-- mark cells as variable, forwarder, anchor, crossover, or clause cells;
-- assign colors to internal edges between active cells;
-- construct solver domains, assignments, trails, tasks, or Z3 expressions.
+- text parsing and normalization;
+- SAT or Wang solving and tile selection;
+- persistent gadget annotations;
+- colors on internal edges between active cells;
+- solver domains, assignments, trails, tasks, and Z3 expressions.
 
 Anchor, crossover, and forwarder placement is forced later by the colored
 boundary and `TILESET`. It is not stored in `Region`.
@@ -576,23 +577,27 @@ UBSan workflows.
 
 ### 11.4 Solver-level gadget coverage
 
-The public solver/verifier path now checks complete Yang–Zhang reductions
-against an independent Boolean oracle. Focused black-box solver tests additionally
-establish the local generalized-tile behavior for both signals: forwarders
-preserve the signal, left and right anchors are forced by their boundary colors,
-and all four crossover inputs `(a,b)` force outputs `(b,a)`.
+The public solver/verifier path checks complete Yang–Zhang reductions against
+an independent Boolean oracle. Focused black-box solver tests establish the
+local generalized-tile behavior for both signals. Forwarders preserve the
+signal, both anchors are forced by their boundary colors, and all four
+crossover inputs `(a,b)` force outputs `(b,a)`.
 
-The whole-block regression cuts out the exact width-`w` rectangle, applies only
-its top `B^(w-1)R`, bottom `LB^(w-1)`, and binary interface conditions, and
-preselects no interior tile or edge. At height seven it exhaustively checks all
-binary input/output pairs at every valid swap row: exactly the requested
-adjacent transposition is SAT and every other output is UNSAT. It also checks
-every position at larger valid heights through 31 rows, two- and three-block
-chains produced by `yang_zhang_permutation_build()`, deterministic fuzz cases,
-and large chains up to 31 rows and 96 crossover blocks. These are regression
-checks rather than a general proof. The separate two-column forwarder bands
-remain justified independently by the tile-edge exclusion argument in
-Section 5 of the [reduction note]({{ '/reduction_notes/' | relative_url }}).
+The whole-block regression cuts out the exact width-`w` rectangle. It applies
+only the top `B^(w-1)R`, bottom `LB^(w-1)`, and binary interface conditions;
+no interior tile or edge is preselected.
+
+At height seven, the test exhaustively checks all binary input/output pairs at
+every valid swap row. Exactly the requested adjacent transposition is SAT, and
+every other output is UNSAT. Further cases cover every position at larger
+valid heights through 31 rows, two- and three-block permutation chains,
+deterministic fuzz cases, and large chains up to 31 rows and 96 crossover
+blocks.
+
+These are regression checks rather than a general proof. The separate
+two-column forwarder bands are justified by the tile-edge exclusion argument
+in Section 5 of the
+[reduction note]({{ '/reduction_notes/' | relative_url }}).
 
 ## 12. Stable design decisions
 

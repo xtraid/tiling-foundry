@@ -9,7 +9,7 @@ status above and the verification evidence in the canonical project documents
 are authoritative. No particular agent framework or optional skill is a
 prerequisite for executing this plan.
 
-**Goal:** Compute and verify the correspondence between each Boolean assignment and the Wang tilings that extend it, while keeping the generic Wang solver independent from Yang-Zhang semantics.
+**Goal:** Compute and verify the correspondence between each Boolean assignment and the Wang tilings that extend it, while keeping the generic Wang solver independent from Yang–Zhang semantics.
 
 **Architecture:** Add optional borrowed dense initial domains to the shared native solver core. Build a stateless C bridge over `Cm13Formula + YangZhangReduction` that pins only variable-gadget tiles, verifies/extracts Wang witnesses, and never evaluates Boolean clauses or reads the swap trace. Add a narrow Python cross-check coordinator that keeps native lifetimes scoped while connecting Boolean Z3, the native bridge, and the existing independent Python checkers.
 
@@ -22,7 +22,7 @@ prerequisite for executing this plan.
 - Read `/home/manuel/AGENTS.md`, this plan, the spec, `README.md`, and `docs/development_principles.md` before editing.
 - Preserve all pre-existing user work. Stop and reassess if the worktree differs from the documented clean `67ff34f` baseline except for this task's spec and plan.
 - Do not commit or push without explicit user authorization. Every commit step below is conditional and otherwise leaves the reviewed changes uncommitted.
-- Keep `wang_solve_serial()` and `wang_solve_optimized()` generic: no formula, assignment, signal, gadget, crossover, or Yang-Zhang knowledge may enter `solver.h` or `solver_serial.c`.
+- Keep `wang_solve_serial()` and `wang_solve_optimized()` generic: no formula, assignment, signal, gadget, crossover, or Yang–Zhang knowledge may enter `solver.h` or `solver_serial.c`.
 - Initial-domain inputs are borrowed and immutable. Malformed masks are `WANG_SOLVE_ERROR`; legal contradictory masks are `WANG_SOLVE_UNSAT`.
 - The bridge borrows `YangZhangReduction`, uses only `reduction.region`, and never reads or copies `reduction.swaps`.
 - Extension never calls a Boolean checker. Extraction verifies the Wang tiling and decodes variable gadgets but never decides whether the decoded assignment satisfies the formula.
@@ -43,7 +43,7 @@ prerequisite for executing this plan.
 - Modify `Makefile`: compile the new native bridge source through serial and shared builds.
 - Modify `python/native/region_adapter.py`: scoped native-reduction lifetime helper reused by coordinators.
 - Create `python/native/witness_adapter.py`: ctypes-only bridge/result adaptation; no Z3 or clause logic.
-- Create `python/crosscheck/witness_pipeline.py`: Boolean-Z3/native-Wang orchestration and independent checks.
+- Create `python/crosscheck/witness_pipeline.py`: Boolean Z3/native Wang orchestration and independent checks.
 - Create `tests/python/test_witness_pipeline.py`: forward and reverse end-to-end witness paths and lifetime failures.
 - Modify `README.md`, `docs/development_principles.md`, `docs/serial_solver_implementation_guide.md`, and `docs/reduction_notes.md`: implemented boundary, contracts, evidence, and limitations.
 
@@ -231,7 +231,7 @@ Otherwise record Task 1 as locally verified and continue without committing.
 
 ---
 
-### Task 2: Stateless Yang-Zhang Witness Bridge
+### Task 2: Stateless Yang–Zhang Witness Bridge
 
 **Files:**
 - Create: `include/wang/yang_zhang_witness.h`
@@ -486,7 +486,7 @@ def test_boolean_z3_assignment_extends_through_native_reference(self) -> None:
     self.assertEqual(extracted, boolean_result.assignment)
 ```
 
-Add the optimized forward path, direct extraction from reference/optimized native tilings, Wang-Z3 tiling extraction, repeated clause positions, UNSAT without witness, a controlled Boolean UNKNOWN that proves native extension is not called, C ERROR propagation, invalid tiling as a negative witness, and cleanup after injected copy/bridge failures.
+Add the optimized forward path, direct extraction from reference/optimized native tilings, Wang Z3 tiling extraction, repeated clause positions, UNSAT without witness, a controlled Boolean UNKNOWN that proves native extension is not called, C ERROR propagation, invalid tiling as a negative witness, and cleanup after injected copy/bridge failures.
 
 - [ ] **Step 2: Run the Python test and confirm the red state**
 
@@ -513,7 +513,7 @@ def _built_reduction(
     lib = _region_library()
     try:
         if not lib.yang_zhang_build(byref(native_formula), byref(reduction)):
-            raise RegionBuildError("could not build Yang-Zhang region")
+            raise RegionBuildError("could not build Yang–Zhang region")
         yield reduction
     finally:
         lib.yang_zhang_reduction_destroy(byref(reduction))
@@ -575,7 +575,7 @@ PYTHONPATH=python uv run --frozen python -m unittest discover \
 make python-check
 ```
 
-Expected: focused tests pass for Boolean-Z3→reference, Boolean-Z3→optimized, native/Wang-Z3→Boolean extraction, UNKNOWN, UNSAT, error, and cleanup paths; all existing Python tests remain green.
+Expected: focused tests pass for Boolean Z3→reference, Boolean Z3→optimized, native/Wang Z3→Boolean extraction, UNKNOWN, UNSAT, error, and cleanup paths; all existing Python tests remain green.
 
 - [ ] **Step 7: Check dependency direction and forbidden marshalling**
 

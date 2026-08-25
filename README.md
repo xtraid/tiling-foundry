@@ -53,98 +53,68 @@ make check
 suites, builds the OpenMP scaffold, and exercises both solver paths on a small
 benchmark case. It does not require a GPU.
 
-## What is interesting today
+## Current status
 
-The optimized solver still uses the same Wang semantics and independent witness
-verification as the reference path. It currently differs in five isolated
-mechanisms: a geometrically growing DFS stack, omission of undo entries during
-initial propagation before rollback can be requested, transfer of the already
-verified SAT domain buffer, and a private byte-wise table for aggregating tile
-support during propagation, plus a packed private pending-cell index that
-suppresses duplicate optimized-queue entries. The reference path retains its
-duplicate-accepting FIFO, baseline tile loop, full initial trail,
-fixed-capacity stack, and dense result copy.
+The implemented components cover the square pipeline from `.cm13` input
+through a verified solution document and the separate diagnostic PNG command.
+Hex translation and parallel solving remain future work.
 
-For the first three mechanisms, five alternating runs of the versioned
-12-variable Yang–Zhang SAT benchmark on a Ryzen 5 3600 measured:
+| Capability | Status |
+| --- | --- |
+| Yang–Zhang formula-to-region construction | Implemented and tested |
+| Reference serial solver | Implemented |
+| Optimized serial path | Implemented with five isolated, measured mechanisms |
+| Independent native verifier | Implemented and required before SAT publication |
+| Boolean Z3 oracle | Implemented over the copied immutable `Formula` |
+| Wang Z3 oracle | Implemented over copied `Region + TILESET` |
+| Boolean–Wang witness correspondence | Implemented; exhaustive evidence covers all 1,701 canonical formulas through three variables and 27,044 constrained native solves |
+| Verified square solution export | Implemented as the closed `wang-solution-v1` contract and deterministic exporter |
+| Wang square diagnostic renderer | Implemented as a separate presentation-only CLI in the isolated `renderer/` project |
+| Square-to-hex translation and verification | Not implemented; the two Python modules are empty placeholders |
+| Native C JSON layer | Not implemented; `src/io/json.c` is a placeholder |
+| `TaskPlan` and native OpenMP solver | Not implemented; only the build scaffold exists |
 
-| Metric | Reference | Optimized | Change |
-| --- | ---: | ---: | ---: |
-| Solver median | 80.033 ms | 73.150 ms | -8.60% |
-| Peak resident set | 14,952 KiB | 7,964 KiB | -6,988 KiB |
-| Reserved DFS stack | 1,829,928 bytes | 384 bytes | -99.98% |
-| Reserved undo trail | 8 MiB | 1 MiB | -87.5% |
-| Initial undo writes | 510,665 | 0 | -100% |
-| Final SAT result copy | 305,124 bytes | 0 bytes | -100% |
+The optimized path preserves the reference path's Wang semantics and public
+contract. Its five retained mechanisms are dynamic DFS storage, omission of
+non-consumable initial-propagation trail entries, SAT-domain ownership
+transfer, byte-wise support aggregation, and queue deduplication. The
+[optimization methodology](docs/solver_performance_scope.md) defines their
+acceptance boundary. Dated reports preserve the measurements and their
+host-specific limitations.
 
-With those mechanisms present in both comparison binaries, seven alternating
-runs isolated the byte-wise table at 91.146 ms before and 20.701 ms after on
-the same large SAT case (-77.29%). The corresponding support aggregation fell
-from 13,058,856 candidate-tile visits to 5,214,770 nonzero-byte lookups. The
-no-arc result-copy and root-UNSAT controls stayed within +0.60% and +3.36%.
+## Implemented pipeline
 
-These are host-specific measurements, not universal performance claims. The
-full corpus, commands, environment, raw interpretation rules, counterexamples,
-and mechanism-by-mechanism reports are versioned under [`benchmarks/`](benchmarks/)
-and [`docs/`](docs/). In particular, the unconstrained deep-search case keeps
-its required 2 MiB search trail and showed no material timing change (-0.40%).
-
-Seven alternating runs isolated queue deduplication at 23.463 ms before and
-19.659 ms after on large Yang–Zhang SAT (-16.21%), and at 4.857 versus 3.912 ms
-on large UNSAT (-19.46%). Processed arcs fell by 35.8--39.2 percent; the packed
-index occupied 9,536 bytes on large SAT and was not allocated for root-conflict
-or no-arc controls. The unconstrained control remained MRV-bound at +0.09%.
-
-The first seven-sample cross-engine smoke baseline, pinned to one Ryzen 5 3600
-logical CPU, measured the complete-file SAT medians at 0.549 ms for C reference,
-0.187 ms for C optimized, 6.988 ms for direct Boolean Z3, and 10.787 s for Wang
-Z3. In the prepared-Region view the corresponding native medians were 0.504 and
-0.142 ms, while Wang Z3 took 10.794 s. These are host-specific smoke results;
-Boolean Z3 solves the original formula rather than the Wang region, so its row
-is not a speedup claim. The much faster UNSAT rows use deliberately shallow
-contradictions, not hard UNSAT search.
-
-The Wang Z3 oracle now models one finite edge-tuple relation per active cell
-and shares a single color term across each internal edge. A controlled
-single-sample SAT comparison on the same CPU reduced the prepared-Region path
-from 10.666 s to 2.605 s and the complete-file path from 10.560 s to 2.620 s,
-while peak process RSS decreased slightly. The model, duplicate-tile semantics,
-test evidence, command, and measurement limits are recorded in the
-[edge-table report](docs/wang_z3_edge_table_2026-08-24.md).
-
-## Goal
-
-The intended end-to-end pipeline is:
+The implemented paths are:
 
 ```text
-Cubic Monotone 1-in-3 SAT formula
-        |
-        v
-Yang–Zhang finite Wang region
-        |
-        +-------------------+
-        |                   |
-        v                   v
-native C solver       Z3 reference paths
-        |                   |
-        +---------+---------+
-                  |
-                  v
-       independent verifier
-                  |
-                  +--> exact witness extension/extraction
-                       between Boolean assignments and Wang tilings
-                  |
-                  v
-      square-to-hex translation
-                  |
-                  v
-       hex verifier and renderer
+.cm13 --> C parser --> native Formula
+                          |        \
+                          |         +--> copied Formula --> Boolean Z3
+                          |                                  |
+                          |                                  v
+                          |                         Boolean witness checker
+                          v
+                  Yang–Zhang builder --> Region
+                                          |  \
+                                          |   +--> copied Region + TILESET
+                                          |              |
+                                          |              v
+                              native reference/       Wang Z3
+                              optimized solver           |
+                                     |                   v
+                                     v             Python tiling checker
+                              native verifier
+                                     |
+                          copied tiling + Python checker
+                                     |
+                                     v
+                          wang-solution-v1 --> square PNG
 ```
 
-The native solver, Z3 models, verifier, and renderer are deliberately separate.
-The renderer is downstream from correctness-critical logic and never decides
-tileability.
+The witness bridge relates exact Boolean assignments to the variable cells of
+the same live Yang–Zhang reduction. Its precise scope and evidence are recorded
+in the [witness correspondence design](docs/designs/2026-08-21-witness-extension-design.md).
+The square-to-hex and OpenMP stages are not part of the implemented diagram.
 
 ## Correctness boundaries
 
@@ -164,116 +134,16 @@ tileability.
 - Project conventions must be distinguished from claims inherited from the
   Yang–Zhang paper.
 
-## Current status
-
-Implemented and tested as of 25 August 2026:
-
-- canonical static definition of the 23 atomic Wang tiles;
-- generalized-tile family metadata kept outside solver semantics;
-- oriented local edge matching;
-- Yang–Zhang signal tokens and deterministic adjacent-swap routing;
-- application and validation of adjacent-swap sequences;
-- minimal canonical in-memory Cubic Monotone 1-in-3 SAT representation using
-  `variable_count` and clauses, with builder-side domain validation;
-- strict `p cm13` parser with caller-owned `FILE *` and a path-based external
-  loader, precise error locations, transactional output, and explicit formula
-  destruction;
-- transactional Yang–Zhang formula-to-region construction, including exact
-  swap-trace ownership, dimensions, the paper-shaped simply connected active
-  mask, and all exposed boundary colors;
-- minimal dense row-major `Region` storage, access, and boundary constraints;
-- independent verification of complete dense tilings, including region,
-  boundary, inactive-cell, tile-ID, and adjacency validation;
-- deterministic native serial solver with private compatibility masks,
-  bitmask domains, propagation, MRV search, an undo trail, and mandatory
-  independent validation of every SAT witness;
-- differentially checked optimized entry point sharing the same Wang core,
-  with a geometrically growing DFS stack and no undo-trail recording during
-  the non-rollbackable initial propagation, ownership transfer of the verified
-  SAT domains after every fallible trace operation has completed, and a
-  private 12 KiB byte-wise support table derived from the canonical
-  compatibility masks, plus a packed private pending-cell bitset that
-  suppresses duplicate optimized-queue entries and is omitted when no active
-  adjacency can use it;
-- optional borrowed dense initial tile domains with identical reference and
-  optimized semantics, complete validation before solving, and a strict
-  distinction between malformed input (`ERROR`) and a legal contradictory
-  restriction (`UNSAT`);
-- optional solver metrics, an opt-in renderable best failed leaf for UNSAT,
-  and a capped binary failed-leaf trace backed by `mmap`;
-- C regression tests, deterministic fuzzing against brute-force and Boolean
-  oracles, large-region stress cases, and end-to-end Yang–Zhang SAT/UNSAT
-  checks;
-- golden coverage of all 23 `(N,E,S,W)` tile tuples and focused solver-level
-  tests for forwarder, anchor, atomic crossover, and whole crossover-block
-  behavior, including deterministic chain fuzzing and volume stress;
-- immutable pure Python formula and dense region data, including canonical
-  row-major storage, active masks, color domains, and boundary-placement
-  validation;
-- an immutable Python copy of all 23 atomic tile edge tuples, checked against
-  the native `TILESET` symbol without importing ctypes into models or oracles;
-- independent Boolean and Wang witness checkers plus Z3 oracles: the Boolean
-  path preserves repeated clause positions, while the Wang path consumes the
-  copied `Region`, constrains each active cell to a finite edge-tuple relation,
-  shares color terms across active internal edges, enforces boundaries, and
-  returns a dense tiling only for SAT;
-- a shared `libwang.so` build and tested C-to-Python formula and region
-  adapters that copy results into immutable Python storage, report native
-  parser status and source locations, and close every native lifetime before
-  returning;
-- a native reduction coordinator that parses once and branches from the live
-  C formula to the Python formula copy and Yang–Zhang region builder;
-- a stateless native Yang–Zhang witness bridge that pins only the three
-  variable-gadget cells, extends an exact Boolean assignment through either
-  generic solver, verifies and decodes dense Wang tilings, and never reads the
-  reduction swap trace or evaluates Boolean clauses;
-- a scoped Python cross-check coordinator that connects Boolean Z3 to native
-  witness extension, extracts assignments from native or Wang-Z3 tilings, and
-  retains copied counterexamples across native cleanup;
-- a solver-neutral Python tiling-result model and a native-only coordinator
-  that solves either serial path, copies the result out of its native lifetime,
-  and requires the independent Python checker without importing Z3;
-- exhaustive witness-level evidence over all 1,701 canonical formulas through
-  three variables, every one of their `2^n` assignments, and both native solver
-  entry points: direct Boolean validity agrees with extension SAT, and every
-  SAT tiling independently verifies and extracts the exact requested
-  assignment;
-- shared SAT/UNSAT `.cm13` fixtures exercised through all implemented
-  end-to-end branches: native parser to Yang–Zhang region, serial solver, and
-  verifier; native parser to Python formula copy, Boolean Z3, and witness
-  checker; and the same copied region through Wang Z3 and its independent
-  checker;
-- a JSON Lines comparison suite over fixed `.cm13` inputs, with separate
-  prepared-Region and file-to-verified-decision scopes for the native
-  reference, native optimized, Boolean Z3, and Wang Z3 paths;
-- the closed `wang-solution-v1` square SAT contract, its dependency-free
-  semantic validator, and a deterministic Python exporter that validates SAT
-  status, dense cells, canonical tile IDs, boundary constraints, and
-  adjacency before writing a self-contained JSON document;
-- a provenance-pinned PAP Render snapshot under `renderer/`, preserving its
-  standalone Python 3.14 project and 144-test suite without coupling its
-  graphical dependencies to the native core or Python reference tools;
-- C17/OpenMP build scaffold and GitHub Actions CI with strict GCC/Clang,
-  ASan, UBSan, GCC static analysis, Memcheck, and Cachegrind paths.
-
-Not implemented yet:
-
-- native OpenMP solver;
-- square-to-hex translation and verification;
-- Wang square and hex renderer integration.
-
 ## Next milestones
 
-Development proceeds through small, testable modules:
+Planned work remains separated into independently reviewed changes:
 
-1. continue isolated performance-path changes after the completed dynamic DFS
-   storage, initial-trail removal, SAT ownership transfer, and byte-wise
-   support table and queue deduplication;
-2. evaluate MRV indexing independently for weakly constrained search;
-3. evaluate propagation scheduling and OpenMP only after the serial mechanisms
-   meet their gates;
-4. implement and verify the square-to-hex translation;
-5. connect verified solution documents to the isolated renderer last.
+1. formalize, implement, and independently verify square-to-hex translation,
+   then add the explicit hex mode to the existing Wang renderer command;
+2. evaluate MRV indexing on weakly constrained search and build a separate
+   hard-UNSAT corpus before making parallelism claims;
+3. harden allocation and cleanup failure paths before concurrent execution;
+4. define and validate a minimal serial `TaskPlan` before implementing OpenMP.
 
 The implementation follows a deliberately small design rule: each datum has one
 owner, derived state is computed when needed, and future metadata is not added to
@@ -296,7 +166,7 @@ make check
 
 The imported renderer remains a separate locked Python project. Its Pillow and
 NumPy dependencies are not installed by the root project or exercised by
-`make check`. Run its 144 tests independently:
+`make check`. Run its 189-test combined suite independently:
 
 ```sh
 cd renderer
@@ -306,6 +176,18 @@ uv run --locked pytest -q
 CI mirrors that command in a separate read-only Python 3.14 job. Snapshot
 provenance and update instructions are recorded in
 [`renderer/UPSTREAM.md`](renderer/UPSTREAM.md).
+
+To exercise the Wang square renderer on the versioned solution fixture:
+
+```sh
+cd renderer
+uv run --locked python wang_square.py \
+  ../tests/fixtures/wang_solution_v1_square_sat.json \
+  output/wang-square.png
+```
+
+The [square solution contract](docs/wang_solution_v1.md) includes the producer
+API for exporting a verified native result before rendering it.
 
 Useful individual targets:
 
@@ -380,15 +262,16 @@ src/core/        tiles and region primitives
 src/builder/     Yang–Zhang reduction components
 src/crosscheck/  Boolean/Wang witness bridge above solver and verifier
 src/solver/      serial solver
-src/parallel/    OpenMP path
+src/parallel/    OpenMP build scaffold (solver not implemented)
 src/verify/      independent tiling verification
-src/io/          formula parsing and serialization
+src/io/          formula parsing and native JSON placeholder
 python/model/    pure Python data contracts
 python/native/   C ABI adapters and ownership boundaries
 python/formats/  versioned solution validation and deterministic export
 python/crosscheck/ scoped native/Z3 witness orchestration
 python/oracles/  independent Z3 oracles and witness checks
-python/hex/      square-to-hex translation and verifier
+python/hex/      empty square-to-hex placeholders
+renderer/        isolated legacy and Wang square PNG rendering
 tests/           C, Python, and instance regressions
 benchmarks/      fixed reference corpus and profiling runner
 docs/            theory and architecture references
@@ -411,7 +294,8 @@ The [GitHub Pages documentation](https://xtraid.github.io/tiling-foundry/)
 organizes the technical material by reader interest:
 
 - **Architecture and correctness** covers module ownership, the serial solver,
-  independent verification, and Boolean–Wang witness correspondence.
+  independent verification, Boolean–Wang witness correspondence, and the
+  square solution data contract.
 - **Yang–Zhang reduction** covers geometry, formula-to-region construction,
   proof obligations, and primary references.
 - **Solver optimization** separates the current methodology from dated,
@@ -436,8 +320,9 @@ specification, proof artifact, or dependency of the new implementation.
 Regions with a Fixed Set of Wang Tiles*](https://arxiv.org/abs/2405.01017),
 arXiv:2405.01017 (2024).
 
-See the architecture specification for the extended bibliography and future
-research directions.
+See the [reference bibliography](docs/references.md) for the full source policy.
+The [historical architecture page](docs/historical_architecture.md) explains
+the original future-facing design document and its current limitations.
 
 ## License
 

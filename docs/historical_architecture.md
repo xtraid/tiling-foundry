@@ -6,7 +6,7 @@ description: Context and limitations for the project's original future-facing ar
 section: Historical material
 document_kind: Historical specification
 status: Superseded design context
-updated: 2026-08-21
+updated: 2026-08-25
 nav_order: 10
 ---
 
@@ -30,11 +30,15 @@ metadata, and the implemented input format is the strict `p cm13` format rather
 than the early `vars`/`clause` sketch. The current public headers and tests are
 authoritative for behavior.
 
-The serial and optimized solvers are implemented and measured. The native
-OpenMP solver, `TaskPlan`, square-to-hex translation, and renderer-facing JSON
-remain future work. Current boundaries and status are documented in the
-[architecture and ownership page]({{ '/development_principles/' | relative_url }})
-and the [solver optimization methodology]({{ '/solver_performance_scope/' | relative_url }}).
+The serial and optimized solvers are implemented and measured. The Python
+square solution contract, exporter, and presentation-only square renderer are
+also implemented. Native C JSON remains a placeholder, while `TaskPlan`, the
+native OpenMP solver, and square-to-hex translation remain future work.
+
+Current boundaries and status are documented in the
+[architecture page]({{ '/development_principles/' | relative_url }}), the
+[solution contract]({{ '/wang-solution-v1/' | relative_url }}), and the
+[solver optimization methodology]({{ '/solver_performance_scope/' | relative_url }}).
 
 ## Document metadata
 

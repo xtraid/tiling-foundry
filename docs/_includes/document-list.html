@@ -7,7 +7,9 @@
             <strong>{{ document.title | escape }}</strong>
             <span>{{ document.description | escape }}</span>
           </span>
-          <span class="document-list__kind">{{ document.document_kind | escape }}</span>
+          <span class="document-list__kind">
+            {{ document.document_kind | escape }} · {{ document.status | escape }}
+          </span>
         </a>
       </li>
     {% endfor %}

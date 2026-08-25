@@ -6,7 +6,7 @@ description: Domain propagation, deterministic search, ownership, diagnostics, a
 section: Architecture and correctness
 document_kind: Technical reference
 status: Current implementation
-updated: 2026-08-21
+updated: 2026-08-25
 nav_order: 20
 ---
 
@@ -26,11 +26,26 @@ restriction, local arc propagation, row-major MRV selection, iterative DFS,
 and an undo trail. The same core supplies a deliberately direct reference path
 and a path with measured private optimizations.
 
-The solver receives only `Region`, solver options, and caller-owned output
-storage. Formula clauses, adjacent-swap traces, generalized-gadget labels, Z3,
+The path distinction is limited to these mechanisms:
+
+| Mechanism | Reference path | Optimized path |
+| --- | --- | --- |
+| Support aggregation | Loop over set tile IDs | Private byte-wise lookup table |
+| Pending queue | Duplicate-accepting FIFO | FIFO with a packed pending-cell index |
+| Initial propagation trail | Record, then discard the prefix | Omit entries that no rollback can consume |
+| DFS stack | Reserve for every active cell | Grow geometrically from a small initial capacity |
+| SAT result domains | Copy the verified dense buffer | Transfer the verified private buffer |
+
+Both paths retain the same input validation, domain meaning, search rules,
+statuses, result ownership, diagnostics, and mandatory independent SAT
+verification.
+
+The solver receives `Region`, solver options, and caller-owned output storage.
+It operates over reusable copies of the canonical tiles. The fixed model
+permits translation but not rotation or reflection.
+
+Formula clauses, adjacent-swap traces, generalized-gadget labels, Z3,
 rendering, and Yang–Zhang construction data do not enter its decision state.
-Tiles may be reused without limit, while rotations and reflections remain
-forbidden by the fixed tileset model.
 
 The relevant public boundaries are:
 
@@ -64,11 +79,13 @@ length equals `region->cell_count`.
 
 The verifier distinguishes invalid arguments, invalid region storage, an
 incorrect dense length, incomplete active cells, invalid tile IDs, assignments
-to inactive cells, boundary mismatches, and adjacency mismatches. It reads
-edges directly from `TILESET`, checks every exposed boundary color other than
-`COLOR_NONE`, and visits east and south adjacencies once each. It does not call
-the solver or consume its compatibility caches, so successful verification is
-independent of the search mechanism that produced the tiling.
+to inactive cells, boundary mismatches, and adjacency mismatches.
+
+It reads edges directly from `TILESET`. It checks every exposed boundary color
+other than `COLOR_NONE` and visits east and south adjacencies once each. It
+does not call the solver or consume its compatibility caches. Successful
+verification is therefore independent of the search mechanism that produced
+the tiling.
 
 ## 3. Public solver API
 
@@ -128,13 +145,14 @@ object. Unknown flag bits are invalid. Trace capture requires a nonempty path
 and a positive capacity.
 
 Initial domains are absent exactly as `NULL/0`. When present, the pointer is
-borrowed and immutable for the duration of the call, and the count equals
-`region->cell_count`. Inactive entries are zero. Active entries use only bits
-in `WANG_DOMAIN_ALL`; `WANG_DOMAIN_ALL` adds no restriction, a nonzero subset
-restricts candidates, and zero is a well-formed contradictory constraint.
-Complete validation of the dense array precedes interpretation of any active
-zero, so a malformed later entry still produces `ERROR` rather than being
-hidden by an earlier contradiction.
+borrowed and immutable for the call, and the count equals
+`region->cell_count`. Inactive entries are zero.
+
+Active entries use only bits in `WANG_DOMAIN_ALL`. The full mask adds no
+restriction, a nonzero subset restricts candidates, and zero is a well-formed
+contradictory constraint. Complete validation of the dense array precedes
+interpretation of any active zero. A malformed later entry therefore produces
+`ERROR` rather than being hidden by an earlier contradiction.
 
 ### 3.3 Entry points
 

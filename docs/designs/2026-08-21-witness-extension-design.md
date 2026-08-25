@@ -6,104 +6,56 @@ description: How exact Boolean assignments are extended to Wang tilings and extr
 section: Architecture and correctness
 document_kind: Technical design
 status: Current implementation
-updated: 2026-08-21
+updated: 2026-08-25
 nav_order: 30
 ---
 
 # Boolean–Wang witness correspondence
 
-## 1. Purpose
+## 1. Purpose and authoritative scope
 
-The pipeline establishes two important but separate facts:
+This page is the implementation design for exact correspondence between
+Boolean assignments and Wang tilings of one concrete Yang–Zhang reduction. It
+defines the native bridge, its use of generic initial domains, the Python
+lifetime coordinator, and the evidence boundary.
 
-- Boolean Z3 and the Wang solvers agree on SAT/UNSAT for shared inputs;
-- every Boolean assignment and Wang tiling returned by its own solver passes an
-  independent verifier.
-
-Decision-level agreement alone does not compute the witness correspondence
-required by the original architecture:
+The path has two directions:
 
 ```text
 specific Boolean assignment -> concrete Wang tiling -> Wang verifier
-specific Wang tiling        -> Boolean assignment -> formula verifier
+specific Wang tiling        -> Boolean assignment -> formula checker
 ```
 
-The implemented witness path adds that correspondence while preserving the
-module boundaries. The generic Wang solver accepts an optional initial-domain input. A
-small native Yang–Zhang bridge translates between Boolean assignments and the
-variable cells of a concrete reduction. A minimal Python coordinator keeps the
-native formula and reduction alive while connecting Boolean Z3 to the native
-solver. No persistent signal plan, copied swap trace, or reverse-marshalled
-formula or region is introduced.
+Decision-level agreement and independent validation of whichever models the
+solvers prefer are related but weaker checks. This design connects a specific
+assignment to a specific extension without moving Yang–Zhang semantics into
+the generic solver.
 
-## 2. Decision summary
+Exact C declarations live in `wang/solver.h` and
+`wang/yang_zhang_witness.h`. The
+[serial solver reference]({{ '/serial_solver_implementation_guide/' | relative_url }})
+is authoritative for the reusable initial-domain, result-ownership, trace, and
+diagnostic contracts.
 
-The implementation has three layers:
+## 2. Correspondence claim and limits
 
-1. **Generic C solver capability.** When supplied, `WangSolverOptions` borrows
-   a dense array of initial tile-domain masks. Both the reference and optimized
-   entry points apply the same contract. This layer knows only `Region`, tile
-   masks, and Wang constraints.
-2. **Native Yang–Zhang witness bridge.** A small cross-check C module receives the concrete
-   `YangZhangReduction`, constructs dense initial masks from a Boolean
-   assignment, extracts a Boolean assignment from a verified dense tiling, and
-   tests whether an assignment and tiling correspond. It does not inspect the
-   reduction's swap trace. This is the only new layer that knows the
-   variable-gadget coordinates and tile IDs. It sits above the generic solver
-   and independent verifier rather than inside either module.
-3. **Minimal Python orchestration.** A native adapter/coordinator parses once,
-   keeps the `Cm13Formula` and `YangZhangReduction` alive, copies the existing
-   immutable Python formula and region views, obtains a Boolean Z3 assignment,
-   and asks the native bridge and selected native solver to extend that exact
-   assignment. Python orchestrates lifetimes and independent checks; it does
-   not reproduce gadget semantics or solver logic.
+The implementation distinguishes three claims:
 
-The C operation names below mirror the implemented API. Exact declarations live
-in the public headers; the contracts and dependency boundaries described here
-are the stable part of the design.
+```text
+decision agreement:
+    independent solvers agree on SAT/UNSAT
 
-## 3. Goals
+witness extension:
+    Boolean validity(a) == native Wang SAT with variable pins(a)
 
-- Extend one exact satisfying Boolean assignment to a concrete, independently
-  verified Wang tiling of its corresponding Yang–Zhang region.
-- Extract one exact Boolean assignment from any verified tiling of the
-  corresponding region, leaving formula verification to the external Boolean
-  checker so a spurious Wang witness remains observable as a counterexample.
-- Establish the round trip
-  `extract(solve_assignment_extension(a)) == a` for every tested satisfying
-  assignment, rather than comparing whichever unrelated models two solvers
-  happen to choose.
-- Make initial-domain restriction a reusable Wang-solver feature with precise
-  ownership, validation, and status semantics.
-- Exercise identical public semantics through `wang_solve_serial()` and
-  `wang_solve_optimized()`.
-- Retain independent Wang and Boolean verification at the end of each path.
-
-## 4. Non-goals
-
-- No claim that every satisfying assignment has exactly one tiling.
-- No requirement that
-  `solve_assignment_extension(extract(tiling))` reproduce the original tiling
-  byte for byte.
-- No requirement that independent Boolean, native Wang, and Wang Z3 solvers
-  choose the same satisfying model without an explicit assignment restriction.
-- No persistent `SignalPlan`, gadget map, witness-pair object, or new formula,
-  region, assignment, or tiling model.
-- No Python copy of `YangZhangReduction.swaps` and no Python reimplementation of
-  occurrence routing or gadget placement.
-- No reverse marshalling from Python `Formula` or `Region` into native structs.
-- No Yang–Zhang concepts in the generic solver and no solver concepts in the
-  immutable model classes.
-- No OpenMP work, square-to-hex work, renderer integration, JSON schema work,
-  or unrelated solver optimization.
-
-## 5. Correctness statement
+witness extraction:
+    verified Wang tiling -> decoded assignment -> external Boolean checker
+```
 
 Let `F` be a validated Cubic Monotone 1-in-3 SAT formula and `R` the exact
-`Region` produced from `F` by `yang_zhang_build()` under the current project
-layout and canonical `TILESET`.
-
-For every well-formed Boolean assignment `a` of length `F.variable_count`:
+`Region` produced from `F` by `yang_zhang_build()` under the current layout and
+canonical `TILESET`. For every well-formed assignment `a` of length
+`F.variable_count`:
 
 ```text
 is_valid_assignment(F, a)
@@ -111,8 +63,8 @@ is_valid_assignment(F, a)
 solve_assignment_extension(F, R, a) returns WANG_SOLVE_SAT.
 ```
 
-When the result is SAT, its dense singleton domains must convert to a tiling
-`t` such that:
+When extension returns SAT, its dense singleton domains must yield a tiling
+`t` satisfying:
 
 ```text
 wang_verify_tiling(R, t) == WANG_VERIFY_VALID
@@ -120,256 +72,173 @@ extract(F, R, t) == a
 correspond(F, R, a, t) == true.
 ```
 
-For every verified tiling `t` of `R`, `extract(F, R, t)` must return the value
-encoded by its variable gadgets. The caller then applies the independent
-Boolean witness checker. Extraction must not reject or hide a decoded value
-merely because it fails that external formula check.
+For every verified tiling `t`, extraction returns the value encoded by its
+variable gadgets. The caller then applies the independent Boolean checker.
+Extraction preserves a decoded value that fails that later check so the pair
+remains observable as a reduction counterexample.
 
-These properties define a computable correspondence in which extraction is a
-left inverse of assignment extension. They deliberately do not assert a
-bijection between all satisfying assignments and all possible tilings. A
-uniqueness claim requires separate proof and model-counting evidence and is
-outside this design.
+Extraction is a left inverse of assignment extension for the tested domain.
+This is not a bijection claim. Multiple tilings may encode one satisfying
+assignment, and extending an assignment extracted from a tiling need not
+reproduce the original tiling byte for byte. Independent solvers also need not
+choose the same satisfying model without an explicit assignment restriction.
 
-## 6. Provenance precondition
+The claims do not cover OpenMP, square-to-hex translation, rendering, solution
+serialization, or unrelated solver optimization.
 
-The bridge accepts a `Formula`/`Cm13Formula` and a `YangZhangReduction` under
-the precondition that the reduction is the successful output of
-`yang_zhang_build()` for that exact formula and the current canonical tileset
-and layout constants. Accepting the builder result rather than a generic
-`Region` represents this provenance at the API boundary without adding
-persistent metadata. The bridge borrows `reduction.region` and deliberately
-does not inspect `reduction.swaps`. The production Python coordinator satisfies
-the precondition structurally by parsing once and keeping the native formula
-and reduction in one lifetime.
+## 3. Layering and dependency boundary
 
-The bridge must still reject detectable inconsistencies, including invalid
-formula storage, invalid region storage, impossible dimensions, wrong dense
-array lengths, and malformed variable-gadget coordinates. It is not required
-to reconstruct the entire reduction or prove that an arbitrary independently
-supplied region came from the supplied formula. Same-sized but unrelated
-formula/reduction pairs remain a documented precondition violation, not a case
-that motivates persistent provenance metadata.
+The implementation has three layers:
 
-## 7. Generic initial-domain solver contract
+| Layer | Responsibility | Boundary |
+| --- | --- | --- |
+| Generic C solver | Borrow optional dense root domains and solve ordinary Wang constraints through either serial entry point | Knows only `Region`, tile masks, and Wang semantics |
+| Native Yang–Zhang bridge | Translate an assignment into variable-cell masks; extract an assignment from a verified tiling; compare the two representations | Alone knows variable-gadget coordinates and tile IDs; reads `reduction.region`, not `reduction.swaps` |
+| Python coordinator | Keep one native formula/reduction lifetime open while composing Boolean Z3, bridge calls, native solving, copy-out, and pure checkers | Does not reproduce gadget, routing, clause, or solver logic |
 
-### 7.1 Public options
+The bridge owns no persistent object. It uses borrowed inputs, temporary dense
+arrays, and transactional caller-provided outputs. The generic solver never
+calls back into the bridge.
 
-`WangSolverOptions` gains these optional borrowed dense-domain fields:
+No `SignalPlan`, gadget map, witness-pair model, copied swap trace, or reverse
+marshalling is needed. The variable cells already encode the assignment, and
+the region boundary plus canonical tileset determine the remaining gadgets.
+Occurrence tokens and swaps remain native builder diagnostics and are
+destroyed with the reduction.
+
+## 4. Formula/reduction provenance
+
+Every bridge operation requires the reduction to be the successful
+`yang_zhang_build()` result for the exact supplied formula, current canonical
+tileset, and layout constants. Accepting `YangZhangReduction` rather than an
+arbitrary `Region` represents that precondition without adding persistent
+provenance metadata.
+
+The bridge still rejects detectable inconsistencies: invalid formula or region
+storage, impossible dimensions, wrong dense lengths, and malformed
+variable-gadget coordinates. It does not reconstruct the full reduction to
+prove the origin of an independently supplied region. A same-sized but
+unrelated formula/reduction pair violates the documented precondition.
+
+The production coordinator satisfies provenance structurally. It parses once,
+builds from that live native formula, and keeps both objects alive for every
+bridge call.
+
+## 5. Generic initial domains
+
+`WangSolverOptions` exposes an optional borrowed dense array:
 
 ```c
 const uint32_t *initial_domains;
 size_t initial_domain_count;
 ```
 
-The pointer is borrowed and immutable for the duration of the solve call. The
-solver copies/intersects values into its private state and never stores, frees,
-or modifies caller storage. Callers must zero-initialize `WangSolverOptions` or
-initialize every field explicitly; omitted designated fields then preserve the
-current unconstrained behavior.
+Absence is exactly `NULL/0`. Presence requires a non-null pointer and
+`initial_domain_count == region->cell_count`. The array is immutable,
+row-major, and parallel to `Region.cells`. The solver copies or intersects its
+values into private state and never stores, frees, or modifies caller storage.
 
-The feature does not require a flag. Absence and presence are strict:
+The low `TILE_COUNT` bits, exposed publicly as `WANG_DOMAIN_ALL`, are the legal
+tile universe. Inactive entries are zero. On active cells,
+`WANG_DOMAIN_ALL` is unrestricted, a nonzero subset restricts candidates, and
+zero is a well-formed contradiction. Bits outside the universe and nonzero
+inactive entries are malformed input.
 
-- absent means `initial_domains == NULL` and `initial_domain_count == 0`;
-- present means `initial_domains != NULL` and
-  `initial_domain_count == region->cell_count`;
-- every other pointer/count combination is an API error.
-
-The array is dense row-major and parallel to `Region.cells` and to result
-domains.
-
-### 7.2 Mask semantics
-
-The public contract defines the legal tile-bit universe as the low
-`TILE_COUNT` bits:
+The solver validates the complete pointer/count pair and every mask before it
+interprets an active zero as UNSAT. A malformed later entry therefore cannot
+be hidden by an earlier contradiction. Active initialization is:
 
 ```text
-WANG_DOMAIN_ALL = (UINT32_C(1) << TILE_COUNT) - UINT32_C(1)
+WANG_DOMAIN_ALL
+    & optional caller root domain
+    & all exposed boundary-color masks
 ```
 
-The public `WANG_DOMAIN_ALL` constant is the canonical expression of this mask,
-so generic callers and the native bridge do not duplicate the bit expression.
+Initial domains are root constraints. They do not bypass region validation,
+oriented adjacency, propagation, search, final independent verification,
+trace handling, or result ownership. A legal contradiction is UNSAT; malformed
+input, infrastructure failure, or rejection of an internal SAT candidate is
+ERROR. Both public solver entry points implement the same contract.
 
-For every supplied entry:
+## 6. Native witness bridge
 
-- bits outside `WANG_DOMAIN_ALL` are forbidden and cause
-  `WANG_SOLVE_ERROR`;
-- an inactive cell must have mask zero; any nonzero inactive mask causes
-  `WANG_SOLVE_ERROR`;
-- an active cell may have any subset of `WANG_DOMAIN_ALL`, including zero;
-- `WANG_DOMAIN_ALL` means no caller restriction for that active cell;
-- a singleton fixes that cell to one tile ID;
-- a multi-bit mask restricts the cell to those candidate tile IDs;
-- zero on an active cell is a well-formed contradictory constraint and causes
-  `WANG_SOLVE_UNSAT`, not `WANG_SOLVE_ERROR`.
-
-After `region_validate()` succeeds, the solver validates the complete
-pointer/count pair and every supplied mask before interpreting any empty active
-domain as UNSAT. A malformed later entry therefore cannot be hidden by an
-earlier zero mask; any malformed entry makes the whole call ERROR.
-
-For an active cell, initialization is the intersection of three independent
-sources of truth:
-
-```text
-canonical tile universe
-    & optional caller initial domain
-    & all exposed boundary-color masks.
-```
-
-Initial domains never bypass boundary validation, oriented adjacency,
-propagation, search, or final independent tiling verification. A legal nonzero
-mask that becomes empty after boundary intersection or propagation is UNSAT.
-
-### 7.3 Initialization and diagnostics
-
-Caller masks are root constraints. They are applied before initial propagation
-and do not create rollback trail entries, just as boundary masks do not. The
-reference solver retains its full initial-propagation trail behavior and the
-optimized solver retains its no-initial-trail optimization; both begin search
-from the same restricted fixed point.
-
-`domain_reductions`, when collected, counts an effective restriction from
-`WANG_DOMAIN_ALL` to a supplied active-cell mask and each later effective
-boundary or propagation narrowing according to the existing counter rule.
-Calls without `initial_domains` retain current metrics and deterministic
-results.
-
-All existing trace, UNSAT snapshot, ownership, SAT-domain verification, and
-late-error cleanup rules remain in force. In particular, a root contradiction
-from legal initial domains is an ordinary failed leaf and participates in the
-existing trace and opt-in snapshot behavior.
-
-### 7.4 Status boundary
-
-The solver must preserve the distinction between malformed input and a
-well-formed inconsistent constraint:
-
-| Condition | Status |
-| --- | --- |
-| Invalid region, output, flags, pointer/count pair, high mask bits, or inactive nonzero mask | `WANG_SOLVE_ERROR` |
-| Allocation, trace, propagation-infrastructure, or final-verification failure | `WANG_SOLVE_ERROR` |
-| Active zero mask or contradiction after boundary/adjacency propagation | `WANG_SOLVE_UNSAT` |
-| Complete verified extension | `WANG_SOLVE_SAT` |
-
-When the caller supplies the required destroyed `out_result`, every
-`WANG_SOLVE_ERROR` path leaves it destroyed. Passing an already-owned result is
-itself an API violation: the call returns ERROR and leaves that caller-owned
-object unchanged so it is not leaked or overwritten. SAT and UNSAT retain the
-current result ownership contract. Both public solver entry points implement
-this exact table through their shared core.
-
-## 8. Native Yang–Zhang witness bridge
-
-### 8.1 Boundary
-
-The bridge is a small C module above `formula`, `yang_zhang`, `tile`, `verify`,
-and `solver`. Its public operations borrow `YangZhangReduction`, use only its
-`region`, and never inspect its `swaps`. Its extension operation calls the
-generic solver, but the solver must not call back into the bridge. Conceptual
-operations are:
+The public operations are:
 
 - `yang_zhang_solve_assignment_extension()`;
 - `yang_zhang_extract_assignment()`;
 - `yang_zhang_witnesses_correspond()`.
 
-The module owns no persistent state. It uses caller-owned inputs, temporary
-dense masks or tile arrays, and transactional caller-provided outputs.
+### 6.1 Assignment extension
 
-### 8.2 Assignment-to-domain translation
-
-For a formula with `n` variables, a well-formed assignment has exactly `n`
-Boolean values. The bridge validates storage, length, the metadata needed for
-safe positional access, and the detectable portion of the formula/reduction
-provenance contract. It does not evaluate the assignment against the clauses.
-The successful-builder provenance precondition remains the source of the
-complete cubic reduction-domain guarantee; the bridge does not duplicate the
-builder's full validator.
-
-It then allocates one dense domain mask per `RegionCell`:
+A well-formed assignment has exactly `formula.variable_count` Boolean values.
+After validating storage and detectable provenance metadata, the bridge
+allocates one mask per `RegionCell`:
 
 - inactive cell: `0`;
-- active cell not belonging to a variable gadget: `WANG_DOMAIN_ALL`;
-- for false variable `v`, cells `(0, 4v)`, `(0, 4v + 1)`, and
-  `(0, 4v + 2)` are fixed respectively to `TILE_V0_TOP`, `TILE_V0_MID`, and
-  `TILE_V0_BOTTOM`;
-- for true variable `v`, all three cells are fixed to `TILE_V1`.
+- unrestricted active cell: `WANG_DOMAIN_ALL`;
+- false variable `v`: `(0, 4v)`, `(0, 4v + 1)`, and `(0, 4v + 2)` are fixed
+  respectively to `TILE_V0_TOP`, `TILE_V0_MID`, and `TILE_V0_BOTTOM`;
+- true variable `v`: the same three cells are fixed to `TILE_V1`.
 
-These are the only Yang–Zhang-specific initial restrictions. Redundant rows,
-forwarders, anchors, crossovers, and clause gadgets remain consequences of the
-region boundary, canonical tileset, propagation, and search.
+These are the only reduction-specific restrictions. Forwarders, anchors,
+crossovers, redundant rows, and clause gadgets remain consequences of the
+region boundary, tileset, propagation, and search.
 
-A well-formed but formula-invalid Boolean assignment is not an API error.
-`solve_assignment_extension()` must not determine or assume its Boolean
-validity: it fixes the variable domains, runs the native Wang solver, and
-returns the Wang status. The external proof harness alone requires equality
-between direct Boolean validity and Wang SAT. The bridge must never
-short-circuit from a Boolean checker or return SAT without a Wang solve and
-verified tiling.
+The bridge does not evaluate the assignment against the formula. A well-formed
+but non-satisfying assignment is not an API error. The bridge runs the selected
+reference or optimized Wang solver and returns its status. It does not add a
+Yang–Zhang mode to `WangSolverOptions`, short-circuit through a Boolean checker,
+or return SAT without the generic solve and its mandatory witness verification.
 
-The operation supports both reference and optimized native entry points through
-an explicit solver selector. It does not add a Yang–Zhang mode flag to
-`WangSolverOptions`.
+On SAT, extension returns the original `WangSolveResult`. It does not call
+extraction or correspondence. The external harness normalizes the singleton
+domains, verifies the tiling, extracts the assignment, and checks equality.
+This keeps the forward path from confirming itself and preserves a mismatching
+SAT result as counterexample data.
 
-On SAT, the extension operation returns the generic solver result without
-calling extraction or correspondence. The proof harness normalizes the
-singleton domains, independently verifies the complete tiling, extracts its
-assignment, and compares it with the requested assignment. Keeping these
-postconditions outside the extension operation avoids making the forward path
-self-confirming and preserves the original SAT result as a counterexample if
-verification, extraction, or equality fails.
-
-### 8.3 Tiling-to-assignment extraction
+### 6.2 Tiling extraction
 
 Extraction accepts a dense tiling aligned with the region. It validates the
-length and requires `wang_verify_tiling()` to accept the entire witness before
-reading logical values. It then examines each variable block in the leftmost
-column:
+length and requires `wang_verify_tiling()` to accept the complete witness
+before reading variable cells. Each leftmost-column variable block decodes as:
 
-- the exact `V0_TOP`, `V0_MID`, `V0_BOTTOM` triple encodes false;
-- three exact `V1` tiles encode true;
-- every other mixture is rejected.
+- exact `V0_TOP`, `V0_MID`, `V0_BOTTOM`: false;
+- exact `V1`, `V1`, `V1`: true;
+- every other mixture: no decoded witness.
 
-The extracted array has exactly `formula.variable_count` Boolean entries.
-Extraction does not evaluate clauses or call a Boolean witness checker. Output
-is transactional: invalid arguments, invalid tilings, or inconsistent variable
-gadgets leave caller output unchanged. Once extraction succeeds, the external
-proof harness checks all three ordered positions of every formula clause,
-including repeated variable occurrences. If that check fails, the decoded
-assignment and tiling are retained and reported as a reduction counterexample.
+The output contains exactly `formula.variable_count` Boolean values. It is
+written only after the complete tiling and every variable block succeed.
+Extraction does not evaluate clauses or call the Boolean checker. That checker
+later examines all three ordered clause positions, including repeats.
 
-Extraction does not inspect solver decision history, domains wider than the
-final singleton tiling, swap traces, or signal tokens. It therefore applies
-equally to reference-native, optimized-native, and Wang-Z3 tilings after they
-have been normalized to the same dense tile representation.
+Extraction reads no search history, nonsingleton domains, swap trace, or signal
+tokens. It therefore applies to normalized reference-native,
+optimized-native, and Wang Z3 tilings.
 
-### 8.4 Correspondence predicate
+### 6.3 Representation predicate
 
-`correspond()` verifies the Wang tiling, extracts its encoded assignment, and
-reports true exactly when it equals the supplied well-formed assignment. It
-does not evaluate either assignment against the formula. It is a representation
-relation check, not a reduction-validity check or a comparison with a solver's
-preferred model.
+`yang_zhang_witnesses_correspond()` verifies the tiling, extracts its value,
+and compares that value with the supplied assignment. It is a representation
+relation, not a clause-validity check or a comparison with a solver's preferred
+model.
 
-The concrete C contract must preserve three outcomes, whether by an enum or by
-a status plus an output Boolean:
+Its tri-state result preserves these distinctions:
 
-- malformed API storage, invalid formula/reduction metadata, provenance failures
-  that can be detected, or allocation failures are operation errors;
-- a well-formed tiling rejected by the Wang verifier, an undecodable variable
-  gadget, or two well-formed representations of different assignments is a
-  successful negative relation;
-- a verified tiling whose extracted assignment equals the supplied assignment
-  is a successful positive relation, regardless of the later external Boolean
-  validity result.
+| Outcome | Meaning |
+| --- | --- |
+| `ERROR` | Malformed storage, invalid detectable metadata, detectable provenance failure, or allocation failure |
+| `NO` | Invalid or undecodable tiling, or two well-formed representations of different assignments |
+| `YES` | Verified tiling whose decoded assignment equals the supplied assignment, regardless of later Boolean validity |
 
-No failure outcome may be silently collapsed into a positive or negative
-relation.
+No operation error is collapsed into a positive or negative relation. For
+extraction, a structurally well-formed tiling rejected by the verifier produces
+no assignment. For correspondence, the same rejection is a normal negative
+relation rather than an infrastructure error.
 
-## 9. Python lifetime coordinator
+## 7. Python lifetime coordinator
 
-The Python layer provides the actual Boolean-Z3-to-native-Wang path without
-reverse marshalling:
+The Python path composes existing models and statuses without reverse
+marshalling:
 
 ```text
 .cm13
@@ -377,219 +246,130 @@ reverse marshalling:
   v
 native parse -----------------------------------------------+
   |                                                         |
-  +-> copy immutable Python Formula -> Boolean Z3 -> a      |
+  +-> copy immutable Formula -> Boolean Z3 -> assignment    |
   |                                               |         |
-  +-> build and keep native YangZhangReduction    |         |
+  +-> build and retain native YangZhangReduction  |         |
                                                   v         |
-                                    native witness bridge    |
+                                      native witness bridge  |
                                                   |         |
-                              generic native solver with     |
-                                  initial_domains            |
+                                 selected generic solver     |
                                                   |         |
-                                         verified tiling     |
+                                      copied dense tiling     |
                                                   |         |
-                                   extract and compare a <---+
+                                  extract and compare <------+
 ```
 
-The coordinator must:
+The coordinator:
 
-1. load the native formula once;
-2. copy it into the existing immutable Python `Formula`;
-3. build and retain the native reduction from that same live formula;
-4. copy the existing immutable Python `Region` view when Python verification
-   needs it;
-5. call Boolean Z3 on the Python formula;
-6. on SAT, pass the exact Boolean tuple back as primitive values to the native
-   bridge while the native formula and reduction remain alive;
-7. select reference or optimized solving explicitly;
-8. copy the resulting dense tiling into the existing Python convention of tile
-   IDs for active cells and `None` for inactive cells;
-9. run the existing independent Python Boolean and Wang witness checkers;
-10. destroy the native reduction and then the native formula in `finally`
-    cleanup on every path.
+1. loads the native formula once and copies the immutable Python `Formula`;
+2. builds the reduction from that same live formula;
+3. copies the immutable Python `Region` when a Python consumer needs it;
+4. calls Boolean Z3 and, on SAT, passes the exact Boolean tuple to the bridge;
+5. selects reference or optimized native solving explicitly;
+6. copies active tile IDs and inactive `None` values into the existing dense
+   Python tiling convention;
+7. applies the independent Python Boolean and Wang checkers;
+8. destroys the reduction and then the formula through `finally` cleanup.
 
-No ctypes pointer may escape. The adapter adds no persistent aggregate result
-model. Its narrow helpers return existing status enums and immutable assignment
-or tiling tuples; the coordinator composes them within one call and copies out
-only existing Python-owned values. It does not copy `swaps`, reconstruct
-source/target tokens, calculate gadget coordinates, or implement clause
+No ctypes pointer escapes. Narrow adapters return existing enums and immutable
+tuples rather than a persistent aggregate model. They do not copy swaps,
+reconstruct tokens, calculate gadget coordinates, or implement clause
 semantics.
 
-If Boolean Z3 returns UNKNOWN, the coordinator propagates
-`BooleanSolveStatus.UNKNOWN`, returns no tiling, and does not invoke the native
-extension path. Native `WANG_SOLVE_ERROR` and `WANG_SOLVE_UNSAT` remain distinct
-in Python; neither may be collapsed into the other or into Boolean UNKNOWN.
+Boolean UNKNOWN is propagated with no tiling and no native extension call.
+Native ERROR and UNSAT remain distinct from each other and from Boolean
+UNKNOWN. The reverse path extracts from a normalized native or Wang Z3 tiling
+under the same provenance lifetime; it does not ask Boolean Z3 to rediscover an
+assignment.
 
-The reverse path takes any normalized native or Wang-Z3 tiling, invokes the
-native extraction bridge under the same provenance lifetime, copies the
-Boolean values into a Python tuple, and runs the existing independent Boolean
-witness checker. It does not ask Boolean Z3 to rediscover an assignment.
+## 8. Ownership and status summary
 
-## 10. Why no SignalPlan or copied swaps are needed
-
-The exact assignment is represented at the three variable cells for each
-variable. The native builder's region boundary already forces signal
-forwarding, crossover locations, clause behavior, and redundant zero rows.
-The solver therefore needs only the initial variable-cell restrictions.
-
-Extraction reads those same variable cells after complete tiling verification;
-it does not need to trace signals through the region. Formula clause storage is
-used only by the external Boolean checker, not by extraction. Occurrence tokens
-and adjacent swaps are not needed.
-
-The production coordinator already has the native `YangZhangReduction` alive,
-so adding a Python `SignalPlan` or copying `swaps` would duplicate derived
-construction data without a consumer. The existing swap trace remains native
-diagnostic metadata and is destroyed with the reduction.
-
-## 11. Error handling and ownership
-
-- Initial domain arrays are borrowed by the generic solver and by the bridge's
-  solve call; temporary arrays allocated by the bridge are always freed before
-  return.
-- The extension operation transfers the generic solver's SAT/UNSAT result under
-  the existing `WangSolveResult` contract. It does not call extraction or
-  rewrite a SAT mismatch as ERROR; the external proof harness retains the
-  returned result when checking all postconditions.
-- Assignment and tiling inputs are borrowed and immutable.
-- Caller-provided extraction output is written only after Wang-witness and
-  variable-gadget validation succeeds; Boolean validity is checked later and
+- Assignment, tiling, formula, reduction, and caller initial-domain inputs are
+  borrowed and immutable.
+- Temporary bridge masks and decoded arrays are freed before return.
+- Extension preserves the generic `WangSolveResult` ownership contract.
+- Native result buffers are destroyed after complete Python copy-out, including
+  every error path.
+- A non-satisfying assignment or legal restriction with no extension is
+  UNSAT. Invalid lengths, masks, regions, tiling storage, allocations, or
+  internal SAT postconditions are errors.
+- Extraction output is transactional. Boolean validity is checked later and
   never suppresses a decoded counterexample.
-- Normalized tiling buffers follow the current solver/verifier ownership rules
-  and are destroyed on all error paths.
-- A well-formed non-satisfying assignment, an active zero initial mask, or a
-  legal restriction with no extension is UNSAT.
-- Invalid lengths, illegal bits, nonzero inactive masks, invalid regions,
-  malformed tiling storage, allocation failure, and violated internal SAT
-  postconditions are errors.
-- For `correspond()`, a structurally well-formed tiling rejected by the Wang
-  verifier is a successful negative relation. For `extract()`, it is an invalid
-  witness and produces no assignment. Neither case is an infrastructure error.
-- A valid tiling representing a different assignment is a normal
-  negative `correspond()` result, not an error.
-- The Python coordinator releases the reduction before the formula and uses
-  `finally` blocks for both lifetimes.
+- A valid tiling representing another assignment is a normal negative
+  correspondence result.
+- Python cleanup always releases the reduction before the formula.
 
-## 12. Verification evidence
+## 9. Verification evidence
 
-### 12.1 Generic solver tests
+### 9.1 Generic solver contract
 
-The C suite runs every public-contract case through both
-`wang_solve_serial()` and `wang_solve_optimized()`:
+Both `wang_solve_serial()` and `wang_solve_optimized()` are tested with absent,
+singleton, multi-bit, zero, and malformed initial domains. Tests cover strict
+pointer/count pairs, illegal high bits, inactive entries, complete validation
+before UNSAT interpretation, boundary and neighbor contradictions, empty
+regions, diagnostics, result ownership, and unchanged borrowed storage.
 
-- absent initial domains preserve the existing deterministic status and SAT
-  witness;
-- `NULL/0` is accepted, while `NULL/nonzero`, `nonnull/0`, and wrong counts are
-  errors;
-- high tile bits are errors;
-- a malformed later mask still makes the call ERROR when an earlier active
-  entry is zero, proving complete validation precedes UNSAT interpretation;
-- an inactive zero entry is accepted and an inactive nonzero entry is an error;
-- a region with no active cells accepts an all-zero dense initial array and
-  remains SAT;
-- an active zero entry is UNSAT, including existing root-failed-leaf trace and
-  opt-in snapshot behavior;
-- singleton and multi-bit masks restrict solutions without being modified;
-- a legal mask incompatible with a boundary or neighbor is UNSAT, not ERROR;
-- an isolated cell selects within its restricted mask rather than ignoring it;
-- metrics and diagnostics preserve their contracts;
-- every ERROR reached from a valid destroyed output leaves
-  `WangSolveResult` destroyed, while an already-owned output is rejected
-  unchanged;
-- reference and optimized statuses agree and every SAT witness passes the
-  independent verifier.
+Randomized small generic regions compare both solvers with brute force under
+the same legal masks. Every SAT result passes the independent verifier. The
+[serial solver reference]({{ '/serial_solver_implementation_guide/' | relative_url }})
+contains the exhaustive public-contract catalogue.
 
-The differential suite includes randomized small generic regions with random
-legal initial masks and compares each solver against brute force under the same
-masks.
+### 9.2 Exhaustive small witness equivalence
 
-### 12.2 Exhaustive small witness equivalence
+The primary witness-level evidence enumerates all 1,701 canonical formulas
+through three variables and all `2^n` assignments for each formula. Both
+native solver entry points are exercised, for 27,044 constrained solves.
 
-The exhaustive suite reuses all 1,701 canonical formulas through three
-variables. For every formula it enumerates all `2^n` Boolean assignments rather
-than requesting one preferred solver model.
+For each assignment and solver, the suite:
 
-For each assignment and for each native solver entry point:
-
-1. compute direct Boolean witness validity;
-2. run `solve_assignment_extension()`;
-3. require SAT exactly when the direct Boolean witness is valid and UNSAT
+1. computes direct Boolean witness validity;
+2. requires extension to be SAT exactly for a valid assignment and UNSAT
    otherwise;
-4. for SAT, normalize and independently verify the tiling;
-5. extract its assignment and require exact equality with the enumerated input;
-6. require `correspond()` to be true;
-7. on focused representative fixtures, corrupt each variable-block pattern
-   and require extraction or correspondence to reject it without mutating
-   outputs;
-8. on explicit multi-witness fixtures, pair the tiling with a different valid
-   assignment and require a successful negative correspondence result.
+3. normalizes and independently verifies every SAT tiling;
+4. extracts the assignment and requires exact equality with the input;
+5. requires the representation predicate to return YES.
 
-This is the primary computational evidence for the reduction at witness level.
-It is stronger than one SAT/UNSAT comparison per formula and avoids ambiguity
-from formulas with multiple satisfying assignments. Any failed SAT
-postcondition must report the formula, requested assignment, solver selector,
-and returned tiling before cleanup so the mismatch remains reproducible.
+Focused fixtures corrupt every variable-block pattern and require
+transactional rejection. Multi-witness fixtures pair a tiling with a different
+valid assignment and require a normal negative correspondence result. Any
+failed SAT postcondition retains the formula, requested assignment, solver
+selector, and returned tiling before cleanup.
 
-### 12.3 End-to-end adapter tests
+This is computational evidence for the tested domain, not a general proof.
+It is stronger than one decision comparison per formula and avoids ambiguity
+from independently chosen models.
 
-- Boolean Z3 SAT assignment -> reference native extension -> C verifier ->
-  Python tiling checker -> exact extracted Boolean assignment -> Python Boolean
-  checker.
-- The same path through the optimized native solver.
-- Native reference and optimized tilings obtained without a requested Boolean
-  model -> extraction -> direct Boolean checker.
-- Wang Z3 tiling -> extraction -> direct Boolean checker.
-- Shared UNSAT fixtures preserve UNSAT and produce no witness.
-- A controlled Boolean UNKNOWN result does not call the native extension path.
-- Parser, bridge, solver, copy-out, and verifier failures release both native
-  lifetimes and retain their distinct statuses.
-- Repeated variable positions such as `(x, x, y)` are counted positionally in
-  every Boolean verification.
+### 9.3 End-to-end and regression gates
 
-### 12.4 Regression gates
+End-to-end tests cover:
 
-The implementation passed the C and Python suites, strict GCC and Clang builds,
-sanitizers, static analysis, Memcheck, and the relevant Cachegrind and
-differential targets. The standard comparison benchmark remains a
-decision/performance suite; witness-extension timing is outside its published
-baselines.
+- Boolean Z3 SAT assignment through reference and optimized native extension,
+  C verification, Python tiling checking, exact extraction, and Python Boolean
+  checking;
+- unconstrained reference and optimized native tilings through extraction and
+  the Boolean checker;
+- Wang Z3 tilings through native extraction and the Boolean checker;
+- shared UNSAT fixtures without witnesses;
+- Boolean UNKNOWN without a native extension call;
+- parser, bridge, solver, copy-out, and verifier failures with both native
+  lifetimes released;
+- positional counting of repeated variables such as `(x, x, y)`.
 
-## 13. Documentation boundary
+The implementation passed the C and Python suites, strict GCC and Clang,
+sanitizers, static analysis, Memcheck, and relevant Cachegrind and differential
+gates. The standard comparison benchmark measures decisions and performance;
+witness-extension timing is outside its published baselines.
 
-The public description of the feature is split by concern:
+## 10. Related authoritative documents
 
-- the [architecture reference]({{ '/development_principles/' | relative_url }})
-  defines module ownership and dependency direction;
-- the [serial solver reference]({{ '/serial_solver_implementation_guide/' | relative_url }})
-  defines initial-domain, status, and ownership contracts;
-- the [reduction note]({{ '/reduction_notes/' | relative_url }}) states the
-  witness-level correspondence and its non-bijection caveat;
-- this page explains why the native bridge and Python coordinator preserve
-  independent verification.
+- The [architecture reference]({{ '/development_principles/' | relative_url }})
+  defines module ownership and dependency direction.
+- The [serial solver reference]({{ '/serial_solver_implementation_guide/' | relative_url }})
+  defines initial domains, statuses, diagnostics, and result ownership.
+- The [reduction note]({{ '/reduction_notes/' | relative_url }}) records the
+  mathematical/project convention boundary and witness-level evidence.
+- This page defines the bridge and coordinator contract.
 
-The [initial architecture specification]({{ '/historical_architecture/' | relative_url }})
-and the Yang–Zhang paper remain historical and theoretical sources rather than
-descriptions of the current API.
-
-## 14. Implemented properties and limits
-
-The implementation provides these properties:
-
-- optional initial domains obey the strict dense mask contract in both native
-  solver entry points;
-- the generic solver remains free of formula, assignment, signal, gadget, and
-  Yang–Zhang dependencies;
-- the native bridge implements extension, extraction, and representation-only
-  correspondence over `YangZhangReduction` without persistent metadata or
-  access to `swaps`;
-- the Python coordinator performs the real Boolean-Z3-to-native-Wang witness
-  path without reverse marshalling or copied swaps;
-- exhaustive small formulas and assignments establish SAT equivalence and exact
-  assignment round trips for reference and optimized solvers;
-- native and Wang-Z3 tilings extract independently verified Boolean witnesses;
-- ERROR, UNSAT, SAT, and Boolean UNKNOWN remain distinct;
-- ownership, invalid-input, independent-verification, regression, and artifact
-  gates cover the feature.
-
-It does not introduce a `SignalPlan`, copy swaps into Python, enable OpenMP,
-integrate rendering, or claim a bijection between assignments and tilings.
+The Yang–Zhang paper is authoritative for the reduction. The
+[initial architecture specification]({{ '/historical_architecture/' | relative_url }})
+is retained as design history rather than current API documentation.

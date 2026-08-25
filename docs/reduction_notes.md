@@ -6,29 +6,26 @@ description: Mathematical conventions, project-specific geometry, and witness-le
 section: Yang–Zhang reduction
 document_kind: Technical note
 status: Current implementation
-updated: 2026-08-21
+updated: 2026-08-25
 nav_order: 10
 ---
 
 # Yang–Zhang reduction: geometry and witness correspondence
 
-This page connects the mathematical reduction to the concrete geometry built
-by Tiling Foundry. It distinguishes conventions inherited from Yang–Zhang from
-the explicit forwarder bands and indexing choices introduced by this project,
-then records the witness-level evidence provided by the implementation.
+This technical note connects the mathematical reduction to the concrete
+geometry built by Tiling Foundry. It records signal height, indexing, the
+paper example, the project's explicit forwarder bands, and witness-level
+evidence.
+
+Each section distinguishes conventions inherited from Yang–Zhang from
+indexing and geometry choices introduced by this project. Those categories
+must not be conflated.
 
 Public headers and tests define implemented behavior. The
 [formula-to-region builder]({{ '/yang_zhang_builder_design/' | relative_url }})
 describes the software contract, while the
 [initial architecture specification]({{ '/historical_architecture/' | relative_url }})
 is retained only as design history.
-
-The distinction throughout this page is between:
-
-1. conventions inherited from Yang–Zhang;
-2. explicit conventions introduced by this project.
-
-Those two categories must not be confused.
 
 Primary reference:
 
@@ -38,8 +35,9 @@ Primary reference:
 
 ## 1. Signal height
 
-For `n` variables, the construction has three signal rows per variable and one redundant
-row between adjacent variable groups:
+Signal height fixes the vertical coordinate range used by the routing and
+builder formulas below. For `n` variables, the construction has three signal
+rows per variable and one redundant row between adjacent variable groups:
 
 ```text
 height = 3n + (n - 1) = 4n - 1
@@ -49,7 +47,8 @@ For `n = 3`, the logical height is 11.
 
 ## 2. Adjacent-swap indexing
 
-The paper uses 1-based rows.
+This conversion relates the paper's row numbering to the zero-based swap trace
+stored by the implementation. The paper uses 1-based rows.
 
 If a paper crossover has width `w`, it swaps rows `w` and `w + 1`.
 
@@ -70,7 +69,8 @@ geometry of every crossover gadget.
 
 ## 3. Paper example
 
-For the paper's three-variable example, the adjacent-transposition sequence is:
+The paper example provides a fixed cross-check for both indexing and total
+crossover width. Its adjacent-transposition sequence is:
 
 ```text
 swap(8), swap(7), swap(6), swap(5), swap(4), swap(3),
@@ -94,7 +94,7 @@ This sequence is kept as a golden regression test.
 
 ## 4. Project convention: explicit forwarder bands
 
-The project deliberately keeps:
+The project keeps:
 
 ```text
 2 forwarder columns before the crossover chain
@@ -108,8 +108,8 @@ The purpose is architectural and diagnostic:
 - separate gadget boundaries visually;
 - provide a simple neutral propagation band for debugging and rendering.
 
-These `2 + 2` columns are a **project convention**. They must not be described as if the
-paper required those exact standalone bands.
+These `2 + 2` columns are a **project convention**. The paper does not require
+those exact standalone bands.
 
 The coarse layout is therefore:
 
@@ -139,7 +139,7 @@ width = 1 + 2 + 89 + 2 + 2 = 96
 
 The two forwarder bands are an adaptation made by this project, so their
 neutrality must follow from the actual 23-tile construction rather than being
-attributed to the paper.  It follows locally from the edge colors.
+attributed to the paper. It follows locally from the edge colors.
 
 For `s` in `{0, 1}`, the atomic forwarder `Fs` has edges
 
@@ -148,7 +148,7 @@ For `s` in `{0, 1}`, the atomic forwarder `Fs` has edges
 ```
 
 The internal glue colors make every multi-cell generalized tile indivisible:
-an occurrence of one of its atomic parts forces the other parts.  In either
+an occurrence of one of its atomic parts forces the other parts. In either
 explicit band, the north and south boundary colors are `B`, there is no `L` or
 `R` boundary seed, and the neighboring completed gadgets expose only signal
 colors `0` or `1` at the band interface.  Inspecting the remaining tile
@@ -175,20 +175,23 @@ same interface signals when the band is removed.  Adding the bands therefore
 introduces no choice and does not change tileability, hence it cannot change
 SAT/UNSAT of the reduced instance.
 
-The concrete `Region` builder has black-box tests for the complete active mask,
-boundary encoding, and exact swap trace. End-to-end serial-solver regressions
-now compare complete SAT and UNSAT reductions with an independent Boolean
-oracle; these are regression checks, not the proof of band neutrality. Focused
-solver tests also cover the atomic forwarder, anchor, and crossover generalized
-tiles for both signal values. Focused whole-block tests additionally enumerate
-the complete binary input/output relation at every swap position for height
-seven, sweep every position at larger valid heights through 31 rows, exercise
-chains produced by the permutation builder, fuzz deterministic larger chains,
-and stress volumes up to 31 signal rows and 96 consecutive crossover blocks.
+The concrete `Region` builder has black-box tests for the active mask, boundary
+encoding, and exact swap trace. End-to-end serial-solver regressions compare
+complete SAT and UNSAT reductions with an independent Boolean oracle. These
+are regression checks, not the proof of band neutrality.
+
+Focused tests cover forwarder, anchor, and crossover generalized tiles for
+both signal values. Whole-block tests enumerate the binary input/output
+relation at every swap position for height seven. They also sweep larger valid
+heights through 31 rows, exercise permutation-builder chains, fuzz
+deterministic larger chains, and stress up to 31 signal rows and 96 consecutive
+crossover blocks.
 
 ## 6. Dimension calculator and completed builder
 
-`yang_zhang_compute_dimensions()` remains only a coarse dimension calculator.
+The implementation separates coarse size arithmetic from construction of the
+active mask and boundary. `yang_zhang_compute_dimensions()` is the coarse
+dimension calculator.
 
 It computes:
 
@@ -210,10 +213,11 @@ reduction stages:
 - variable, clause, and isolated crossover boundary markers;
 - transactional transfer of the exact adjacent-swap trace.
 
-The builder does not parse text, solve the formula, choose tiles, or store
-gadget annotations in `Region`. Its full implementation contract is recorded
-in the [formula-to-region builder page]({{ '/yang_zhang_builder_design/' | relative_url }});
-public headers and black-box tests are authoritative for implemented behavior.
+Parsing, solving, tile selection, and persistent gadget annotations belong to
+other modules. The
+[formula-to-region builder page]({{ '/yang_zhang_builder_design/' | relative_url }})
+is the full implementation contract; public headers and black-box tests remain
+authoritative for behavior.
 
 ## 7. Witness-level correspondence
 
@@ -236,11 +240,10 @@ verified Wang tiling
 ```
 
 False pins the three atomic V0 tiles in order; true pins `TILE_V1` in all
-three positions. Every other active cell begins unrestricted. Forwarders,
-anchors, crossovers, redundant rows, and clause gadgets therefore remain
-consequences of the region boundary, canonical tileset, propagation, and
-search. The bridge neither reads the adjacent-swap trace nor evaluates formula
-clauses.
+three positions. Every other active cell begins unrestricted. The region
+boundary, canonical tileset, propagation, and search determine forwarders,
+anchors, crossovers, redundant rows, and clause gadgets. The bridge neither
+reads the adjacent-swap trace nor evaluates formula clauses.
 
 The executable evidence enumerates all 1,701 canonical formulas through three
 variables, all `2^n` assignments for each formula, and both native solver entry
@@ -250,8 +253,11 @@ independent Wang verifier, extracts the exact input assignment, and satisfies
 the representation correspondence predicate.
 
 This establishes extraction as a left inverse of assignment extension for the
-tested domain. It does not establish a bijection: one satisfying assignment may
-have multiple tilings, and extending an assignment extracted from a tiling need
-not reproduce that tiling byte for byte. Extraction deliberately does not hide
-a decoded assignment that later fails Boolean verification; such a pair is a
-reduction counterexample to retain and inspect.
+tested domain. It does not establish a bijection. One satisfying assignment
+may have multiple tilings, and extending an assignment extracted from a tiling
+need not reproduce that tiling byte for byte.
+
+Extraction preserves a decoded assignment even if it later fails Boolean
+verification. Such a pair is a reduction counterexample to retain and inspect.
+The [witness correspondence design]({{ '/witness_correspondence/' | relative_url }})
+defines the bridge, status, and lifetime contracts.

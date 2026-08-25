@@ -18,6 +18,28 @@ description: A research software laboratory for finite Wang tilings and inspecta
   [Explore the documentation](#documentation){: .text-link }
 </section>
 
+<section class="home-index" id="reading-path" data-content-column markdown="1">
+  <div class="section-heading">
+    <p class="eyebrow">Reading path</p>
+    <h2>Understand, inspect, verify</h2>
+  </div>
+
+  Start with the architecture reference and reduction note to understand the
+  pipeline. Use implementation contracts and the data contract when inspecting
+  code or integrations. Use methodology pages before interpreting dated
+  benchmark, profile, coverage, or fuzzing reports.
+
+  Each catalog entry shows both its document type and status. Current
+  specifications, contracts, references, notes, and designs describe maintained
+  behavior within their stated scope. Methodology pages define how evidence is
+  collected. Dated reports preserve results for a named source state and date.
+  Historical pages preserve earlier decisions and are not current API
+  documentation.
+
+  Completed implementation plans remain versioned under `docs/plans/` for
+  operational history, but are excluded from this public catalog.
+</section>
+
 {% assign architecture = site.pages | where: "section", "Architecture and correctness" | sort: "nav_order" %}
 {% assign reduction = site.pages | where: "section", "Yang–Zhang reduction" | sort: "nav_order" %}
 {% assign optimization = site.pages | where: "section", "Solver optimization" | sort: "nav_order" %}
@@ -30,9 +52,9 @@ description: A research software laboratory for finite Wang tilings and inspecta
     <h2>Architecture and correctness</h2>
   </div>
 
-  These documents explain the software boundaries that keep the reduction,
-  solver, independent verification, and Boolean–Wang witness correspondence
-  auditable.
+  These current references define the software boundaries that keep the
+  reduction, solver, independent verification, solution transport, and
+  Boolean–Wang witness correspondence auditable.
 
   {% include document-list.html documents=architecture %}
 </section>
@@ -43,9 +65,10 @@ description: A research software laboratory for finite Wang tilings and inspecta
     <h2>Yang–Zhang reduction</h2>
   </div>
 
-  Read these pages for the mathematical conventions, region geometry,
-  implementation contract, and primary sources behind the fixed 23-tile
-  construction.
+  The technical note distinguishes paper conventions from project conventions.
+  The builder page is the implementation contract for region geometry,
+  ownership, and black-box obligations. The bibliography records primary
+  sources.
 
   {% include document-list.html documents=reduction %}
 </section>
@@ -56,9 +79,9 @@ description: A research software laboratory for finite Wang tilings and inspecta
     <h2>Solver optimization</h2>
   </div>
 
-  The optimization record starts from the retained reference path and adds one
-  measured mechanism at a time. Each report preserves its corpus, environment,
-  direct work counters, timing method, and limitations.
+  Read the methodology first. The remaining pages are dated profile or
+  benchmark reports that preserve their corpus, environment, work counters,
+  timing method, and limitations.
 
   {% include document-list.html documents=optimization %}
 </section>
@@ -69,8 +92,9 @@ description: A research software laboratory for finite Wang tilings and inspecta
     <h2>Cross-engine benchmarks</h2>
   </div>
 
-  The comparison protocol distinguishes solving the same prepared Wang region
-  from end-to-end decisions that begin with the same formula file.
+  The current protocol distinguishes solving the same prepared Wang region
+  from end-to-end decisions that begin with the same formula file. Dated
+  reports retain the measured source identity and interpretation limits.
 
   {% include document-list.html documents=comparisons %}
 </section>
