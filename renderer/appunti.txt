@@ -1,0 +1,227 @@
+# OVERVIEW:
+- [x] palette 16 colors
+- [x] tiles 32*32
+- [x] sprite 64*64
+  ~ \forall pixel \implies 4bit \in palette
+
+- [x] save the config => palette.json + scene.json
+- [x] final rendered device => png
+
+
+# INTERFACE AT COMMAND LINE:
+
+- this program must be executable by command line with the following shape:
+  python main.py <palette.json> <scene.json> <tiles.bin> <sprites.bin> <output.png>
+
+
+# INPUT FORMAT:
+ - [x] the renderer must be able to read JSON to get assets, split in 2 separate files:
+         |- palette.json  => palette only
+         |- scene.json    => transparent_index, tile_map, sprites
+
+ - [x] palette \represented as pure JSON
+                      ~ [
+                          [0,0,0],
+                          [255,0,0],
+                          [0,255,0],
+                          [0,0,255],
+                          [255,255,0],
+                          [0,255,255],
+                          [255,0,255],
+                          [255,255,255],
+                          [128,0,0],
+                          [0,128,0],
+                          [0,0,128],
+                          [128,128,0],
+                          [0,128,128],
+                          [128,0,128],
+                          [128,128,128],
+                          [255,128,0]
+                      ]
+
+ - [x] read tile and sprite binaries
+     \saved as packed binary as 256*256 matrix
+         |- packed binary are ( 256 * 256 ) / 2 bytes (file 32768 byte) (each byte contains 2 pixel)
+             \foreach byte
+               |- high nibble (bit 7-4) ~ first pixel  => palette index 0-15
+               |- low  nibble (bit 3-0) ~ second pixel => palette index 0-15
+
+ - [x] the scene is saved in a JSON
+     \is organized such as
+       |- 1. transparent_index ( palette index 0-15 treated as transparent )
+       |- 2. tile_map ( matrix 15 * 20 of tile IDs 0-63 )
+       |- 3. sprites ( list of sprite )
+         \where \foreach sprite \has (at least) columns:
+             |- id
+             |- x
+             |- y
+             |- flip_x
+             |- flip_y
+             |- rotation
+
+   ~ {
+       "transparent_index": 0,
+       "tile_map": [
+         [ 1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1],
+         [ 1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1],
+         [ 1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1],
+         [ 1,  0,  0,  5,  5,  0,  0,  0,  0,  0,  0,  0,  0,  0,  5,  5,  0,  0,  0,  1],
+         [ 1,  0,  0,  2,  2,  0,  0,  0,  0,  0,  0,  0,  0,  0,  2,  2,  0,  0,  0,  1],
+         [ 1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1],
+         [ 1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1],
+         [ 1,  0,  0,  0,  0,  0,  2,  2,  2,  2,  2,  2,  0,  0,  0,  0,  0,  0,  0,  1],
+         [ 1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1],
+         [ 1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1],
+         [ 1,  0,  0,  5,  5,  0,  0,  0,  0,  0,  0,  0,  0,  0,  5,  5,  0,  0,  0,  1],
+         [ 1,  0,  0,  2,  2,  0,  0,  0,  0,  0,  0,  0,  0,  0,  2,  2,  0,  0,  0,  1],
+         [ 1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1],
+         [ 1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1],
+         [ 1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1]
+       ],
+       "sprites": [
+         { "id": 0,  "x": 100, "y": 80,  "flip_x": false, "flip_y": false, "rotation": 0   },
+         { "id": 3,  "x": 320, "y": 200, "flip_x": true,  "flip_y": false, "rotation": 0   },
+         { "id": 7,  "x": 480, "y": 150, "flip_x": false, "flip_y": true,  "rotation": 90  },
+         { "id": 12, "x": 60,  "y": 380, "flip_x": true,  "flip_y": true,  "rotation": 180 }
+       ]
+     }
+
+
+# ARCHITECTURE:
+- [x] the palette:
+    \foreach color
+      |- is defined as RGB between 0-255 ~ 3 byte
+    \foreach pixel
+      |- has just 1 reference to a color ~ 4 bit
+
+- [x] a tile sheet:
+    \is 256*256
+      |-\has 64 tiles \in grid 8*8
+    \foreach tile
+      |- \has 32*32 pixel
+    \is ordered
+      |- tile 0 \is top left
+                      ~    |----------------------------|
+                           | tile 0 tile 1 ... tile 7   |
+                           | tile 8        ... tile 15  |
+                           |   .                 .      |
+                           |   .                 .      |
+                           |   .                 .      |
+                           |                            |
+                           | tile 56       ... tile 63  |
+                           |----------------------------|
+
+- [x] a sprite sheet:
+    \is 256*256 pixel
+      |-\has 16 sprites \in grid 4*4
+    \foreach sprite
+      |-\has 64*64 pixel
+    \is ordered
+      |- sprite 0 top left
+                      ~    |----------------------------------|
+                           | sprite 0 sprite 1  ... sprite 3  |
+                           | sprite 4           ... sprite 7  |
+                           |   .                       .      |
+                           |   .                       .      |
+                           |   .                       .      |
+                           |                                  |
+                           | sprite 12          ... sprite 15 |
+                           |----------------------------------|
+
+- [x] a frame buffer:
+    \is 640*480 pixel
+    \is fondale => whole screen
+        |-\binds tiles \by tile_map 15*20 (
+                                        - 480/32 = 15
+                                        - 640/32 = 20
+                                      )
+
+- [x] transparency:
+    \exists transparent_index \in palette (0-15)
+    \foreach sprite, \foreach pixel
+                    - \if pixel palette index == transparent_index => pixel is not copied over the tile on the buffer
+                    - \if pixel palette index != transparent_index => pixel get overwritten on the buffer
+
+- [x] sprite transformation:
+    \happens before \binding frame buffer
+       |-1. reflected on x axis
+       |-2. reflected on y axis
+       |-3. rotated by 90,180,270 degree
+
+
+# BUILDING FLOW:
+  1. First whole fondale is drawn based on tile_map
+  2. Second \foreach sprite is drawn in the order it is saved in json
+
+  N.B. a sprite can be partially out of frame \in this case the pixel drawn are just the \in frame ones
+
+
+# CLASSES:
+      |- [x] 1. class Palette that takes a JSON path, reads and validates the palette and makes an index to the respective RGB value
+      |- [x] 2. class VirtualVRAM which uploads the tile sheet and sprite sheet from the respective binaries, decodes the 4 bit sequences in a matrix of palette indexes
+      |- [x] 3. class SceneParser which reads a JSON and gives back the description of the frame buffer and of the sprites
+      |- [x] 4. class Blitter which gets tiles and sprites from the respective sheets, applies flip, rotations and transparency and draws the final result in the background
+      |- [x] 5. class RenderingPipeline which calls and executes the complete composition of the scene and exports it as png
+
+
+# OPTIONS / EXTRA:
+- [ ] nibble unpacker in C via ctypes
+    \instead of pure numpy in VirtualVRAM._decode()
+      |- write decode(uint8* input, int len, uint8* output) as C shared lib (.so)
+      |- load in VirtualVRAM via ctypes
+      |- good ctypes demo: simple interface, bit-level operation that belongs to low level
+      |- numpy alternative: data>>4 and data&0x0F with interleave (already fast, C not needed for perf)
+      |- value is in demonstrating ctypes cross-language integration, not raw speed
+
+
+# TODO IF TIME (refactoring design/architettura, non bloccanti — progetto ok cosi):
+- [ ] blit_sprite: togliere il chained indexing self._buffer[dst][mask[src]] = ...
+      |- funziona solo perche dst sono slice pure (basic indexing => view => write-through)
+      |- fix idiomatico: np.copyto(region, sprite_buf[src], where=sprite_buf[src] != transparent_index)
+         con region = self._buffer[dst]
+- [ ] RenderingPipeline: caricare Palette/VirtualVRAM/SceneParser in cima a render() (fail-fast)
+      |- ora la palette si valida solo in _export, dopo aver gia composto tutto il buffer
+      |- passare gli oggetti gia pronti a _compose/_export invece di ricostruirli
+- [ ] Blitter: spostare l'id da costruttore a parametro dei metodi (un solo Blitter per scena)
+      |- ora se ne crea 1 per cella (300+) e si ri-valida transparent_index ogni volta
+      |- blit_tile(tile_id, row, col) / blit_sprite(sprite_id, x, y, flip_x, flip_y, rotation)
+      |- N.B. cambia le firme => aggiornare i test (make_pipeline, test Blitter)
+
+
+# REQUIREMENTS:
+- in case of error the renderer must raise a related exception, is suggested to make custom exceptions
+- each relevant function must be commented with what it does, its input and its output
+- Pillow usage must stay in the export to PNG only
+- utilize Numpy for arrays, specifically the type np.uint8
+- renderer must be executed by command line in the proposed version
+
+
+# PRE-WRITING CHECKLIST (Python good habits):
+
+## Naming
+- [ ] classi in PascalCase  (es. VirtualVRAM, SceneParser)
+- [ ] metodi e variabili in snake_case  (es. load_json, tile_map)
+- [ ] costanti in UPPER_SNAKE_CASE  (es. TILE_SIZE = 32)
+
+## Attributi di istanza
+- [ ] self.x    => pubblico, parte dell'API esterna
+- [ ] self._x   => protetto, uso interno / sottoclassi
+- [ ] self.__x  => privato, name-mangled (_ClassName__x), nessuno lo tocca fuori dalla classe
+      \scegli __ solo se c'è ereditarietà o vuoi protezione esplicita, altrimenti _ basta
+
+## Dunder methods
+- [ ] __repr__  => sempre, stringa developer-facing (ideale: eval(repr(obj)) ricrea l'oggetto)
+- [ ] __str__   => opzionale, stringa human-readable per print()
+      \se implementi solo uno => implementa __repr__, Python lo usa come fallback
+- [ ] __getitem__ => se l'oggetto è indicizzabile con [], usa isinstance() per validare il tipo dell'indice
+
+## isinstance nei dunder
+- [ ] nei metodi che accettano argomenti esterni (operatori, __getitem__, ecc.)
+      usare isinstance(x, T) per dare errori chiari invece di TypeError oscuri
+      es:
+        if not isinstance(idx, int):
+            raise MyError(f"expected int, got {type(idx)}")
+
+## Eccezioni custom
+- [ ] definire almeno una eccezione per classe/modulo (es. PaletteError, VRAMError)
+- [ ] sollevarla sempre con un messaggio che dice COSA è andato storto e QUALE valore ha causato il problema
