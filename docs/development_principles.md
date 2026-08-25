@@ -96,7 +96,8 @@ A module is implemented when it has:
 | `python/crosscheck` | Scoped composition of adapters, Z3, and independent checkers | Persistent native state and duplicated reduction semantics |
 | `python/oracles` | Independent solvers and checkers over pure models | Parsing, filesystem I/O, and reduction construction |
 | `python/formats` | Square solution validation and deterministic export | Native lifetimes, solving, and presentation |
-| `renderer/wang_square.py` | Structural presentation projection and square rasterization | Semantic verification and solver access |
+| `renderer/wang_hex_port.py` | Pure square-to-hex mapping, inverse checks, and matching-equivalence checks | Raster geometry, semantic verification, and solver access |
+| `renderer/wang_square.py` | Structural presentation projection and square/default or hex/explicit rasterization | Semantic verification and solver access |
 
 `include/wang/task_plan.h`, `src/parallel/solver_openmp.c`, and the two modules
 under `python/hex/` are placeholders. `src/io/json.c` is also a placeholder;
@@ -124,7 +125,12 @@ models. No ctypes pointer reaches those models or their consumers.
        immutable Python models       generic native solver
           /              \
          v                v
-   Python oracles    checkers / exporter --> square renderer
+   Python oracles    checkers / exporter --> Wang renderer
+                                             |       \
+                                             |        +--> pure hex port/check
+                                             v                    |
+                                       square PNG                 v
+                                                            hex PNG
 ```
 
 The formula adapter uses `cm13_formula_load_path(...)`, the path-based external
@@ -201,7 +207,15 @@ produces the closed square-only `wang-solution-v1` document. The
 [data contract]({{ '/wang-solution-v1/' | relative_url }}) is authoritative for
 schema, semantic validation, deterministic serialization, and metadata rules.
 
-The isolated square renderer consumes only that document. It projects the
-fields needed to choose pixels and produces a diagnostic PNG. Rendering is
-presentation, not proof, and cannot replace either semantic validation or the
-independent verifier. Hex translation and hex rendering are not implemented.
+The isolated Wang renderer consumes only that document. Its default path
+projects the fields needed for the existing square diagnostic PNG. Explicit
+`--hex` mode applies the pure in-memory
+[square-to-hex port]({{ '/wang-square-to-hex/' | relative_url }}), runs its
+raster-independent checker, and then composes a pointy-top axial PNG. The port
+preserves the square table, selected IDs, coordinates, holes, boundary, and
+matching truth values; it does not create a hex schema or core model.
+
+Rendering is presentation, not proof. The port checker establishes translation
+equivalence but deliberately does not require the source matching relations to
+be true, so neither raster path can replace semantic validation or the
+independent verifier.

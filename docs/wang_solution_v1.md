@@ -134,11 +134,13 @@ the internal consistency of the serialized witness, but it is neither a solver
 nor the independent application verifier. The integration boundary must run
 the independent verifier before presenting a solution as correct.
 
-The renderer remains a presentation-only consumer. It must not import this
-formats module, replace the independent verifier, or decide correctness from a
-successful render. `load_wang_solution()` additionally rejects malformed JSON,
-duplicate object members, and non-finite numeric extensions accepted by some
-JSON parsers.
+The renderer remains a presentation-only consumer. Its explicit hex mode uses
+the same square document through the in-memory
+[square-to-hex port]({{ '/wang-square-to-hex/' | relative_url }}); it does not
+extend this schema. Neither raster mode may import this formats module, replace
+the independent verifier, or decide correctness from a successful render.
+`load_wang_solution()` additionally rejects malformed JSON, duplicate object
+members, and non-finite numeric extensions accepted by some JSON parsers.
 
 ## Metadata boundary
 

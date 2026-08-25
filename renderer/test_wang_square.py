@@ -427,6 +427,7 @@ from pathlib import Path
 import sys
 
 module_path = Path({str(RENDERER_DIR / 'wang_square.py')!r})
+sys.path.insert(0, str(module_path.parent))
 spec = importlib.util.spec_from_file_location('isolated_wang_square', module_path)
 module = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = module

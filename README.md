@@ -56,8 +56,9 @@ benchmark case. It does not require a GPU.
 ## Current status
 
 The implemented components cover the square pipeline from `.cm13` input
-through a verified solution document and the separate diagnostic PNG command.
-Hex translation and parallel solving remain future work.
+through a verified solution document, the default square diagnostic PNG, and
+the checked presentation-only square-to-hex view selected by `--hex`. Parallel
+solving remains future work.
 
 | Capability | Status |
 | --- | --- |
@@ -69,8 +70,8 @@ Hex translation and parallel solving remain future work.
 | Wang Z3 oracle | Implemented over copied `Region + TILESET` |
 | Boolean–Wang witness correspondence | Implemented; exhaustive evidence covers all 1,701 canonical formulas through three variables and 27,044 constrained native solves |
 | Verified square solution export | Implemented as the closed `wang-solution-v1` contract and deterministic exporter |
-| Wang square diagnostic renderer | Implemented as a separate presentation-only CLI in the isolated `renderer/` project |
-| Square-to-hex translation and verification | Not implemented; the two Python modules are empty placeholders |
+| Wang diagnostic renderer | Implemented as one presentation-only CLI with byte-stable square default and explicit `--hex` mode in the isolated `renderer/` project |
+| Square-to-hex presentation port | Implemented as a pure in-memory Basire/Culik mapping with a raster-independent checker; no hex solver, schema, or core model |
 | Native C JSON layer | Not implemented; `src/io/json.c` is a placeholder |
 | `TaskPlan` and native OpenMP solver | Not implemented; only the build scaffold exists |
 
@@ -108,13 +109,17 @@ The implemented paths are:
                           copied tiling + Python checker
                                      |
                                      v
-                          wang-solution-v1 --> square PNG
+                          wang-solution-v1 --> square PNG (default)
+                                     \
+                                      +--> pure hex port/check --> hex PNG (--hex)
 ```
 
 The witness bridge relates exact Boolean assignments to the variable cells of
 the same live Yang–Zhang reduction. Its precise scope and evidence are recorded
 in the [witness correspondence design](docs/designs/2026-08-21-witness-extension-design.md).
-The square-to-hex and OpenMP stages are not part of the implemented diagram.
+The square-to-hex branch changes presentation only; it consumes the same
+square witness after verification. OpenMP is not part of the implemented
+diagram.
 
 ## Correctness boundaries
 
@@ -130,6 +135,9 @@ The square-to-hex and OpenMP stages are not part of the implemented diagram.
   independent formula checker.
 - Witness correspondence does not claim a unique tiling for each assignment or
   that extending an extracted assignment reproduces the original tiling.
+- The hex port is a bijection over the image tile table, not a second solver or
+  correctness oracle. Its pure checker proves translation equivalence while
+  leaving source solution validation upstream.
 - OpenMP is introduced only after the serial path is correct and measurable.
 - Project conventions must be distinguished from claims inherited from the
   Yang–Zhang paper.
@@ -138,12 +146,10 @@ The square-to-hex and OpenMP stages are not part of the implemented diagram.
 
 Planned work remains separated into independently reviewed changes:
 
-1. formalize, implement, and independently verify square-to-hex translation,
-   then add the explicit hex mode to the existing Wang renderer command;
-2. evaluate MRV indexing on weakly constrained search and build a separate
+1. evaluate MRV indexing on weakly constrained search and build a separate
    hard-UNSAT corpus before making parallelism claims;
-3. harden allocation and cleanup failure paths before concurrent execution;
-4. define and validate a minimal serial `TaskPlan` before implementing OpenMP.
+2. harden allocation and cleanup failure paths before concurrent execution;
+3. define and validate a minimal serial `TaskPlan` before implementing OpenMP.
 
 The implementation follows a deliberately small design rule: each datum has one
 owner, derived state is computed when needed, and future metadata is not added to
@@ -166,7 +172,7 @@ make check
 
 The imported renderer remains a separate locked Python project. Its Pillow and
 NumPy dependencies are not installed by the root project or exercised by
-`make check`. Run its 189-test combined suite independently:
+`make check`. Run its 213-test combined suite independently:
 
 ```sh
 cd renderer
@@ -177,7 +183,7 @@ CI mirrors that command in a separate read-only Python 3.14 job. Snapshot
 provenance and update instructions are recorded in
 [`renderer/UPSTREAM.md`](renderer/UPSTREAM.md).
 
-To exercise the Wang square renderer on the versioned solution fixture:
+To exercise the Wang renderer on the versioned square solution fixture:
 
 ```sh
 cd renderer
@@ -186,8 +192,20 @@ uv run --locked python wang_square.py \
   output/wang-square.png
 ```
 
+The same command produces the checked pointy-top axial presentation only when
+the explicit flag is present:
+
+```sh
+uv run --locked python wang_square.py \
+  ../tests/fixtures/wang_solution_v1_square_sat.json \
+  output/wang-hex.png \
+  --hex
+```
+
 The [square solution contract](docs/wang_solution_v1.md) includes the producer
-API for exporting a verified native result before rendering it.
+API for exporting a verified native result before rendering it. The
+[square-to-hex reference](docs/wang_square_to_hex.md) defines the mapping,
+inverse proof, checker boundary, and integer axial raster convention.
 
 Useful individual targets:
 
@@ -270,8 +288,8 @@ python/native/   C ABI adapters and ownership boundaries
 python/formats/  versioned solution validation and deterministic export
 python/crosscheck/ scoped native/Z3 witness orchestration
 python/oracles/  independent Z3 oracles and witness checks
-python/hex/      empty square-to-hex placeholders
-renderer/        isolated legacy and Wang square PNG rendering
+python/hex/      deliberately unused empty hex-core placeholders
+renderer/        isolated legacy and square/default, hex/explicit Wang rendering
 tests/           C, Python, and instance regressions
 benchmarks/      fixed reference corpus and profiling runner
 docs/            theory and architecture references
@@ -294,8 +312,8 @@ The [GitHub Pages documentation](https://xtraid.github.io/tiling-foundry/)
 organizes the technical material by reader interest:
 
 - **Architecture and correctness** covers module ownership, the serial solver,
-  independent verification, Boolean–Wang witness correspondence, and the
-  square solution data contract.
+  independent verification, Boolean–Wang witness correspondence, the square
+  solution data contract, and the presentation-only square-to-hex proof.
 - **Yang–Zhang reduction** covers geometry, formula-to-region construction,
   proof obligations, and primary references.
 - **Solver optimization** separates the current methodology from dated,

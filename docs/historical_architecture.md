@@ -31,13 +31,14 @@ than the early `vars`/`clause` sketch. The current public headers and tests are
 authoritative for behavior.
 
 The serial and optimized solvers are implemented and measured. The Python
-square solution contract, exporter, and presentation-only square renderer are
-also implemented. Native C JSON remains a placeholder, while `TaskPlan`, the
-native OpenMP solver, and square-to-hex translation remain future work.
+square solution contract, exporter, presentation-only square renderer, and
+checked square-to-hex presentation port are also implemented. Native C JSON,
+`TaskPlan`, and the native OpenMP solver remain future work.
 
 Current boundaries and status are documented in the
 [architecture page]({{ '/development_principles/' | relative_url }}), the
-[solution contract]({{ '/wang-solution-v1/' | relative_url }}), and the
+[solution contract]({{ '/wang-solution-v1/' | relative_url }}), the
+[square-to-hex reference]({{ '/wang-square-to-hex/' | relative_url }}), and the
 [solver optimization methodology]({{ '/solver_performance_scope/' | relative_url }}).
 
 ## Document metadata
