@@ -6,9 +6,10 @@ A command-line pixel art renderer that composites a scene from a tile-based back
 
 **Status**: feature-complete. The code works and is tested; any future changes will be refactoring, cleanup, or optimization.
 
-Tiling Foundry also supplies a separate presentation-only Wang square backend.
-It consumes the versioned JSON boundary without importing the solver or
-changing this legacy pixel-art pipeline.
+Tiling Foundry also supplies a separate presentation-only Wang backend. Its
+default square path and explicit checked `--hex` view consume the same
+versioned square JSON without importing the solver or changing this legacy
+pixel-art pipeline.
 
 ## Output
 
@@ -37,9 +38,10 @@ python main.py <palette.json> <scene.json> <tiles.bin> <sprites.bin> <output.png
 | `sprites.bin` | packed binary sprite sheet (32768 bytes) |
 | `output.png` | rendered output |
 
-### Wang square diagnostic rendering
+### Wang diagnostic rendering
 
-From this directory, render a `wang-solution-v1` square document with:
+From this directory, render a `wang-solution-v1` square document with the
+default square geometry:
 
 ```bash
 uv run --locked python wang_square.py \
@@ -47,18 +49,38 @@ uv run --locked python wang_square.py \
   output/wang-square.png
 ```
 
-Optional `--pixels-per-cell N` and `--margin N` arguments control the dynamic
-canvas. Inclusive coordinate offsets, including negative origins, do not alter
-dense row-major placement. Holes use a neutral checkerboard. Each logical edge
-color receives a deterministic, distinct RGB value, so the backend does not
-collapse the contract's unbounded color IDs into the legacy 16-color palette.
+Use the same command and the same square document for the pointy-top axial
+view, enabled only by the explicit flag:
 
-The backend renders every active cell from its named `N`, `E`, `S`, and `W`
-edge colors and writes the PNG with an atomic same-directory replace. It does
-not use `boundary` or `metadata` to select pixels, check edge matching, validate
-SAT correctness, or load `libwang.so`/Z3. A successful PNG is presentation,
-not a proof; correctness remains the responsibility of the independent Tiling
-Foundry verifier before export.
+```bash
+uv run --locked python wang_square.py \
+  ../tests/fixtures/wang_solution_v1_square_sat.json \
+  output/wang-hex.png \
+  --hex
+```
+
+Optional `--pixels-per-cell N` and `--margin N` arguments control the dynamic
+canvas. `N` is the square side in default mode and the integer hex radius in
+hex mode. Inclusive coordinate offsets, including negative origins, do not
+alter dense row-major placement. Holes use a neutral checkerboard. Each logical
+edge color receives a deterministic, distinct RGB value, so the backend does
+not collapse the contract's unbounded color IDs into the legacy 16-color
+palette.
+
+The square backend renders every active cell from its named `N`, `E`, `S`, and
+`W` edge colors. Hex mode first invokes the standard-library-only reducer and
+checker in `wang_hex_port.py`. With `(q,r)=(x,y)` and edge order
+`(E,SE,SW,W,NW,NE)`, it maps `(N,E,S,W)` to
+`(E,S,kappa,W,N,kappa)`, where `kappa=max(C)+1`, and then rasterizes the checked
+in-memory view. No hex JSON or second command is created.
+
+Both modes write the PNG with an atomic same-directory replace. Neither uses
+`metadata` to select pixels, validates source SAT correctness, or loads
+`libwang.so`/Z3. Boundary is pixel-neutral: hex mode retains and checks its
+direction-preserving translation, while default square output remains
+byte-for-byte unchanged. A successful PNG is presentation, not a proof;
+correctness remains the responsibility of the independent Tiling Foundry
+verifier before export.
 
 ## Input Format
 
@@ -204,12 +226,15 @@ Raises `RenderingException` on pipeline errors.
 ├── main.py               # CLI entry point
 ├── classes.py            # Palette, VirtualVRAM, SceneParser, Blitter, RenderingPipeline
 ├── tests.py              # Test suite (144 tests, all passing)
-├── wang_square.py         # Separate wang-solution-v1 square backend and CLI
-├── test_wang_square.py    # Wang loader, raster, isolation, CLI, and failure tests
+├── wang_square.py         # One Wang CLI: square default, explicit hex raster
+├── wang_hex_port.py       # Pure square-to-hex reducer and independent checker
+├── test_wang_square.py    # Square loader, raster, isolation, CLI, and failures
+├── test_wang_hex.py       # Port proof obligations, hex raster, golden, and CLI
 ├── input/                # Example input files (palette, scene, tiles, sprites)
 ├── output/               # Rendered PNG output goes here
 ├── test_data/
-│   ├── wang_solution_v1_square_sat.png # Decoded-pixel golden for the Wang fixture
+│   ├── wang_solution_v1_square_sat.png # Square golden for the Wang fixture
+│   ├── wang_solution_v1_hex_sat.png    # Pointy-top hex golden for the same fixture
 │   ├── palette_ok.json             # Valid 16-color palette
 │   ├── palette_wrong_count.json    # Only 3 colors (invalid)
 │   ├── palette_wrong_value.json    # Component > 255 (invalid)
@@ -225,8 +250,9 @@ Raises `RenderingException` on pipeline errors.
 uv run --locked pytest -q
 ```
 
-The complete isolated suite has 189 tests: the 144 preserved legacy tests
-below and 45 Wang square tests. To run only the original upstream suite:
+The complete isolated suite has 213 tests: the 144 preserved legacy tests
+below, 45 Wang square tests, and 24 square-to-hex/hex-raster tests. To run only
+the original upstream suite:
 
 ```bash
 uv run --locked pytest tests.py -v

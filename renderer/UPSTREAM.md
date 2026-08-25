@@ -21,12 +21,11 @@ tests. The overall and affected section totals now say 144, 18 Palette, 33
 SceneParser, and 49 Blitter tests. This `UPSTREAM.md` file is local provenance,
 not an upstream file.
 
-Tiling Foundry later added `wang_square.py`, `test_wang_square.py`, and the
-decoded-pixel golden `test_data/wang_solution_v1_square_sat.png`, plus clearly
-separated usage notes in `README.md`. These additions consume
-`wang-solution-v1` as presentation data and do not modify or import the legacy
-PAP modules. They also leave `pyproject.toml`, `uv.lock`, and the pinned
-dependencies unchanged.
+Tiling Foundry later added `wang_square.py`, `wang_hex_port.py`, their two test
+modules, and square/hex goldens under `test_data/`, plus clearly separated
+usage notes in `README.md`. These additions consume `wang-solution-v1` as
+presentation data and do not modify or import the legacy PAP modules. They
+also leave `pyproject.toml`, `uv.lock`, and the pinned dependencies unchanged.
 
 ## Verification
 
@@ -43,9 +42,10 @@ uv run --locked pytest -q
 ```
 
 The import baseline remains 144 collected tests and 144 passing tests. The
-combined local suite is 189 tests: 144 preserved legacy tests and 45 Wang
-square tests. Keep the renderer environment under `renderer/.venv`; its local
-`.gitignore` excludes that environment and generated Python/build files.
+combined local suite is 213 tests: 144 preserved legacy tests, 45 Wang square
+tests, and 24 square-to-hex/hex-raster tests. Keep the renderer environment
+under `renderer/.venv`; its local `.gitignore` excludes that environment and
+generated Python/build files.
 
 The preserved `renderer/.github/workflows/ci.yml` is nested upstream evidence;
 GitHub does not run it as a workflow of the containing repository. The

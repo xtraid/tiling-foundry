@@ -2,14 +2,14 @@
 
 This module deliberately does not verify Wang adjacency or boundary semantics.
 It accepts the structural fields needed for presentation, projects away
-``boundary`` and ``metadata``, and renders the selected tile edge colors.
-Successful rendering is not a correctness claim.
+``metadata``, and renders the selected tile edge colors.  The default square
+path is unchanged; explicit hex mode applies and checks the pure Basire/Culik
+port before rasterization.  Successful rendering is not a correctness claim.
 """
 
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
@@ -17,13 +17,22 @@ import tempfile
 from typing import Final
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
+
+from wang_hex_port import (
+    SQUARE_DIRECTIONS,
+    WangHexPort,
+    WangPresentation,
+    WangSquareRenderError,
+    check_square_to_hex,
+    reduce_square_to_hex,
+)
 
 
 SCHEMA_NAME: Final = "wang-solution-v1"
 GEOMETRY: Final = "square"
 STATUS: Final = "SAT"
-DIRECTIONS: Final = ("N", "E", "S", "W")
+DIRECTIONS: Final = SQUARE_DIRECTIONS
 
 DEFAULT_PIXELS_PER_CELL: Final = 32
 DEFAULT_MARGIN: Final = 8
@@ -64,30 +73,6 @@ _BOUND_FIELDS: Final = frozenset(
         "max_y_inclusive",
     }
 )
-
-
-class WangSquareRenderError(ValueError):
-    """Raised when an input cannot be presented as a v1 square image."""
-
-
-@dataclass(frozen=True, slots=True)
-class WangPresentation:
-    """Immutable projection of only the fields that determine the pixels."""
-
-    min_x: int
-    min_y: int
-    max_x: int
-    max_y: int
-    tile_edges: tuple[tuple[int, int, int, int], ...]
-    cells: tuple[int | None, ...]
-
-    @property
-    def width(self) -> int:
-        return self.max_x - self.min_x + 1
-
-    @property
-    def height(self) -> int:
-        return self.max_y - self.min_y + 1
 
 
 def _fail(path: str, message: str) -> None:
@@ -145,19 +130,22 @@ def _reject_nonfinite_constant(value: str) -> None:
     )
 
 
-def _validate_optional_edges(value: object, path: str) -> None:
+def _validate_optional_edges(
+    value: object, path: str
+) -> tuple[int | None, int | None, int | None, int | None] | None:
     if value is None:
-        return
+        return None
     edges = _require_object(value, path)
     _require_exact_fields(edges, frozenset(DIRECTIONS), path)
+    projected: list[int | None] = []
     for direction in DIRECTIONS:
         color = edges[direction]
         if color is not None:
-            _require_integer(
-                color,
-                f"{path}.{direction}",
-                nonnegative=True,
+            color = _require_integer(
+                color, f"{path}.{direction}", nonnegative=True
             )
+        projected.append(color)
+    return tuple(projected)
 
 
 def _project_wang_presentation(document: object) -> WangPresentation:
@@ -248,13 +236,16 @@ def _project_wang_presentation(document: object) -> WangPresentation:
             _fail(f"$.cells[{index}]", f"references absent tile_id {tile_id}")
         cells.append(tile_id)
 
-    # Boundary data is checked only for v1 transport shape. It is not compared
-    # with cells or edges, and it never reaches the presentation projection.
+    # Boundary data is checked only for v1 transport shape. It is retained for
+    # the pure hex port, but is not compared with cells/edges or used by the
+    # square raster.
     boundary = _require_array(root["boundary"], "$.boundary")
     if len(boundary) != area:
         _fail("$.boundary", f"length must equal inclusive bounds area {area}")
-    for index, sides in enumerate(boundary):
+    projected_boundary = tuple(
         _validate_optional_edges(sides, f"$.boundary[{index}]")
+        for index, sides in enumerate(boundary)
+    )
 
     _require_object(root["metadata"], "$.metadata")
     return WangPresentation(
@@ -264,11 +255,12 @@ def _project_wang_presentation(document: object) -> WangPresentation:
         max_y=max_y,
         tile_edges=tuple(tile_edges),
         cells=tuple(cells),
+        boundary=projected_boundary,
     )
 
 
 def load_wang_presentation(path: str | Path) -> WangPresentation:
-    """Load strict JSON and return only the fields that determine pixels."""
+    """Load strict JSON and project metadata away from presentation data."""
     source = Path(path)
     try:
         with source.open(encoding="utf-8") as stream:
@@ -300,14 +292,11 @@ def load_wang_presentation(path: str | Path) -> WangPresentation:
     return _project_wang_presentation(document)
 
 
-def build_palette(
-    presentation: WangPresentation,
+def _build_palette_from_edges(
+    tile_edges: tuple[tuple[int, ...], ...],
 ) -> dict[int, tuple[int, int, int]]:
-    """Assign a deterministic, injective RGB color to each logical color."""
-    if not isinstance(presentation, WangPresentation):
-        raise TypeError("presentation must be a WangPresentation")
     logical_colors = sorted(
-        {color for edges in presentation.tile_edges for color in edges}
+        {color for edges in tile_edges for color in edges}
     )
     available = _RGB_SPACE_SIZE - len(_RESERVED_RGB)
     if len(logical_colors) > available:
@@ -330,6 +319,15 @@ def build_palette(
         else:  # Defensive: the cardinality check above makes this unreachable.
             raise WangSquareRenderError("RGB palette space exhausted")
     return palette
+
+
+def build_palette(
+    presentation: WangPresentation,
+) -> dict[int, tuple[int, int, int]]:
+    """Assign a deterministic, injective RGB color to each logical color."""
+    if not isinstance(presentation, WangPresentation):
+        raise TypeError("presentation must be a WangPresentation")
+    return _build_palette_from_edges(presentation.tile_edges)
 
 
 def _render_integer(
@@ -364,6 +362,11 @@ def _canvas_dimensions(
     )
     width = presentation.width * ppc + 2 * checked_margin
     height = presentation.height * ppc + 2 * checked_margin
+    _check_canvas_limits(width, height)
+    return width, height, ppc, checked_margin
+
+
+def _check_canvas_limits(width: int, height: int) -> None:
     if width > MAX_CANVAS_SIDE or height > MAX_CANVAS_SIDE:
         raise WangSquareRenderError(
             f"canvas side exceeds limit {MAX_CANVAS_SIDE}: {width}x{height}"
@@ -372,7 +375,6 @@ def _canvas_dimensions(
         raise WangSquareRenderError(
             f"canvas area exceeds limit {MAX_CANVAS_PIXELS}: {width}x{height}"
         )
-    return width, height, ppc, checked_margin
 
 
 def _tile_asset(
@@ -447,6 +449,145 @@ def compose_wang_square(
     return canvas
 
 
+def _hex_canvas_dimensions(
+    presentation: WangHexPort,
+    pixels_per_cell: object,
+    margin: object,
+) -> tuple[int, int, int, int, int]:
+    radius = _render_integer(
+        pixels_per_cell,
+        "pixels_per_cell",
+        minimum=MIN_PIXELS_PER_CELL,
+        maximum=MAX_PIXELS_PER_CELL,
+    )
+    checked_margin = _render_integer(
+        margin, "margin", minimum=0, maximum=MAX_MARGIN
+    )
+    shoulder = radius // 2
+    width = (
+        2 * radius * (presentation.width - 1)
+        + radius * (presentation.height - 1)
+        + 2 * radius
+        + 1
+        + 2 * checked_margin
+    )
+    height = (
+        (radius + shoulder) * (presentation.height - 1)
+        + 2 * radius
+        + 1
+        + 2 * checked_margin
+    )
+    _check_canvas_limits(width, height)
+    return width, height, radius, shoulder, checked_margin
+
+
+def _hex_vertices(radius: int, shoulder: int) -> tuple[tuple[int, int], ...]:
+    centre = radius
+    far = 2 * radius
+    return (
+        (centre, 0),
+        (far, centre - shoulder),
+        (far, centre + shoulder),
+        (centre, far),
+        (0, centre + shoulder),
+        (0, centre - shoulder),
+    )
+
+
+def _hex_mask(radius: int, vertices: tuple[tuple[int, int], ...]) -> Image.Image:
+    size = 2 * radius + 1
+    mask = Image.new("L", (size, size), 0)
+    ImageDraw.Draw(mask).polygon(vertices, fill=255)
+    return mask
+
+
+def _hex_tile_asset(
+    edges: tuple[int, int, int, int, int, int],
+    palette: dict[int, tuple[int, int, int]],
+    radius: int,
+    vertices: tuple[tuple[int, int], ...],
+) -> Image.Image:
+    size = 2 * radius + 1
+    asset = Image.new("RGB", (size, size), BACKGROUND_RGB)
+    draw = ImageDraw.Draw(asset)
+    centre = (radius, radius)
+    for direction, color in enumerate(edges):
+        first_vertex = vertices[(direction + 1) % 6]
+        second_vertex = vertices[(direction + 2) % 6]
+        draw.polygon(
+            (centre, first_vertex, second_vertex),
+            fill=palette[color],
+        )
+    draw.line((*vertices, vertices[0]), fill=GRID_RGB, width=1)
+    return asset
+
+
+def _hex_hole_asset(
+    radius: int,
+    vertices: tuple[tuple[int, int], ...],
+) -> Image.Image:
+    size = 2 * radius + 1
+    coordinates = np.arange(size, dtype=np.int32)
+    x = np.broadcast_to(coordinates, (size, size))
+    y = x.T
+    checker_size = max(2, radius // 4)
+    checker = ((x // checker_size) + (y // checker_size)) % 2
+    colors = np.asarray((HOLE_LIGHT_RGB, HOLE_DARK_RGB), dtype=np.uint8)
+    asset = Image.fromarray(colors[checker], mode="RGB")
+    ImageDraw.Draw(asset).line(
+        (*vertices, vertices[0]), fill=GRID_RGB, width=1
+    )
+    return asset
+
+
+def _compose_wang_hex(
+    square: WangPresentation,
+    *,
+    pixels_per_cell: int = DEFAULT_PIXELS_PER_CELL,
+    margin: int = DEFAULT_MARGIN,
+) -> np.ndarray:
+    """Port, check, and compose one pointy-top axial hex canvas."""
+    presentation = reduce_square_to_hex(square)
+    check_square_to_hex(square, presentation)
+    width, height, radius, shoulder, checked_margin = _hex_canvas_dimensions(
+        presentation, pixels_per_cell, margin
+    )
+    canvas = Image.new("RGB", (width, height), BACKGROUND_RGB)
+    vertices = _hex_vertices(radius, shoulder)
+    mask = _hex_mask(radius, vertices)
+    hole = _hex_hole_asset(radius, vertices)
+    palette = _build_palette_from_edges(presentation.tile_edges)
+    tile_assets: dict[int, Image.Image] = {}
+
+    min_center_x = (
+        2 * radius * presentation.min_q + radius * presentation.min_r
+    )
+    min_center_y = (radius + shoulder) * presentation.min_r
+    for index, tile_id in enumerate(presentation.cells):
+        local_q = index % presentation.width
+        local_r = index // presentation.width
+        q = presentation.min_q + local_q
+        r = presentation.min_r + local_r
+        center_x = 2 * radius * q + radius * r
+        center_y = (radius + shoulder) * r
+        x = checked_margin + center_x - min_center_x
+        y = checked_margin + center_y - min_center_y
+        if tile_id is None:
+            asset = hole
+        else:
+            asset = tile_assets.get(tile_id)
+            if asset is None:
+                asset = _hex_tile_asset(
+                    presentation.tile_edges[tile_id],
+                    palette,
+                    radius,
+                    vertices,
+                )
+                tile_assets[tile_id] = asset
+        canvas.paste(asset, (x, y), mask)
+    return np.asarray(canvas, dtype=np.uint8)
+
+
 def _save_png_atomic(canvas: np.ndarray, output_path: str | Path) -> None:
     destination = Path(output_path)
     temporary: Path | None = None
@@ -485,20 +626,30 @@ def render_wang_square(
     *,
     pixels_per_cell: int = DEFAULT_PIXELS_PER_CELL,
     margin: int = DEFAULT_MARGIN,
+    hex_mode: bool = False,
 ) -> None:
-    """Load a v1 presentation, compose it, and atomically write one PNG."""
+    """Load a v1 presentation and atomically write square or hex pixels."""
     presentation = load_wang_presentation(input_path)
-    canvas = compose_wang_square(
-        presentation,
-        pixels_per_cell=pixels_per_cell,
-        margin=margin,
-    )
+    if hex_mode:
+        canvas = _compose_wang_hex(
+            presentation,
+            pixels_per_cell=pixels_per_cell,
+            margin=margin,
+        )
+    else:
+        canvas = compose_wang_square(
+            presentation,
+            pixels_per_cell=pixels_per_cell,
+            margin=margin,
+        )
     _save_png_atomic(canvas, output_path)
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Render a wang-solution-v1 square tiling as a diagnostic PNG"
+        description=(
+            "Render a wang-solution-v1 tiling as a diagnostic square or hex PNG"
+        )
     )
     parser.add_argument("input", help="path to a wang-solution-v1 JSON file")
     parser.add_argument("output", help="path to the output PNG")
@@ -507,7 +658,7 @@ def _parser() -> argparse.ArgumentParser:
         type=int,
         default=DEFAULT_PIXELS_PER_CELL,
         help=(
-            "square cell size in pixels "
+            "square cell size or hex radius in pixels "
             f"(default: {DEFAULT_PIXELS_PER_CELL})"
         ),
     )
@@ -516,6 +667,11 @@ def _parser() -> argparse.ArgumentParser:
         type=int,
         default=DEFAULT_MARGIN,
         help=f"canvas margin in pixels (default: {DEFAULT_MARGIN})",
+    )
+    parser.add_argument(
+        "--hex",
+        action="store_true",
+        help="port the square witness to pointy-top axial hexagons",
     )
     return parser
 
@@ -529,6 +685,7 @@ def main(argv: list[str] | None = None) -> None:
             args.output,
             pixels_per_cell=args.pixels_per_cell,
             margin=args.margin,
+            hex_mode=args.hex,
         )
     except (FileNotFoundError, WangSquareRenderError) as error:
         parser.error(str(error))
