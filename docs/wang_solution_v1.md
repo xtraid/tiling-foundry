@@ -29,6 +29,46 @@ The machine-readable structural definition is
 is `python/formats/wang_solution.py`, and the representative golden document is
 `tests/fixtures/wang_solution_v1_square_sat.json`.
 
+## Producing a document
+
+`python/formats/wang_solution_export.py` builds the contract from the immutable
+Python `Region`, a solver-neutral `TilingSolveResult`, the canonical `TILESET`,
+an explicit coordinate origin, and optional non-semantic metadata. The
+producer rejects UNSAT and UNKNOWN results, malformed dense storage, assignments
+to holes, absent tile IDs, and tilings rejected by the independent Python
+checker. It then validates the complete document with
+`validate_wang_solution()` before writing any output.
+
+The native-only coordinator parses, builds, and solves within scoped C
+lifetimes, copies the region and result, and runs the Python checker without
+importing or invoking Z3:
+
+```python
+from formats.wang_solution_export import dump_wang_solution
+from native.solve_pipeline import solve_native_tiling
+
+region, result = solve_native_tiling("input.cm13", optimized=True)
+dump_wang_solution(
+    "solution.json",
+    region,
+    result,
+    origin=(0, 0),
+    metadata={"producer": "native-optimized"},
+)
+```
+
+The producer loads `libwang.so`; the resulting JSON does not. A downstream
+consumer receives only the versioned document and never needs the native
+library, Z3, solver domains, or Python producer modules.
+
+Serialization is deterministic for the same semantic inputs: contract fields,
+tile directions, and dense arrays have fixed order; metadata is copied and its
+object keys are ordered recursively; output is UTF-8 with two-space indentation
+and one final newline. The complete document is encoded before the destination
+is opened, then installed with an atomic same-directory replace; an invalid
+input or failed replace leaves an existing output unchanged. The exporter does
+not synthesize timestamps, hostnames, commit IDs, or other changing metadata.
+
 ## Fields and ordering
 
 The top-level fields are closed and have these meanings:
@@ -106,7 +146,9 @@ JSON parsers.
 diagnostics. Its contents must never select a tile, change coordinates,
 override a boundary color, affect SAT status, or be required to reproduce the
 tiling. Semantic validation deliberately ignores the entire object after
-checking that it contains JSON values.
+checking that it contains JSON values. The exporter deep-copies those values
+and rejects cycles, non-string object keys, non-finite numbers, invalid UTF-8
+text, and non-JSON Python objects.
 
 ## Versioning
 
@@ -119,4 +161,8 @@ placing it there does not expand the correctness contract.
 The golden fixture spans inclusive bounds `[-1,2]` through `[2,4]`: twelve
 dense positions, ten active cells, and two holes. Its complete 23-entry table
 is tested for exact `(N,E,S,W)` parity with the canonical Python `TILESET`, and
-targeted mutations exercise every cross-field rejection above.
+targeted mutations exercise every cross-field rejection above. Export tests
+reconstruct the same document from `Region + TilingSolveResult`, while separate
+integration tests export real SAT witnesses from both native serial paths and
+reject their shared UNSAT fixture. The compact golden is therefore not tied to
+one permissible solver search witness.

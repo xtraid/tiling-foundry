@@ -18,11 +18,11 @@ from enum import IntEnum
 from functools import cache
 
 from model.region import Region
+from model.tiling import TilingSolveResult, TilingSolveStatus
 from model.tileset import TILE_COUNT
 from native._lib import library
 from native.formula_adapter import _Cm13Formula
 from native.region_adapter import _Region, _YangZhangReduction
-from oracles.tiling_solver import TilingSolveResult, TilingSolveStatus
 
 
 _TILE_NONE = 255

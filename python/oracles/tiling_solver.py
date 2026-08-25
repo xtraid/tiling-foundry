@@ -1,11 +1,9 @@
 """Independent Wang-tiling Z3 oracle over the pure Python Region model."""
 
-from dataclasses import dataclass
-from enum import Enum
-
 from z3 import And, ArithRef, Int, Or, Solver, sat, unsat
 
 from model.region import Region
+from model.tiling import TilingSolveResult, TilingSolveStatus
 from model.tileset import (
     COLOR_COUNT,
     COLOR_NONE,
@@ -15,23 +13,6 @@ from model.tileset import (
     Tile,
     Tileset,
 )
-
-
-class TilingSolveStatus(Enum):
-    SAT = "sat"
-    UNSAT = "unsat"
-    UNKNOWN = "unknown"
-
-
-@dataclass(frozen=True, slots=True)
-class TilingSolveResult:
-    status: TilingSolveStatus
-    tiling: tuple[int | None, ...] | None = None
-
-    def __post_init__(self) -> None:
-        has_tiling = self.tiling is not None
-        if has_tiling != (self.status is TilingSolveStatus.SAT):
-            raise ValueError("only SAT results carry a tiling")
 
 
 def _validate_tileset(tileset: Tileset) -> None:
