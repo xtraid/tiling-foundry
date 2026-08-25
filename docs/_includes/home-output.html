@@ -1,0 +1,33 @@
+{% assign output = include.output %}
+{% if output.eyebrow and output.title and output.image and output.alt and output.caption and output.width and output.height %}
+  <section
+    class="home-section home-visual layout-presentation"
+    id="{{ output.id | default: 'featured-output' | escape }}"
+  >
+    <div class="section-heading">
+      <p class="eyebrow">{{ output.eyebrow | escape }}</p>
+      <h2>{{ output.title | escape }}</h2>
+    </div>
+
+    <figure class="home-output">
+      <div class="home-output__media">
+        <img
+          src="{{ output.image | relative_url }}"
+          alt="{{ output.alt | escape }}"
+          width="{{ output.width }}"
+          height="{{ output.height }}"
+          loading="lazy"
+          decoding="async"
+        >
+      </div>
+      <figcaption>
+        <p>{{ output.caption | escape }}</p>
+        {% if output.source and output.source_label %}
+          <a class="text-link" href="{{ output.source | relative_url }}">
+            {{ output.source_label | escape }}
+          </a>
+        {% endif %}
+      </figcaption>
+    </figure>
+  </section>
+{% endif %}

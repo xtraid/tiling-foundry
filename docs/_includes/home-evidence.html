@@ -1,0 +1,30 @@
+{% assign evidence = include.evidence %}
+{% if evidence.eyebrow and evidence.title and evidence.items.size > 0 %}
+  <section
+    class="home-section home-visual layout-presentation"
+    id="{{ evidence.id | default: 'evidence' | escape }}"
+  >
+    <div class="section-heading">
+      <p class="eyebrow">{{ evidence.eyebrow | escape }}</p>
+      <h2>{{ evidence.title | escape }}</h2>
+    </div>
+
+    {% if evidence.introduction %}
+      <p class="home-section__prose">{{ evidence.introduction | escape }}</p>
+    {% endif %}
+
+    <ul class="evidence-band">
+      {% for item in evidence.items %}
+        <li>
+          {% if item.role %}
+            <span class="evidence-band__role">{{ item.role | escape }}</span>
+          {% endif %}
+          <strong>{{ item.label | escape }}</strong>
+          {% if item.detail %}
+            <span class="evidence-band__detail">{{ item.detail | escape }}</span>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  </section>
+{% endif %}

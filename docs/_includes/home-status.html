@@ -1,0 +1,30 @@
+{% assign status = include.status %}
+{% if status.eyebrow and status.title and status.items.size > 0 %}
+  <section
+    class="home-section home-status layout-reading"
+    id="{{ status.id | default: 'implementation-status' | escape }}"
+  >
+    <div class="section-heading">
+      <p class="eyebrow">{{ status.eyebrow | escape }}</p>
+      <h2>{{ status.title | escape }}</h2>
+    </div>
+
+    {% if status.introduction %}
+      <p class="home-section__prose">{{ status.introduction | escape }}</p>
+    {% endif %}
+
+    <dl class="status-ledger">
+      {% for item in status.items %}
+        <div>
+          <dt>{{ item.label | escape }}</dt>
+          <dd>
+            <strong>{{ item.state | escape }}</strong>
+            {% if item.detail %}
+              <span class="status-ledger__detail">{{ item.detail | escape }}</span>
+            {% endif %}
+          </dd>
+        </div>
+      {% endfor %}
+    </dl>
+  </section>
+{% endif %}

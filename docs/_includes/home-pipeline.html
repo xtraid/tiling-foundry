@@ -1,0 +1,56 @@
+{% assign pipeline = include.pipeline %}
+{% if pipeline.eyebrow and pipeline.title and pipeline.stages.size > 0 %}
+  <section
+    class="home-section home-visual layout-presentation"
+    id="{{ pipeline.id | default: 'pipeline' | escape }}"
+  >
+    <div class="section-heading">
+      <p class="eyebrow">{{ pipeline.eyebrow | escape }}</p>
+      <h2>{{ pipeline.title | escape }}</h2>
+    </div>
+
+    {% if pipeline.introduction %}
+      <p class="home-section__prose">{{ pipeline.introduction | escape }}</p>
+    {% endif %}
+
+    <figure class="home-pipeline">
+      <ol
+        class="home-pipeline__track"
+        aria-label="{{ pipeline.track_label | default: pipeline.title | escape }}"
+      >
+        {% for stage in pipeline.stages %}
+          <li class="home-pipeline__stage">
+            <span class="home-pipeline__index" aria-hidden="true">{{ forloop.index }}</span>
+            <strong>{{ stage.label | escape }}</strong>
+            {% if stage.detail %}
+              <span class="home-pipeline__detail">{{ stage.detail | escape }}</span>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ol>
+
+      {% if pipeline.checks.size > 0 %}
+        <aside
+          class="home-pipeline__checks"
+          aria-label="{{ pipeline.checks_label | default: 'Independent checks' | escape }}"
+        >
+          <p>{{ pipeline.checks_label | default: 'Independent checks' | escape }}</p>
+          <ul>
+            {% for check in pipeline.checks %}
+              <li>
+                <strong>{{ check.label | escape }}</strong>
+                {% if check.detail %}
+                  <span class="home-pipeline__detail">{{ check.detail | escape }}</span>
+                {% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+        </aside>
+      {% endif %}
+
+      {% if pipeline.caption %}
+        <figcaption>{{ pipeline.caption | escape }}</figcaption>
+      {% endif %}
+    </figure>
+  </section>
+{% endif %}
