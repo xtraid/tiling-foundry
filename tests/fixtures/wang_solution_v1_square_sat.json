@@ -1,0 +1,128 @@
+{
+  "schema": "wang-solution-v1",
+  "status": "SAT",
+  "geometry": "square",
+  "bounds": {
+    "min_x_inclusive": -1,
+    "min_y_inclusive": 2,
+    "max_x_inclusive": 2,
+    "max_y_inclusive": 4
+  },
+  "tile_table": [
+    {
+      "tile_id": 0,
+      "edges": {"N": 0, "E": 2, "S": 7, "W": 1}
+    },
+    {
+      "tile_id": 1,
+      "edges": {"N": 7, "E": 2, "S": 8, "W": 1}
+    },
+    {
+      "tile_id": 2,
+      "edges": {"N": 8, "E": 2, "S": 0, "W": 1}
+    },
+    {
+      "tile_id": 3,
+      "edges": {"N": 0, "E": 3, "S": 0, "W": 1}
+    },
+    {
+      "tile_id": 4,
+      "edges": {"N": 0, "E": 4, "S": 0, "W": 2}
+    },
+    {
+      "tile_id": 5,
+      "edges": {"N": 0, "E": 4, "S": 9, "W": 3}
+    },
+    {
+      "tile_id": 6,
+      "edges": {"N": 9, "E": 3, "S": 0, "W": 2}
+    },
+    {
+      "tile_id": 7,
+      "edges": {"N": 0, "E": 2, "S": 0, "W": 2}
+    },
+    {
+      "tile_id": 8,
+      "edges": {"N": 0, "E": 3, "S": 0, "W": 3}
+    },
+    {
+      "tile_id": 9,
+      "edges": {"N": 5, "E": 2, "S": 5, "W": 2}
+    },
+    {
+      "tile_id": 10,
+      "edges": {"N": 5, "E": 3, "S": 5, "W": 3}
+    },
+    {
+      "tile_id": 11,
+      "edges": {"N": 0, "E": 10, "S": 6, "W": 2}
+    },
+    {
+      "tile_id": 12,
+      "edges": {"N": 6, "E": 2, "S": 0, "W": 10}
+    },
+    {
+      "tile_id": 13,
+      "edges": {"N": 0, "E": 11, "S": 6, "W": 3}
+    },
+    {
+      "tile_id": 14,
+      "edges": {"N": 6, "E": 3, "S": 0, "W": 11}
+    },
+    {
+      "tile_id": 15,
+      "edges": {"N": 6, "E": 2, "S": 12, "W": 2}
+    },
+    {
+      "tile_id": 16,
+      "edges": {"N": 12, "E": 2, "S": 5, "W": 2}
+    },
+    {
+      "tile_id": 17,
+      "edges": {"N": 6, "E": 2, "S": 13, "W": 3}
+    },
+    {
+      "tile_id": 18,
+      "edges": {"N": 13, "E": 3, "S": 5, "W": 2}
+    },
+    {
+      "tile_id": 19,
+      "edges": {"N": 6, "E": 3, "S": 14, "W": 2}
+    },
+    {
+      "tile_id": 20,
+      "edges": {"N": 14, "E": 2, "S": 5, "W": 3}
+    },
+    {
+      "tile_id": 21,
+      "edges": {"N": 6, "E": 3, "S": 15, "W": 3}
+    },
+    {
+      "tile_id": 22,
+      "edges": {"N": 15, "E": 3, "S": 5, "W": 3}
+    }
+  ],
+  "cells": [
+    7, 7, null, 7,
+    7, 7, null, 7,
+    7, 7, 7, 7
+  ],
+  "boundary": [
+    {"N": 0, "E": null, "S": null, "W": 2},
+    {"N": 0, "E": 2, "S": null, "W": null},
+    null,
+    {"N": 0, "E": 2, "S": null, "W": 2},
+    {"N": null, "E": null, "S": null, "W": 2},
+    {"N": null, "E": 2, "S": null, "W": null},
+    null,
+    {"N": null, "E": 2, "S": null, "W": 2},
+    {"N": null, "E": null, "S": 0, "W": 2},
+    {"N": null, "E": null, "S": 0, "W": null},
+    {"N": 0, "E": null, "S": 0, "W": null},
+    {"N": null, "E": 2, "S": 0, "W": null}
+  ],
+  "metadata": {
+    "fixture": "canonical-tileset-square-with-holes",
+    "note": "This object is not used to establish tiling correctness."
+  }
+}
