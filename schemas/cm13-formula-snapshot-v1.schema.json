@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:tiling-foundry:schema:cm13-formula-snapshot-v1",
+  "title": "Tiling Foundry parsed CM13 formula snapshot v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "source", "variable_count", "clauses"],
+  "properties": {
+    "schema": {
+      "const": "cm13-formula-snapshot-v1"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "sha256"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^/\\\\]+$",
+          "not": {
+            "enum": [".", ".."]
+          }
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "variable_count": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "clauses": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["clause_id", "variables"],
+        "properties": {
+          "clause_id": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "variables": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 3,
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

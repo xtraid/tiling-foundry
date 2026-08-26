@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:tiling-foundry:schema:wang-tileset-snapshot-v1",
+  "title": "Tiling Foundry square Wang tileset snapshot v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "geometry", "directions", "colors", "tiles"],
+  "properties": {
+    "schema": {
+      "const": "wang-tileset-snapshot-v1"
+    },
+    "geometry": {
+      "const": "square"
+    },
+    "directions": {
+      "type": "array",
+      "prefixItems": [
+        {"const": "N"},
+        {"const": "E"},
+        {"const": "S"},
+        {"const": "W"}
+      ],
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "colors": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/color"
+      }
+    },
+    "tiles": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["tile_id", "edges"],
+        "properties": {
+          "tile_id": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "edges": {
+            "$ref": "#/$defs/edges"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "color": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "edges": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["N", "E", "S", "W"],
+      "properties": {
+        "N": {"$ref": "#/$defs/color"},
+        "E": {"$ref": "#/$defs/color"},
+        "S": {"$ref": "#/$defs/color"},
+        "W": {"$ref": "#/$defs/color"}
+      }
+    }
+  }
+}

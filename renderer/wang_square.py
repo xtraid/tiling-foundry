@@ -19,6 +19,18 @@ from typing import Final
 import numpy as np
 from PIL import Image, ImageDraw
 
+from wang_explain import (
+    EXPLAIN_PANEL_RGB,
+    EXPLAIN_TEXT_RGB,
+    draw_boundary_side,
+    draw_explain_heading,
+    draw_inactive_key,
+    draw_palette_legend,
+    explain_font,
+    hex_explain_tile,
+    square_explain_tile,
+    square_inactive_tile,
+)
 from wang_hex_port import (
     SQUARE_DIRECTIONS,
     WangHexPort,
@@ -41,6 +53,9 @@ MAX_PIXELS_PER_CELL: Final = 512
 MAX_MARGIN: Final = 4096
 MAX_CANVAS_SIDE: Final = 16384
 MAX_CANVAS_PIXELS: Final = 64 * 1024 * 1024
+EXPLAIN_HEADER_HEIGHT: Final = 54
+EXPLAIN_LEGEND_WIDTH: Final = 190
+EXPLAIN_PANEL_GAP: Final = 20
 
 BACKGROUND_RGB: Final = (248, 248, 244)
 GRID_RGB: Final = (32, 35, 42)
@@ -588,6 +603,270 @@ def _compose_wang_hex(
     return np.asarray(canvas, dtype=np.uint8)
 
 
+def _palette_with_boundary(
+    tile_edges: tuple[tuple[int, ...], ...],
+    boundary: tuple[tuple[int | None, ...] | None, ...],
+) -> dict[int, tuple[int, int, int]]:
+    colors = {
+        color
+        for sides in boundary
+        if sides is not None
+        for color in sides
+        if color is not None
+    }
+    if colors:
+        return _build_palette_from_edges((*tile_edges, tuple(sorted(colors))))
+    return _build_palette_from_edges(tile_edges)
+
+
+def _compose_wang_square_explain(
+    presentation: WangPresentation,
+    *,
+    pixels_per_cell: int = DEFAULT_PIXELS_PER_CELL,
+    margin: int = DEFAULT_MARGIN,
+) -> np.ndarray:
+    """Compose an opt-in square view with explicit colored side bands."""
+    ppc = _render_integer(
+        pixels_per_cell,
+        "pixels_per_cell",
+        minimum=MIN_PIXELS_PER_CELL,
+        maximum=MAX_PIXELS_PER_CELL,
+    )
+    checked_margin = _render_integer(
+        margin,
+        "margin",
+        minimum=0,
+        maximum=MAX_MARGIN,
+    )
+    grid_width = presentation.width * ppc
+    grid_height = presentation.height * ppc
+    canvas_width = (
+        2 * checked_margin
+        + grid_width
+        + EXPLAIN_PANEL_GAP
+        + EXPLAIN_LEGEND_WIDTH
+    )
+    canvas_height = max(
+        2 * checked_margin + EXPLAIN_HEADER_HEIGHT + grid_height,
+        2 * checked_margin + EXPLAIN_HEADER_HEIGHT + 300,
+    )
+    _check_canvas_limits(canvas_width, canvas_height)
+
+    canvas = Image.new(
+        "RGB",
+        (canvas_width, canvas_height),
+        EXPLAIN_PANEL_RGB,
+    )
+    draw = ImageDraw.Draw(canvas)
+    draw_explain_heading(
+        draw,
+        (checked_margin, checked_margin),
+        title="Verified Wang solution - square",
+        subtitle="colored N/E/S/W bands; tile ID at each active cell",
+    )
+    grid_x = checked_margin
+    grid_y = checked_margin + EXPLAIN_HEADER_HEIGHT
+    palette = _palette_with_boundary(
+        presentation.tile_edges,
+        presentation.boundary,
+    )
+    inactive = square_inactive_tile(ppc)
+    tile_assets: dict[int, Image.Image] = {}
+    overlays: list[
+        tuple[
+            tuple[int, int],
+            tuple[int, int],
+            tuple[int, int, int],
+        ]
+    ] = []
+
+    for index, tile_id in enumerate(presentation.cells):
+        local_x = index % presentation.width
+        local_y = index // presentation.width
+        x = grid_x + local_x * ppc
+        y = grid_y + local_y * ppc
+        if tile_id is None:
+            canvas.paste(inactive, (x, y))
+            continue
+        asset = tile_assets.get(tile_id)
+        if asset is None:
+            asset = square_explain_tile(
+                presentation.tile_edges[tile_id],
+                palette,
+                ppc,
+                tile_id=tile_id,
+                edge_labels=False,
+            )
+            tile_assets[tile_id] = asset
+        canvas.paste(asset, (x, y))
+        sides = presentation.boundary[index]
+        if sides is None:
+            continue
+        segments = (
+            ((x, y), (x + ppc - 1, y)),
+            ((x + ppc - 1, y), (x + ppc - 1, y + ppc - 1)),
+            ((x, y + ppc - 1), (x + ppc - 1, y + ppc - 1)),
+            ((x, y), (x, y + ppc - 1)),
+        )
+        for direction, color in enumerate(sides):
+            if color is not None:
+                overlays.append((*segments[direction], palette[color]))
+
+    draw = ImageDraw.Draw(canvas)
+    for first, second, rgb in overlays:
+        draw_boundary_side(
+            draw,
+            first,
+            second,
+            rgb,
+            width=max(2, ppc // 12),
+        )
+    legend_x = grid_x + grid_width + EXPLAIN_PANEL_GAP
+    _, legend_height = draw_palette_legend(
+        draw,
+        palette,
+        (legend_x, grid_y),
+        columns=2,
+    )
+    draw_inactive_key(draw, (legend_x, grid_y + legend_height + 12))
+    return np.asarray(canvas, dtype=np.uint8)
+
+
+def _compose_wang_hex_explain(
+    square: WangPresentation,
+    *,
+    pixels_per_cell: int = DEFAULT_PIXELS_PER_CELL,
+    margin: int = DEFAULT_MARGIN,
+) -> np.ndarray:
+    """Compose an opt-in checked hex view with explicit six-side bands."""
+    presentation = reduce_square_to_hex(square)
+    check_square_to_hex(square, presentation)
+    raw_width, raw_height, radius, shoulder, _ = _hex_canvas_dimensions(
+        presentation,
+        pixels_per_cell,
+        0,
+    )
+    checked_margin = _render_integer(
+        margin,
+        "margin",
+        minimum=0,
+        maximum=MAX_MARGIN,
+    )
+    canvas_width = (
+        2 * checked_margin
+        + raw_width
+        + EXPLAIN_PANEL_GAP
+        + EXPLAIN_LEGEND_WIDTH
+    )
+    canvas_height = max(
+        2 * checked_margin + EXPLAIN_HEADER_HEIGHT + raw_height,
+        2 * checked_margin + EXPLAIN_HEADER_HEIGHT + 350,
+    )
+    _check_canvas_limits(canvas_width, canvas_height)
+    canvas = Image.new(
+        "RGB",
+        (canvas_width, canvas_height),
+        EXPLAIN_PANEL_RGB,
+    )
+    draw = ImageDraw.Draw(canvas)
+    draw_explain_heading(
+        draw,
+        (checked_margin, checked_margin),
+        title="Verified Wang solution - Basire/Culik hex view",
+        subtitle="E/SE/SW/W/NW/NE bands; kappa marks the presentation-only axis",
+    )
+    grid_x = checked_margin
+    grid_y = checked_margin + EXPLAIN_HEADER_HEIGHT
+    vertices = _hex_vertices(radius, shoulder)
+    mask = _hex_mask(radius, vertices)
+    inactive = _hex_hole_asset(radius, vertices)
+    palette = _palette_with_boundary(
+        presentation.tile_edges,
+        presentation.boundary,
+    )
+    tile_assets: dict[int, Image.Image] = {}
+    overlays: list[
+        tuple[
+            tuple[int, int],
+            tuple[int, int],
+            tuple[int, int, int],
+        ]
+    ] = []
+    min_anchor_x = (
+        2 * radius * presentation.min_q + radius * presentation.min_r
+    )
+    min_anchor_y = (radius + shoulder) * presentation.min_r
+    for index, tile_id in enumerate(presentation.cells):
+        local_q = index % presentation.width
+        local_r = index // presentation.width
+        q = presentation.min_q + local_q
+        r = presentation.min_r + local_r
+        anchor_x = 2 * radius * q + radius * r
+        anchor_y = (radius + shoulder) * r
+        x = grid_x + anchor_x - min_anchor_x
+        y = grid_y + anchor_y - min_anchor_y
+        if tile_id is None:
+            asset = inactive
+        else:
+            asset = tile_assets.get(tile_id)
+            if asset is None:
+                asset = hex_explain_tile(
+                    presentation.tile_edges[tile_id],
+                    palette,
+                    radius,
+                    vertices,
+                    tile_id=tile_id,
+                    edge_labels=False,
+                )
+                tile_assets[tile_id] = asset
+        canvas.paste(asset, (x, y), mask)
+        if tile_id is None:
+            continue
+        sides = presentation.boundary[index]
+        if sides is None:
+            continue
+        for direction, color in enumerate(sides):
+            if color is None:
+                continue
+            first = vertices[(direction + 1) % 6]
+            second = vertices[(direction + 2) % 6]
+            overlays.append(
+                (
+                    (x + first[0], y + first[1]),
+                    (x + second[0], y + second[1]),
+                    palette[color],
+                )
+            )
+
+    draw = ImageDraw.Draw(canvas)
+    for first, second, rgb in overlays:
+        draw_boundary_side(
+            draw,
+            first,
+            second,
+            rgb,
+            width=max(2, radius // 8),
+        )
+    legend_x = grid_x + raw_width + EXPLAIN_PANEL_GAP
+    _, legend_height = draw_palette_legend(
+        draw,
+        palette,
+        (legend_x, grid_y),
+        columns=2,
+    )
+    draw.text(
+        (legend_x, grid_y + legend_height + 8),
+        f"kappa = {presentation.fresh_color}",
+        font=explain_font(13),
+        fill=EXPLAIN_TEXT_RGB,
+    )
+    draw_inactive_key(
+        draw,
+        (legend_x, grid_y + legend_height + 38),
+    )
+    return np.asarray(canvas, dtype=np.uint8)
+
+
 def _save_png_atomic(canvas: np.ndarray, output_path: str | Path) -> None:
     destination = Path(output_path)
     temporary: Path | None = None
@@ -627,11 +906,24 @@ def render_wang_square(
     pixels_per_cell: int = DEFAULT_PIXELS_PER_CELL,
     margin: int = DEFAULT_MARGIN,
     hex_mode: bool = False,
+    explain: bool = False,
 ) -> None:
     """Load a v1 presentation and atomically write square or hex pixels."""
     presentation = load_wang_presentation(input_path)
-    if hex_mode:
+    if hex_mode and explain:
+        canvas = _compose_wang_hex_explain(
+            presentation,
+            pixels_per_cell=pixels_per_cell,
+            margin=margin,
+        )
+    elif hex_mode:
         canvas = _compose_wang_hex(
+            presentation,
+            pixels_per_cell=pixels_per_cell,
+            margin=margin,
+        )
+    elif explain:
+        canvas = _compose_wang_square_explain(
             presentation,
             pixels_per_cell=pixels_per_cell,
             margin=margin,
@@ -648,10 +940,13 @@ def render_wang_square(
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Render a wang-solution-v1 tiling as a diagnostic square or hex PNG"
+            "Render a Wang solution or a static explainability snapshot as PNG"
         )
     )
-    parser.add_argument("input", help="path to a wang-solution-v1 JSON file")
+    parser.add_argument(
+        "input",
+        help="path to wang-solution-v1 JSON or a wang-explain-manifest-v1 file",
+    )
     parser.add_argument("output", help="path to the output PNG")
     parser.add_argument(
         "--pixels-per-cell",
@@ -673,6 +968,17 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="port the square witness to pointy-top axial hexagons",
     )
+    parser.add_argument(
+        "--explain",
+        action="store_true",
+        help="add colored edge bands, tile IDs, boundary emphasis, and a legend",
+    )
+    parser.add_argument(
+        "--view",
+        choices=("solution", "formula", "tileset", "region"),
+        default="solution",
+        help="input stage to render (default: solution)",
+    )
     return parser
 
 
@@ -680,13 +986,30 @@ def main(argv: list[str] | None = None) -> None:
     parser = _parser()
     args = parser.parse_args(argv)
     try:
-        render_wang_square(
-            args.input,
-            args.output,
-            pixels_per_cell=args.pixels_per_cell,
-            margin=args.margin,
-            hex_mode=args.hex,
-        )
+        if args.view == "solution":
+            render_wang_square(
+                args.input,
+                args.output,
+                pixels_per_cell=args.pixels_per_cell,
+                margin=args.margin,
+                hex_mode=args.hex,
+                explain=args.explain,
+            )
+        else:
+            if args.explain:
+                raise WangSquareRenderError(
+                    "snapshot views are already explainable; omit --explain"
+                )
+            from wang_snapshot import render_pipeline_snapshot
+
+            render_pipeline_snapshot(
+                args.input,
+                args.output,
+                view=args.view,
+                pixels_per_cell=args.pixels_per_cell,
+                margin=args.margin,
+                hex_mode=args.hex,
+            )
     except (FileNotFoundError, WangSquareRenderError) as error:
         parser.error(str(error))
 

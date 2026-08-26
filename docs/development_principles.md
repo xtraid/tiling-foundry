@@ -95,9 +95,10 @@ A module is implemented when it has:
 | `python/native` | C ABI adaptation, scoped native lifetimes, and complete copy-out | Solver logic and escaping native pointers |
 | `python/crosscheck` | Scoped composition of adapters, Z3, and independent checkers | Persistent native state and duplicated reduction semantics |
 | `python/oracles` | Independent solvers and checkers over pure models | Parsing, filesystem I/O, and reduction construction |
-| `python/formats` | Square solution validation and deterministic export | Native lifetimes, solving, and presentation |
+| `python/formats` | Solution and static pipeline snapshot validation and deterministic export | Native lifetimes, solving, and presentation |
 | `renderer/wang_hex_port.py` | Pure square-to-hex mapping, inverse checks, and matching-equivalence checks | Raster geometry, semantic verification, and solver access |
-| `renderer/wang_square.py` | Structural presentation projection and square/default or hex/explicit rasterization | Semantic verification and solver access |
+| `renderer/wang_snapshot.py` | Strict hash-bound snapshot consumption and static formula, tile-sheet, and region composition | Native access, solving, and semantic verification |
+| `renderer/wang_square.py` | One CLI for solution and static views, with square/default or hex/explicit rasterization | Semantic verification and solver access |
 
 `include/wang/task_plan.h`, `src/parallel/solver_openmp.c`, and the two modules
 under `python/hex/` are placeholders. `src/io/json.c` is also a placeholder;
@@ -200,6 +201,15 @@ builder owns the stronger obligation to produce the required simply connected
 instances, and its tests verify that construction.
 
 ### Downstream solution and renderer boundary
+
+Before solving, `python/formats/pipeline_snapshot.py` can project copied
+`Formula`, canonical `TILESET`, and unassigned `Region` values into three
+closed, versioned documents referenced by a hash-bound manifest. These are
+presentation-neutral snapshots: they preserve source identity, ordered formula
+positions, positional tile IDs, active cells, bounds, and exposed boundary
+constraints without adding fields to the core models. The
+[static snapshot contract]({{ '/wang-explainability-snapshots/' | relative_url }})
+defines their failure and rendering behavior.
 
 The native-only solve coordinator copies a verified SAT tiling out of native
 storage and applies the independent Python Wang checker. The exporter then
