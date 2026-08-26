@@ -82,6 +82,42 @@ byte-for-byte unchanged. A successful PNG is presentation, not a proof;
 correctness remains the responsibility of the independent Tiling Foundry
 verifier before export.
 
+Add `--explain` to a verified solution to show a neutral tile center, its
+positional tile ID, colored `N,E,S,W` (or six hex) edge bands, emphasized
+exposed boundary constraints, and the numeric palette legend:
+
+```bash
+uv run --locked python wang_square.py \
+  ../tests/fixtures/wang_solution_v1_square_sat.json \
+  output/wang-square-explain.png \
+  --explain
+```
+
+Static pre-solver views consume a `wang-explain-manifest-v1` instead of a
+solution. They are inherently explanatory, so they do not use `--explain`:
+
+```bash
+uv run --locked python wang_square.py \
+  ../tests/fixtures/pipeline_sat_explain/manifest.json \
+  output/formula.png \
+  --view formula
+
+uv run --locked python wang_square.py \
+  ../tests/fixtures/pipeline_sat_explain/manifest.json \
+  output/tileset.png \
+  --view tileset
+
+uv run --locked python wang_square.py \
+  ../tests/fixtures/pipeline_sat_explain/manifest.json \
+  output/region.png \
+  --view region
+```
+
+`--view tileset` and `--view region` also accept `--hex`. Both invoke the pure
+square-to-hex reducer and checker before rasterization. Formula view rejects
+`--hex`; region view intentionally contains no assignment or partial solver
+state.
+
 ## Input Format
 
 ### palette.json
@@ -228,8 +264,11 @@ Raises `RenderingException` on pipeline errors.
 ├── tests.py              # Test suite (144 tests, all passing)
 ├── wang_square.py         # One Wang CLI: square default, explicit hex raster
 ├── wang_hex_port.py       # Pure square-to-hex reducer and independent checker
+├── wang_snapshot.py       # Strict static-snapshot consumer and view compositor
+├── wang_explain.py        # Shared colored-edge and legend drawing primitives
 ├── test_wang_square.py    # Square loader, raster, isolation, CLI, and failures
 ├── test_wang_hex.py       # Port proof obligations, hex raster, golden, and CLI
+├── test_wang_snapshot.py  # Snapshot contracts, views, isolation, and goldens
 ├── input/                # Example input files (palette, scene, tiles, sprites)
 ├── output/               # Rendered PNG output goes here
 ├── test_data/
@@ -250,9 +289,10 @@ Raises `RenderingException` on pipeline errors.
 uv run --locked pytest -q
 ```
 
-The complete isolated suite has 213 tests: the 144 preserved legacy tests
-below, 45 Wang square tests, and 24 square-to-hex/hex-raster tests. To run only
-the original upstream suite:
+The complete isolated suite has 234 tests: the 144 preserved legacy tests
+below, 45 Wang square tests, 24 square-to-hex/hex-raster tests, and 21 static
+snapshot/explainability tests.
+To run only the original upstream suite:
 
 ```bash
 uv run --locked pytest tests.py -v

@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:tiling-foundry:schema:wang-region-snapshot-v1",
+  "title": "Tiling Foundry unassigned square Wang region snapshot v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "geometry",
+    "source_formula_sha256",
+    "bounds",
+    "active",
+    "boundary"
+  ],
+  "properties": {
+    "schema": {
+      "const": "wang-region-snapshot-v1"
+    },
+    "geometry": {
+      "const": "square"
+    },
+    "source_formula_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "bounds": {
+      "$ref": "#/$defs/inclusive_bounds"
+    },
+    "active": {
+      "type": "array",
+      "minItems": 1,
+      "contains": {"const": true},
+      "items": {
+        "type": "boolean"
+      }
+    },
+    "boundary": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "oneOf": [
+          {"$ref": "#/$defs/optional_edges"},
+          {"type": "null"}
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "inclusive_bounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "min_x_inclusive",
+        "min_y_inclusive",
+        "max_x_inclusive",
+        "max_y_inclusive"
+      ],
+      "properties": {
+        "min_x_inclusive": {"type": "integer"},
+        "min_y_inclusive": {"type": "integer"},
+        "max_x_inclusive": {"type": "integer"},
+        "max_y_inclusive": {"type": "integer"}
+      }
+    },
+    "nullable_color": {
+      "oneOf": [
+        {"type": "integer", "minimum": 0},
+        {"type": "null"}
+      ]
+    },
+    "optional_edges": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["N", "E", "S", "W"],
+      "properties": {
+        "N": {"$ref": "#/$defs/nullable_color"},
+        "E": {"$ref": "#/$defs/nullable_color"},
+        "S": {"$ref": "#/$defs/nullable_color"},
+        "W": {"$ref": "#/$defs/nullable_color"}
+      }
+    }
+  }
+}

@@ -72,6 +72,7 @@ solving remains future work.
 | Verified square solution export | Implemented as the closed `wang-solution-v1` contract and deterministic exporter |
 | Wang diagnostic renderer | Implemented as one presentation-only CLI with byte-stable square default and explicit `--hex` mode in the isolated `renderer/` project |
 | Square-to-hex presentation port | Implemented as a pure in-memory Basire/Culik mapping with a raster-independent checker; no hex solver, schema, or core model |
+| Static explainability snapshots | Implemented for parsed formula, canonical tile sheet, and unassigned region, with hash-bound JSON contracts and square/hex diagnostic views |
 | Native C JSON layer | Not implemented; `src/io/json.c` is a placeholder |
 | `TaskPlan` and native OpenMP solver | Not implemented; only the build scaffold exists |
 
@@ -89,29 +90,32 @@ The implemented paths are:
 
 ```text
 .cm13 --> C parser --> native Formula
-                          |        \
-                          |         +--> copied Formula --> Boolean Z3
-                          |                                  |
-                          |                                  v
-                          |                         Boolean witness checker
+                          |        |\
+                          |        | +--> formula snapshot --> formula view
+                          |        +----> copied Formula ----> Boolean Z3
+                          |                                      |
+                          |                                      v
+                          |                             Boolean witness checker
                           v
                   Yang–Zhang builder --> Region
-                                          |  \
-                                          |   +--> copied Region + TILESET
-                                          |              |
-                                          |              v
-                              native reference/       Wang Z3
-                              optimized solver           |
-                                     |                   v
-                                     v             Python tiling checker
-                              native verifier
-                                     |
-                          copied tiling + Python checker
-                                     |
-                                     v
-                          wang-solution-v1 --> square PNG (default)
-                                     \
-                                      +--> pure hex port/check --> hex PNG (--hex)
+                                          |  |\
+                                          |  | +--> static manifest --> region view
+                                          |  |                         + tile sheet
+                                          |  +----> copied Region + TILESET
+                                          |                |
+                                          |                v
+                                native reference/       Wang Z3
+                                optimized solver           |
+                                       |                   v
+                                       v             Python tiling checker
+                                native verifier
+                                       |
+                            copied tiling + Python checker
+                                       |
+                                       v
+                            wang-solution-v1 --> square PNG (default/explain)
+                                       \
+                                        +--> pure hex port/check --> hex PNG (--hex)
 ```
 
 The witness bridge relates exact Boolean assignments to the variable cells of
@@ -144,12 +148,15 @@ diagram.
 
 ## Next milestones
 
-Planned work remains separated into independently reviewed changes:
+Planned work remains separated into independently reviewed changes. The new
+priority is explainability across the deterministic pipeline:
 
-1. evaluate MRV indexing on weakly constrained search and build a separate
-   hard-UNSAT corpus before making parallelism claims;
-2. harden allocation and cleanup failure paths before concurrent execution;
-3. define and validate a minimal serial `TaskPlan` before implementing OpenMP.
+1. add provenance overlays from formula positions to region structures without
+   changing the generic `Region` model;
+2. define bounded, deterministic event traces for native DFS and explicit
+   encoding summaries for Z3, then render partial states by replay;
+3. publish a compact formula-to-final-image gallery from versioned examples;
+4. resume serial MRV and hard-UNSAT evidence before `TaskPlan` and OpenMP work.
 
 The implementation follows a deliberately small design rule: each datum has one
 owner, derived state is computed when needed, and future metadata is not added to
@@ -172,7 +179,7 @@ make check
 
 The imported renderer remains a separate locked Python project. Its Pillow and
 NumPy dependencies are not installed by the root project or exercised by
-`make check`. Run its 213-test combined suite independently:
+`make check`. Run its 234-test combined suite independently:
 
 ```sh
 cd renderer
@@ -206,6 +213,9 @@ The [square solution contract](docs/wang_solution_v1.md) includes the producer
 API for exporting a verified native result before rendering it. The
 [square-to-hex reference](docs/wang_square_to_hex.md) defines the mapping,
 inverse proof, checker boundary, and integer axial raster convention.
+The [static snapshot contract](docs/wang_explainability_snapshots.md) documents
+the real formula-to-region export and the formula, tile-sheet, region, and
+opt-in final explainability views.
 
 Useful individual targets:
 
@@ -285,11 +295,11 @@ src/verify/      independent tiling verification
 src/io/          formula parsing and native JSON placeholder
 python/model/    pure Python data contracts
 python/native/   C ABI adapters and ownership boundaries
-python/formats/  versioned solution validation and deterministic export
+python/formats/  versioned solution and static-snapshot validation/export
 python/crosscheck/ scoped native/Z3 witness orchestration
 python/oracles/  independent Z3 oracles and witness checks
 python/hex/      deliberately unused empty hex-core placeholders
-renderer/        isolated legacy and square/default, hex/explicit Wang rendering
+renderer/        isolated legacy and explainable square/hex Wang rendering
 tests/           C, Python, and instance regressions
 benchmarks/      fixed reference corpus and profiling runner
 docs/            theory and architecture references
