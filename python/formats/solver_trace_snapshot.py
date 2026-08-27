@@ -191,12 +191,17 @@ def trace_from_document(document: object) -> SolverTrace:
     _require_literal(root["geometry"], GEOMETRY, "$.geometry")
     _require_sha256(root["source_formula_sha256"], "$.source_formula_sha256")
     _require_sha256(root["region_sha256"], "$.region_sha256")
-    if root["solution_sha256"] is not None:
-        _require_sha256(root["solution_sha256"], "$.solution_sha256")
+    solution_digest = root["solution_sha256"]
+    if solution_digest is not None:
+        _require_sha256(solution_digest, "$.solution_sha256")
     solver = _require_string(root["solver"], "$.solver")
     if solver not in SOLVERS:
         raise PipelineSnapshotError("$.solver: is not a supported native solver")
     status_value = _require_status(root["status"], "$.status")
+    if (status_value == "sat") != (solution_digest is not None):
+        raise PipelineSnapshotError(
+            "$.solution_sha256: must be present exactly for SAT traces"
+        )
 
     layout = _require_object(root["layout"], "$.layout")
     _require_exact_fields(
@@ -443,6 +448,32 @@ def _validate_trace_region_state(
                 )
 
 
+def _validate_solution_bundle_identity(
+    documents: dict[str, dict[str, object]],
+) -> None:
+    solution = documents["solution"]
+    region = documents["region"]
+    tileset = documents["tileset"]
+    if solution["bounds"] != region["bounds"]:
+        raise PipelineSnapshotError(
+            "solution.bounds: does not match the referenced region"
+        )
+    if solution["tile_table"] != tileset["tiles"]:
+        raise PipelineSnapshotError(
+            "solution.tile_table: does not match the referenced tileset"
+        )
+    cells = _require_array(solution["cells"], "solution.cells")
+    active = _require_array(region["active"], "region.active")
+    if tuple(cell is not None for cell in cells) != tuple(active):
+        raise PipelineSnapshotError(
+            "solution.cells: active map does not match the referenced region"
+        )
+    if solution["boundary"] != region["boundary"]:
+        raise PipelineSnapshotError(
+            "solution.boundary: does not match the referenced region"
+        )
+
+
 def validate_solver_trace_manifest(document: object) -> None:
     """Validate the v3 manifest without reading referenced artifacts."""
     root = _require_object(document, "$")
@@ -592,6 +623,7 @@ def load_solver_trace_bundle(
             raise PipelineSnapshotError(
                 "trace.solution_sha256: does not match solution artifact"
             )
+        _validate_solution_bundle_identity(documents)
         solution = documents["solution"]
         bounds = _require_object(solution["bounds"], "solution.bounds")
         width = bounds["max_x_inclusive"] - bounds["min_x_inclusive"] + 1
