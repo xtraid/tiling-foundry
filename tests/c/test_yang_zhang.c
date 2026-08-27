@@ -8,6 +8,24 @@
 
 #define ARRAY_COUNT(array) (sizeof(array) / sizeof((array)[0]))
 
+typedef struct {
+    Region region;
+    AdjacentSwap *swaps;
+    size_t swap_count;
+} LegacyYangZhangReduction;
+
+_Static_assert(sizeof(YangZhangReduction) == sizeof(LegacyYangZhangReduction),
+               "YangZhangReduction ABI size changed");
+_Static_assert(offsetof(YangZhangReduction, region) ==
+               offsetof(LegacyYangZhangReduction, region),
+               "YangZhangReduction.region ABI offset changed");
+_Static_assert(offsetof(YangZhangReduction, swaps) ==
+               offsetof(LegacyYangZhangReduction, swaps),
+               "YangZhangReduction.swaps ABI offset changed");
+_Static_assert(offsetof(YangZhangReduction, swap_count) ==
+               offsetof(LegacyYangZhangReduction, swap_count),
+               "YangZhangReduction.swap_count ABI offset changed");
+
 static void test_reduction_destroy_accepts_null_and_empty(void)
 {
     YangZhangReduction reduction = {0};
@@ -21,11 +39,6 @@ static void test_reduction_destroy_accepts_null_and_empty(void)
     assert(reduction.region.cells == NULL);
     assert(reduction.swaps == NULL);
     assert(reduction.swap_count == 0);
-    assert(reduction.explanation.source_signals == NULL);
-    assert(reduction.explanation.target_signals == NULL);
-    assert(reduction.explanation.signal_count == 0);
-    assert(reduction.explanation.gadgets == NULL);
-    assert(reduction.explanation.gadget_count == 0);
 }
 
 static void test_reduction_destroy_releases_and_resets_owned_storage(void)
@@ -37,21 +50,6 @@ static void test_reduction_destroy_releases_and_resets_owned_storage(void)
     reduction.swaps = malloc(2 * sizeof(*reduction.swaps));
     assert(reduction.swaps != NULL);
     reduction.swap_count = 2;
-    reduction.explanation.source_signals = malloc(
-        3 * sizeof(*reduction.explanation.source_signals)
-    );
-    reduction.explanation.target_signals = malloc(
-        3 * sizeof(*reduction.explanation.target_signals)
-    );
-    reduction.explanation.gadgets = malloc(
-        4 * sizeof(*reduction.explanation.gadgets)
-    );
-    assert(reduction.explanation.source_signals != NULL);
-    assert(reduction.explanation.target_signals != NULL);
-    assert(reduction.explanation.gadgets != NULL);
-    reduction.explanation.signal_count = 3;
-    reduction.explanation.gadget_count = 4;
-
     yang_zhang_reduction_destroy(&reduction);
 
     assert(reduction.region.width == 0);
@@ -60,14 +58,47 @@ static void test_reduction_destroy_releases_and_resets_owned_storage(void)
     assert(reduction.region.cells == NULL);
     assert(reduction.swaps == NULL);
     assert(reduction.swap_count == 0);
-    assert(reduction.explanation.source_signals == NULL);
-    assert(reduction.explanation.target_signals == NULL);
-    assert(reduction.explanation.signal_count == 0);
-    assert(reduction.explanation.gadgets == NULL);
-    assert(reduction.explanation.gadget_count == 0);
-
     /* A destroyed reduction can be destroyed repeatedly. */
     yang_zhang_reduction_destroy(&reduction);
+}
+
+static void test_explained_reduction_destroy_releases_all_storage(void)
+{
+    YangZhangExplainedReduction explained = {0};
+
+    assert(region_init(&explained.reduction.region, 2, 3));
+    explained.reduction.swaps = malloc(
+        2 * sizeof(*explained.reduction.swaps)
+    );
+    explained.explanation.source_signals = malloc(
+        3 * sizeof(*explained.explanation.source_signals)
+    );
+    explained.explanation.target_signals = malloc(
+        3 * sizeof(*explained.explanation.target_signals)
+    );
+    explained.explanation.gadgets = malloc(
+        4 * sizeof(*explained.explanation.gadgets)
+    );
+    assert(explained.reduction.swaps != NULL);
+    assert(explained.explanation.source_signals != NULL);
+    assert(explained.explanation.target_signals != NULL);
+    assert(explained.explanation.gadgets != NULL);
+    explained.reduction.swap_count = 2;
+    explained.explanation.signal_count = 3;
+    explained.explanation.gadget_count = 4;
+
+    yang_zhang_explained_reduction_destroy(&explained);
+
+    assert(explained.reduction.region.cells == NULL);
+    assert(explained.reduction.swaps == NULL);
+    assert(explained.reduction.swap_count == 0);
+    assert(explained.explanation.source_signals == NULL);
+    assert(explained.explanation.target_signals == NULL);
+    assert(explained.explanation.signal_count == 0);
+    assert(explained.explanation.gadgets == NULL);
+    assert(explained.explanation.gadget_count == 0);
+    yang_zhang_explained_reduction_destroy(&explained);
+    yang_zhang_explained_reduction_destroy(NULL);
 }
 
 static Cm13Formula one_variable_formula(Cm13Clause clauses[1])
@@ -89,6 +120,13 @@ static void assert_reduction_destroyed(const YangZhangReduction *reduction)
     assert(reduction->region.cells == NULL);
     assert(reduction->swaps == NULL);
     assert(reduction->swap_count == 0);
+}
+
+static void assert_explained_reduction_destroyed(
+    const YangZhangExplainedReduction *reduction
+)
+{
+    assert_reduction_destroyed(&reduction->reduction);
     assert(reduction->explanation.source_signals == NULL);
     assert(reduction->explanation.target_signals == NULL);
     assert(reduction->explanation.signal_count == 0);
@@ -343,20 +381,33 @@ static void test_build_rejects_non_destroyed_output(void)
     assert(reduction.region.width == 1);
 }
 
+static void test_explained_build_rejects_non_destroyed_output(void)
+{
+    Cm13Clause clauses[1];
+    Cm13Formula formula = one_variable_formula(clauses);
+    YangZhangExplainedReduction reduction = {
+        .explanation = { .signal_count = 1 }
+    };
+
+    assert(!yang_zhang_build_explained(&formula, &reduction));
+    assert_reduction_destroyed(&reduction.reduction);
+    assert(reduction.explanation.signal_count == 1);
+}
+
 static void test_build_minimal_valid_formula_with_explanation(void)
 {
     Cm13Clause clauses[1];
     Cm13Formula formula = one_variable_formula(clauses);
     const Cm13Clause clauses_before[1] = { clauses[0] };
-    YangZhangReduction reduction = {0};
+    YangZhangExplainedReduction reduction = {0};
     const bool top_is_r[7] = {false};
     const bool bottom_is_l[7] = {false};
 
     assert(yang_zhang_build_explained(&formula, &reduction));
-    assert(reduction.region.width == 7);
-    assert(reduction.region.height == 3);
-    assert(reduction.swaps == NULL);
-    assert(reduction.swap_count == 0);
+    assert(reduction.reduction.region.width == 7);
+    assert(reduction.reduction.region.height == 3);
+    assert(reduction.reduction.swaps == NULL);
+    assert(reduction.reduction.swap_count == 0);
     assert(reduction.explanation.signal_count == 3);
     assert(reduction.explanation.source_signals != NULL);
     assert(reduction.explanation.target_signals != NULL);
@@ -412,14 +463,14 @@ static void test_build_minimal_valid_formula_with_explanation(void)
         3,
         REDUCTION_NO_SWAP_ROW
     );
-    assert_region_encoding(&reduction.region, top_is_r, bottom_is_l);
+    assert_region_encoding(&reduction.reduction.region, top_is_r, bottom_is_l);
     assert(memcmp(clauses, clauses_before, sizeof(clauses)) == 0);
 
-    yang_zhang_reduction_destroy(&reduction);
-    assert_reduction_destroyed(&reduction);
+    yang_zhang_explained_reduction_destroy(&reduction);
+    assert_explained_reduction_destroyed(&reduction);
 }
 
-static void test_standard_build_omits_explanation(void)
+static void test_standard_build_preserves_compact_result(void)
 {
     Cm13Clause clauses[1];
     Cm13Formula formula = one_variable_formula(clauses);
@@ -428,12 +479,6 @@ static void test_standard_build_omits_explanation(void)
     assert(yang_zhang_build(&formula, &reduction));
     assert(reduction.region.width == 7);
     assert(reduction.region.height == 3);
-    assert(reduction.explanation.source_signals == NULL);
-    assert(reduction.explanation.target_signals == NULL);
-    assert(reduction.explanation.signal_count == 0);
-    assert(reduction.explanation.gadgets == NULL);
-    assert(reduction.explanation.gadget_count == 0);
-
     yang_zhang_reduction_destroy(&reduction);
     assert_reduction_destroyed(&reduction);
 }
@@ -512,14 +557,14 @@ static void test_build_paper_example(void)
         redundant_token(3, 1),
         variable_token(0, 2), variable_token(1, 2), variable_token(2, 2)
     };
-    YangZhangReduction reduction = {0};
+    YangZhangExplainedReduction reduction = {0};
     bool top_is_r[96] = {false};
     bool bottom_is_l[96] = {false};
 
     assert(yang_zhang_build_explained(&formula, &reduction));
-    assert(reduction.region.height == 11);
-    assert(reduction.region.width == 96);
-    assert(reduction.swap_count == ARRAY_COUNT(expected_rows));
+    assert(reduction.reduction.region.height == 11);
+    assert(reduction.reduction.region.width == 96);
+    assert(reduction.reduction.swap_count == ARRAY_COUNT(expected_rows));
     assert(reduction.explanation.signal_count == ARRAY_COUNT(source));
     assert(reduction.explanation.gadget_count ==
            2u * formula.variable_count + 2u + ARRAY_COUNT(expected_rows));
@@ -561,11 +606,11 @@ static void test_build_paper_example(void)
     int32_t block_x = (int32_t)(YANG_ZHANG_VARIABLE_WIDTH +
                                 YANG_ZHANG_LEFT_FORWARD_WIDTH);
     size_t crossover_width = 0;
-    for (size_t i = 0; i < reduction.swap_count; ++i) {
+    for (size_t i = 0; i < reduction.reduction.swap_count; ++i) {
         const uint32_t row = expected_rows[i];
         const int32_t block_width = (int32_t)row + 1;
 
-        assert(reduction.swaps[i].row == row);
+        assert(reduction.reduction.swaps[i].row == row);
         assert_gadget_span(
             &reduction.explanation.gadgets[formula.variable_count + 1u + i],
             REDUCTION_GADGET_CROSSOVER,
@@ -600,7 +645,7 @@ static void test_build_paper_example(void)
         const int32_t first_y = (int32_t)(4u * clause);
         const int32_t y_end = clause + 1u < formula.clause_count
             ? first_y + 4
-            : reduction.region.height;
+            : reduction.reduction.region.height;
         assert_gadget_span(
             &reduction.explanation.gadgets[right_index + 1u + clause],
             REDUCTION_GADGET_CLAUSE,
@@ -616,18 +661,18 @@ static void test_build_paper_example(void)
     assert(yang_zhang_permutation_apply(
         source,
         ARRAY_COUNT(source),
-        reduction.swaps,
-        reduction.swap_count
+        reduction.reduction.swaps,
+        reduction.reduction.swap_count
     ));
     for (size_t i = 0; i < ARRAY_COUNT(source); ++i) {
         assert(tokens_equal(&source[i], &target[i]));
     }
 
-    assert_region_encoding(&reduction.region, top_is_r, bottom_is_l);
+    assert_region_encoding(&reduction.reduction.region, top_is_r, bottom_is_l);
     assert(memcmp(clauses, clauses_before, sizeof(clauses)) == 0);
 
-    yang_zhang_reduction_destroy(&reduction);
-    assert_reduction_destroyed(&reduction);
+    yang_zhang_explained_reduction_destroy(&reduction);
+    assert_explained_reduction_destroyed(&reduction);
 }
 
 static void test_paper_dimensions_from_known_swaps(void)
@@ -913,13 +958,15 @@ int main(void)
 {
     test_reduction_destroy_accepts_null_and_empty();
     test_reduction_destroy_releases_and_resets_owned_storage();
+    test_explained_reduction_destroy_releases_all_storage();
     test_build_rejects_null_arguments();
     test_build_rejects_invalid_formula_domain();
     test_build_rejects_variable_count_overflow();
     test_failed_build_does_not_modify_formula_storage();
     test_build_rejects_non_destroyed_output();
+    test_explained_build_rejects_non_destroyed_output();
     test_build_minimal_valid_formula_with_explanation();
-    test_standard_build_omits_explanation();
+    test_standard_build_preserves_compact_result();
 
     test_dimensions_normal();
     test_build_paper_example();

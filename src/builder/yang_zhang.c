@@ -10,12 +10,19 @@ static bool reduction_is_destroyed(const YangZhangReduction *reduction)
         && reduction->region.cell_count == 0
         && reduction->region.cells == NULL
         && reduction->swaps == NULL
-        && reduction->swap_count == 0
-        && reduction->explanation.source_signals == NULL
-        && reduction->explanation.target_signals == NULL
-        && reduction->explanation.signal_count == 0
-        && reduction->explanation.gadgets == NULL
-        && reduction->explanation.gadget_count == 0;
+        && reduction->swap_count == 0;
+}
+
+static bool explanation_is_destroyed(
+    const ReductionExplanation *explanation
+)
+{
+    return explanation != NULL
+        && explanation->source_signals == NULL
+        && explanation->target_signals == NULL
+        && explanation->signal_count == 0
+        && explanation->gadgets == NULL
+        && explanation->gadget_count == 0;
 }
 
 static bool build_reduction_explanation(
@@ -442,7 +449,7 @@ static bool paint_crossover_boundaries(
 static bool yang_zhang_build_internal(
     const Cm13Formula *formula,
     YangZhangReduction *out_reduction,
-    bool include_explanation
+    ReductionExplanation *out_explanation
 )
 {
     SignalToken *source = NULL;
@@ -456,6 +463,8 @@ static bool yang_zhang_build_internal(
     ReductionExplanation explanation = {0};
 
     if (!reduction_is_destroyed(out_reduction) ||
+        (out_explanation != NULL &&
+         !explanation_is_destroyed(out_explanation)) ||
         !formula_is_in_reduction_domain(formula)) {
         return false;
     }
@@ -478,6 +487,13 @@ static bool yang_zhang_build_internal(
         return false;
     }
 
+    if (out_explanation == NULL) {
+        free(target);
+        target = NULL;
+        free(source);
+        source = NULL;
+    }
+
     if (!yang_zhang_compute_dimensions(
             formula->variable_count,
             swaps,
@@ -497,7 +513,7 @@ static bool yang_zhang_build_internal(
             swaps,
             swap_count
         ) ||
-        (include_explanation && !build_reduction_explanation(
+        (out_explanation != NULL && !build_reduction_explanation(
             formula,
             source,
             target,
@@ -518,10 +534,8 @@ static bool yang_zhang_build_internal(
     out_reduction->region = region;
     out_reduction->swaps = swaps;
     out_reduction->swap_count = swap_count;
-    out_reduction->explanation = explanation;
-    if (!include_explanation) {
-        free(target);
-        free(source);
+    if (out_explanation != NULL) {
+        *out_explanation = explanation;
     }
     return true;
 }
@@ -531,15 +545,22 @@ bool yang_zhang_build(
     YangZhangReduction *out_reduction
 )
 {
-    return yang_zhang_build_internal(formula, out_reduction, false);
+    return yang_zhang_build_internal(formula, out_reduction, NULL);
 }
 
 bool yang_zhang_build_explained(
     const Cm13Formula *formula,
-    YangZhangReduction *out_reduction
+    YangZhangExplainedReduction *out_reduction
 )
 {
-    return yang_zhang_build_internal(formula, out_reduction, true);
+    if (out_reduction == NULL) {
+        return false;
+    }
+    return yang_zhang_build_internal(
+        formula,
+        &out_reduction->reduction,
+        &out_reduction->explanation
+    );
 }
 
 void yang_zhang_reduction_destroy(YangZhangReduction *reduction)
@@ -552,6 +573,17 @@ void yang_zhang_reduction_destroy(YangZhangReduction *reduction)
     free(reduction->swaps);
     reduction->swaps = NULL;
     reduction->swap_count = 0;
+}
+
+void yang_zhang_explained_reduction_destroy(
+    YangZhangExplainedReduction *reduction
+)
+{
+    if (reduction == NULL) {
+        return;
+    }
+
+    yang_zhang_reduction_destroy(&reduction->reduction);
     free(reduction->explanation.gadgets);
     free(reduction->explanation.target_signals);
     free(reduction->explanation.source_signals);

@@ -92,6 +92,12 @@ class _YangZhangReduction(Structure):
         ("region", _Region),
         ("swaps", POINTER(_AdjacentSwap)),
         ("swap_count", c_size_t),
+    ]
+
+
+class _YangZhangExplainedReduction(Structure):
+    _fields_ = [
+        ("reduction", _YangZhangReduction),
         ("explanation", _ReductionExplanation),
     ]
 
@@ -110,13 +116,17 @@ def _region_library() -> CDLL:
     lib.yang_zhang_build.restype = c_bool
     lib.yang_zhang_build_explained.argtypes = [
         POINTER(_Cm13Formula),
-        POINTER(_YangZhangReduction),
+        POINTER(_YangZhangExplainedReduction),
     ]
     lib.yang_zhang_build_explained.restype = c_bool
     lib.yang_zhang_reduction_destroy.argtypes = [
         POINTER(_YangZhangReduction)
     ]
     lib.yang_zhang_reduction_destroy.restype = None
+    lib.yang_zhang_explained_reduction_destroy.argtypes = [
+        POINTER(_YangZhangExplainedReduction)
+    ]
+    lib.yang_zhang_explained_reduction_destroy.restype = None
     return lib
 
 
@@ -206,7 +216,7 @@ def _copy_gadget(native_gadget: _ReductionGadgetSpan) -> ReductionGadget:
 
 
 def _copy_reduction_explanation(
-    native_reduction: _YangZhangReduction,
+    native_reduction: _YangZhangExplainedReduction,
     variable_count: int,
 ) -> ReductionExplanation:
     native = native_reduction.explanation
@@ -230,8 +240,8 @@ def _copy_reduction_explanation(
     )
     return ReductionExplanation(
         variable_count=variable_count,
-        width=int(native_reduction.region.width),
-        height=int(native_reduction.region.height),
+        width=int(native_reduction.reduction.region.width),
+        height=int(native_reduction.reduction.region.height),
         source_signals=source,
         target_signals=target,
         gadgets=gadgets,
@@ -241,18 +251,11 @@ def _copy_reduction_explanation(
 @contextmanager
 def _built_reduction(
     native_formula: _Cm13Formula,
-    *,
-    explained: bool = False,
 ) -> Iterator[_YangZhangReduction]:
     native_reduction = _YangZhangReduction()
     lib = _region_library()
     try:
-        build = (
-            lib.yang_zhang_build_explained
-            if explained
-            else lib.yang_zhang_build
-        )
-        if not build(
+        if not lib.yang_zhang_build(
             byref(native_formula),
             byref(native_reduction),
         ):
@@ -260,6 +263,25 @@ def _built_reduction(
         yield native_reduction
     finally:
         lib.yang_zhang_reduction_destroy(byref(native_reduction))
+
+
+@contextmanager
+def _built_explained_reduction(
+    native_formula: _Cm13Formula,
+) -> Iterator[_YangZhangExplainedReduction]:
+    native_reduction = _YangZhangExplainedReduction()
+    lib = _region_library()
+    try:
+        if not lib.yang_zhang_build_explained(
+            byref(native_formula),
+            byref(native_reduction),
+        ):
+            raise RegionBuildError(
+                "could not build explained Yang-Zhang region"
+            )
+        yield native_reduction
+    finally:
+        lib.yang_zhang_explained_reduction_destroy(byref(native_reduction))
 
 
 def _build_region(native_formula: _Cm13Formula) -> Region:
@@ -270,9 +292,9 @@ def _build_region(native_formula: _Cm13Formula) -> Region:
 def _build_region_and_explanation(
     native_formula: _Cm13Formula,
 ) -> tuple[Region, ReductionExplanation]:
-    with _built_reduction(native_formula, explained=True) as native_reduction:
+    with _built_explained_reduction(native_formula) as native_reduction:
         return (
-            _copy_region(native_reduction.region),
+            _copy_region(native_reduction.reduction.region),
             _copy_reduction_explanation(
                 native_reduction,
                 int(native_formula.variable_count),

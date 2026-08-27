@@ -40,7 +40,7 @@ typedef struct {
 
 /*
  * Immutable construction provenance owned by a successful
- * YangZhangReduction returned by yang_zhang_build_explained().
+ * YangZhangExplainedReduction returned by yang_zhang_build_explained().
  *
  * source_signals and target_signals are the exact sequences passed to the
  * permutation builder. Their array index is the zero-based signal row.

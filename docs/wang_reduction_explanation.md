@@ -6,7 +6,7 @@ description: Native-produced signal, permutation, and gadget provenance for one 
 section: Yang–Zhang reduction
 document_kind: Data and rendering contract
 status: Current implementation
-updated: 2026-08-26
+updated: 2026-08-27
 nav_order: 25
 ---
 
@@ -33,14 +33,17 @@ A successful opt-in `yang_zhang_build_explained()` owns three related results:
   arrays passed to the permutation builder and the gadget spans emitted from
   the same dimensioned build.
 
-The standard `yang_zhang_build()` leaves `explanation` destroyed and performs
-no provenance allocation, so ordinary solving and benchmarks do not pay for
-this diagnostic result. The explanation arrays from the opt-in entry point are
-borrowed through `YangZhangReduction` and remain
-immutable after construction. `yang_zhang_reduction_destroy()` releases and
-zeros all of them. Failed construction transfers nothing and leaves the output
-destroyed. The Python adapter copies every value before that native cleanup;
-no pointer escapes into the immutable Python model.
+The standard `yang_zhang_build()` returns the original compact
+`YangZhangReduction`, frees temporary signals immediately after permutation
+construction, and performs no provenance allocation. Ordinary solving and
+benchmarks therefore do not pay for this diagnostic result, and the public
+reduction ABI does not change. The opt-in entry point instead returns a
+`YangZhangExplainedReduction` containing that compact result plus the owned
+explanation arrays. They remain immutable after construction and
+`yang_zhang_explained_reduction_destroy()` releases and zeros both parts.
+Failed construction transfers nothing and leaves the output destroyed. The
+Python adapter copies every value before that native cleanup; no pointer
+escapes into the immutable Python model.
 
 This structure is not a temporary output bundle. It represents a domain object
 with independent invariants and an owned lifetime, and it has an immediate

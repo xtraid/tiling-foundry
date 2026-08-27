@@ -73,7 +73,7 @@ solving remains future work.
 | Wang diagnostic renderer | Implemented as one presentation-only CLI with byte-stable square default and explicit `--hex` mode in the isolated `renderer/` project |
 | Square-to-hex presentation port | Implemented as a pure in-memory Basire/Culik mapping with a raster-independent checker; no hex solver, schema, or core model |
 | Static explainability snapshots | Implemented for parsed formula, canonical tile sheet, and unassigned region, with hash-bound JSON contracts and square/hex diagnostic views |
-| Reduction construction provenance | Implemented as an opt-in native-owned explanation with exact signal orders, swap-bound gadget spans, manifest v2, and a square overlay view; the standard build does not allocate it |
+| Reduction construction provenance | Implemented as a separate opt-in native-owned result with exact signal orders, swap-bound gadget spans, manifest v2, and a square overlay view; the compact standard ABI does not allocate it |
 | Native C JSON layer | Not implemented; `src/io/json.c` is a placeholder |
 | `TaskPlan` and native OpenMP solver | Not implemented; only the build scaffold exists |
 

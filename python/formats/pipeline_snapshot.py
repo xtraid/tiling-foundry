@@ -417,7 +417,7 @@ def _validate_explanation_signals(
         _fail(path, "length must equal the explanation height")
     identities: list[tuple[str, int, int | None, int | None]] = []
     token_ids: set[int] = set()
-    occurrences = [0] * variable_count
+    occurrences: list[set[int]] = [set() for _ in range(variable_count)]
     redundant_count = 0
     for row, raw_signal in enumerate(signals):
         item_path = f"{path}[{row}]"
@@ -460,7 +460,7 @@ def _validate_explanation_signals(
                 _fail(f"{item_path}.variable", "is outside the formula")
             if occurrence >= 3:
                 _fail(f"{item_path}.occurrence", "must be 0, 1, or 2")
-            occurrences[variable] += 1
+            occurrences[variable].add(occurrence)
         else:
             if signal["variable"] is not None or signal["occurrence"] is not None:
                 _fail(item_path, "redundant signal metadata must be null")
@@ -468,8 +468,8 @@ def _validate_explanation_signals(
             occurrence = None
             redundant_count += 1
         identities.append((kind, token_id, variable, occurrence))
-    if any(count != 3 for count in occurrences):
-        _fail(path, "must contain three signals for every variable")
+    if any(values != {0, 1, 2} for values in occurrences):
+        _fail(path, "must contain occurrences 0, 1, and 2 for every variable")
     if redundant_count != variable_count - 1:
         _fail(path, "has an invalid redundant signal count")
     return tuple(identities)
@@ -857,51 +857,11 @@ def _validate_base_bundle_identity(
     return source_digest
 
 
-def load_explainability_bundle(
-    manifest_path: str | Path,
-) -> tuple[
-    dict[str, object],
-    dict[str, object],
-    dict[str, object],
-    dict[str, object],
-]:
-    """Load a v1 manifest and its three hash-bound artifacts."""
-    artifact_schemas = (
-        ("formula", FORMULA_SCHEMA),
-        ("tileset", TILESET_SCHEMA),
-        ("region", REGION_SCHEMA),
-    )
-    manifest, loaded = _load_manifest_artifacts(
-        manifest_path,
-        manifest_schema=MANIFEST_SCHEMA,
-        artifact_schemas=artifact_schemas,
-    )
-    _validate_base_bundle_identity(manifest, loaded)
-    return manifest, loaded["formula"], loaded["tileset"], loaded["region"]
-
-
-def load_reduction_explainability_bundle(
-    manifest_path: str | Path,
-) -> tuple[
-    dict[str, object],
-    dict[str, object],
-    dict[str, object],
-    dict[str, object],
-    dict[str, object],
-]:
-    """Load a v2 manifest and verify formula, region, and provenance identity."""
-    artifact_schemas = (
-        ("formula", FORMULA_SCHEMA),
-        ("tileset", TILESET_SCHEMA),
-        ("region", REGION_SCHEMA),
-        ("reduction", REDUCTION_SCHEMA),
-    )
-    manifest, loaded = _load_manifest_artifacts(
-        manifest_path,
-        manifest_schema=REDUCTION_MANIFEST_SCHEMA,
-        artifact_schemas=artifact_schemas,
-    )
-    source_digest = _validate_base_bundle_identity(manifest, loaded)
+def _validate_reduction_bundle_identity(
+    manifest: dict[str, object],
+    loaded: dict[str, dict[str, object]],
+    source_digest: str,
+) -> None:
     reduction = loaded["reduction"]
     if reduction["source_formula_sha256"] != source_digest:
         _fail(
@@ -951,7 +911,9 @@ def load_reduction_explainability_bundle(
                 (SIGNAL_REDUNDANT, 3 * variable_count + clause_id, None, None)
             )
     signals = _require_object(reduction["signals"], "reduction.signals")
-    actual_sequences: list[tuple[tuple[str, int, int | None, int | None], ...]] = []
+    actual_sequences: list[
+        tuple[tuple[str, int, int | None, int | None], ...]
+    ] = []
     for name in ("source", "target"):
         sequence = _require_array(signals[name], f"reduction.signals.{name}")
         actual_sequences.append(
@@ -985,6 +947,55 @@ def load_reduction_explainability_bundle(
         _fail("reduction.bounds.x_end", "does not match the region width")
     if reduction_bounds["y_end"] != region_height:
         _fail("reduction.bounds.y_end", "does not match the region height")
+
+
+def load_explainability_bundle(
+    manifest_path: str | Path,
+) -> tuple[
+    dict[str, object],
+    dict[str, object],
+    dict[str, object],
+    dict[str, object],
+]:
+    """Load a v1 manifest and its three hash-bound artifacts."""
+    artifact_schemas = (
+        ("formula", FORMULA_SCHEMA),
+        ("tileset", TILESET_SCHEMA),
+        ("region", REGION_SCHEMA),
+    )
+    manifest, loaded = _load_manifest_artifacts(
+        manifest_path,
+        manifest_schema=MANIFEST_SCHEMA,
+        artifact_schemas=artifact_schemas,
+    )
+    _validate_base_bundle_identity(manifest, loaded)
+    return manifest, loaded["formula"], loaded["tileset"], loaded["region"]
+
+
+def load_reduction_explainability_bundle(
+    manifest_path: str | Path,
+) -> tuple[
+    dict[str, object],
+    dict[str, object],
+    dict[str, object],
+    dict[str, object],
+    dict[str, object],
+]:
+    """Load a v2 manifest and verify formula, region, and provenance identity."""
+    artifact_schemas = (
+        ("formula", FORMULA_SCHEMA),
+        ("tileset", TILESET_SCHEMA),
+        ("region", REGION_SCHEMA),
+        ("reduction", REDUCTION_SCHEMA),
+    )
+    manifest, loaded = _load_manifest_artifacts(
+        manifest_path,
+        manifest_schema=REDUCTION_MANIFEST_SCHEMA,
+        artifact_schemas=artifact_schemas,
+    )
+    source_digest = _validate_base_bundle_identity(manifest, loaded)
+    _validate_reduction_bundle_identity(manifest, loaded, source_digest)
+    reduction = loaded["reduction"]
     return (
         manifest,
         loaded["formula"],
@@ -1239,6 +1250,9 @@ def _dump_snapshot_bundle(
         "tileset": (TILESET_SCHEMA, tileset_document),
         "region": (REGION_SCHEMA, region_document),
     }
+    loaded_documents = {
+        name: document for name, (_, document) in documents.items()
+    }
     references: dict[str, object] = {}
     for name, (schema, document) in documents.items():
         encoded = _encode_document(document)
@@ -1281,6 +1295,7 @@ def _dump_snapshot_bundle(
             "sha256": digest,
             "schema": REDUCTION_SCHEMA,
         }
+        loaded_documents["reduction"] = explanation_document
 
     manifest_schema = (
         REDUCTION_MANIFEST_SCHEMA if explanation is not None else MANIFEST_SCHEMA
@@ -1296,6 +1311,16 @@ def _dump_snapshot_bundle(
         validate_explain_manifest(manifest)
     else:
         validate_reduction_explain_manifest(manifest)
+    validated_source_digest = _validate_base_bundle_identity(
+        manifest,
+        loaded_documents,
+    )
+    if explanation is not None:
+        _validate_reduction_bundle_identity(
+            manifest,
+            loaded_documents,
+            validated_source_digest,
+        )
     _write_atomic(destination, _encode_document(manifest))
     if explanation is None:
         load_explainability_bundle(destination)

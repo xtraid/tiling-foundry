@@ -141,8 +141,9 @@ positions of every clause and releases the native formula in a `finally`
 block.
 
 The reduction coordinator parses once. While the native formula is live, it
-builds the corresponding `YangZhangReduction` and copies any Python views that
-the selected path needs. Cleanup destroys the reduction before the formula.
+builds either the compact `YangZhangReduction` or the separate opt-in
+`YangZhangExplainedReduction`, then copies only the Python views selected by
+that path. Cleanup uses the matching destructor before releasing the formula.
 The explanation adapter copies the exact source/target signals, swap-bound
 gadget spans, and region extent before cleanup. Python models are not
 reverse-marshalled into `Cm13Formula` or `Region`.

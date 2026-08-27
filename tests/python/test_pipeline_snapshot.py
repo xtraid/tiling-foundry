@@ -31,6 +31,7 @@ from formats.pipeline_snapshot import (
     validate_region_snapshot,
     validate_tileset_snapshot,
 )
+from model.formula import Formula
 from model.tileset import TILESET
 from native.reduction_adapter import load_formula_region_and_explanation
 
@@ -186,6 +187,14 @@ class PipelineSnapshotTests(unittest.TestCase):
         with self.assertRaisesRegex(PipelineSnapshotError, "must be an integer"):
             validate_reduction_explanation_snapshot(bool_ordinal)
 
+        duplicate_occurrence = copy.deepcopy(document)
+        duplicate_occurrence["signals"]["source"][1]["occurrence"] = 0
+        with self.assertRaisesRegex(
+            PipelineSnapshotError,
+            "must contain occurrences 0, 1, and 2",
+        ):
+            validate_reduction_explanation_snapshot(duplicate_occurrence)
+
     def test_v2_bundle_is_deterministic_and_cross_stage_hash_bound(self) -> None:
         snapshots: list[dict[str, bytes]] = []
         for _ in range(2):
@@ -249,6 +258,37 @@ class PipelineSnapshotTests(unittest.TestCase):
                 "does not match the referenced region",
             ):
                 load_reduction_explainability_bundle(manifest_path)
+
+    def test_v2_cross_validation_failure_preserves_existing_manifest(self) -> None:
+        mismatched_formula = Formula(
+            variable_count=self.formula.variable_count,
+            clauses=tuple(reversed(self.formula.clauses)),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            manifest_path = Path(directory) / "pipeline.explain.json"
+            dump_reduction_explanation_snapshots(
+                manifest_path,
+                SAT_PATH,
+                self.formula,
+                self.region,
+                self.explanation,
+            )
+            original_manifest = manifest_path.read_bytes()
+
+            with self.assertRaisesRegex(
+                PipelineSnapshotError,
+                "does not match the formula clauses",
+            ):
+                dump_reduction_explanation_snapshots(
+                    manifest_path,
+                    SAT_PATH,
+                    mismatched_formula,
+                    self.region,
+                    self.explanation,
+                )
+
+            self.assertEqual(manifest_path.read_bytes(), original_manifest)
+            load_reduction_explainability_bundle(manifest_path)
 
     def test_manifest_rejects_changed_artifact_bytes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
