@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:tiling-foundry:schema:wang-explain-manifest-v3",
+  "title": "Tiling Foundry solver-trace explainability manifest v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "stage", "source_formula_sha256", "artifacts"],
+  "properties": {
+    "schema": {"const": "wang-explain-manifest-v3"},
+    "stage": {"const": "solver-trace"},
+    "source_formula_sha256": {"$ref": "#/$defs/sha256"},
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "formula",
+        "tileset",
+        "region",
+        "reduction",
+        "trace",
+        "solution"
+      ],
+      "properties": {
+        "formula": {
+          "$ref": "#/$defs/reference",
+          "properties": {"schema": {"const": "cm13-formula-snapshot-v1"}}
+        },
+        "tileset": {
+          "$ref": "#/$defs/reference",
+          "properties": {"schema": {"const": "wang-tileset-snapshot-v1"}}
+        },
+        "region": {
+          "$ref": "#/$defs/reference",
+          "properties": {"schema": {"const": "wang-region-snapshot-v1"}}
+        },
+        "reduction": {
+          "$ref": "#/$defs/reference",
+          "properties": {
+            "schema": {"const": "wang-reduction-explanation-v1"}
+          }
+        },
+        "trace": {
+          "$ref": "#/$defs/reference",
+          "properties": {"schema": {"const": "wang-solver-trace-v1"}}
+        },
+        "solution": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/reference",
+              "properties": {"schema": {"const": "wang-solution-v1"}}
+            },
+            {"type": "null"}
+          ]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "artifact_path": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^/\\]+$",
+      "not": {"enum": [".", ".."]}
+    },
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "schema"],
+      "properties": {
+        "path": {"$ref": "#/$defs/artifact_path"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "schema": {"type": "string"}
+      }
+    }
+  }
+}

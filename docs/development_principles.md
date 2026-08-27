@@ -6,7 +6,7 @@ description: How Tiling Foundry separates source data, derived state, native lif
 section: Architecture and correctness
 document_kind: Architecture reference
 status: Current implementation
-updated: 2026-08-25
+updated: 2026-08-27
 nav_order: 10
 ---
 
@@ -88,16 +88,19 @@ A module is implemented when it has:
 | `region` | Active cells and exposed boundary constraints | Solver domains and scheduling |
 | `yang_zhang` | Reduction construction, transferred swap trace, and immutable signal/gadget provenance | Solver state and presentation metadata |
 | `solver` | Domains, trail, assignments, and search state | Formula and reduction semantics |
+| `solver_trace` | Opt-in bounded semantic events, full initial state, checkpoints, and their owned lifetime | Solving policy, raster composition, and Z3 internals |
 | `verify` | Stateless validation of a candidate tiling | Search logic and solver caches |
 | `crosscheck` | Stateless Boolean/Wang witness translation over a live reduction | Generic solver internals, clause validity, and copied swap data |
 | `task_plan` | Future derived scheduling data | `Region` or serial-solver ownership |
-| `python/model` | Pure immutable formula, region, tiling, and reduction-explanation contracts | I/O, ctypes, Z3, and native ownership |
-| `python/native` | C ABI adaptation, scoped native lifetimes, and complete copy-out | Solver logic and escaping native pointers |
+| `python/model` | Pure immutable formula, region, tiling, reduction-explanation, and solver-trace contracts | I/O, ctypes, Z3, and native ownership |
+| `python/native` | C ABI adaptation, scoped native lifetimes, and complete result/trace copy-out | Solver logic and escaping native pointers |
 | `python/crosscheck` | Scoped composition of adapters, Z3, and independent checkers | Persistent native state and duplicated reduction semantics |
 | `python/oracles` | Independent solvers and checkers over pure models | Parsing, filesystem I/O, and reduction construction |
-| `python/formats` | Solution, static-stage, and reduction-provenance validation and deterministic export | Native lifetimes, solving, and presentation |
+| `python/formats` | Solution, static-stage, reduction-provenance, observed-trace, and Z3 encoding-summary validation/export | Native lifetimes, solving, and presentation |
 | `renderer/wang_hex_port.py` | Pure square-to-hex mapping, inverse checks, and matching-equivalence checks | Raster geometry, semantic verification, and solver access |
 | `renderer/wang_snapshot.py` | Strict hash-bound formula, tile-sheet, region, and recorded reduction-provenance views | Native access, solving, and geometry reconstruction |
+| `renderer/wang_trace.py` | Strict hash-bound trace loading and independent ordered-delta replay | Native access, frame composition, and solving |
+| `renderer/wang_animation.py` | Deterministic atomic PNG, contact-sheet, and GIF encoding from already composed frames | State reconstruction and correctness claims |
 | `renderer/wang_square.py` | One CLI for solution and static views, with square/default or hex/explicit rasterization | Semantic verification and solver access |
 
 `include/wang/task_plan.h`, `src/parallel/solver_openmp.c`, and the two modules
@@ -107,10 +110,10 @@ the implemented solution contract and exporter are Python modules under
 
 ### Native and Python ownership flow
 
-The C parser and Yang–Zhang builder own native allocations. The adapters copy
-complete values into immutable Python `Formula`, `Region`,
-`ReductionExplanation`, tileset, and tiling models. No ctypes pointer reaches
-those models or their consumers.
+The C parser, Yang–Zhang builder, and opt-in traced solver calls own native
+allocations. The adapters copy complete values into immutable Python `Formula`,
+`Region`, `ReductionExplanation`, solver trace, tileset, and tiling models. No
+ctypes pointer reaches those models or their consumers.
 
 ```text
                     C parser + Yang–Zhang builder
@@ -129,9 +132,9 @@ those models or their consumers.
          v                v
    Python oracles    checkers / exporter --> Wang renderer
                                              |       \
-                                             |        +--> pure hex port/check
+                               trace replay -+        +--> pure hex port/check
                                              v                    |
-                                       square PNG                 v
+                                      PNG/GIF views               v
                                                             hex PNG
 ```
 
@@ -154,6 +157,13 @@ reverse-marshalled into `Cm13Formula` or `Region`.
 and `native/solve_pipeline.py` supplies copied, independently checked native
 tilings to producers without importing Z3.
 
+The trace coordinator similarly parses and reduces once, copies the ordinary
+result plus every semantic event and checkpoint before native destruction, and
+checks any SAT tiling independently. Its JSON producer reuses the existing
+formula, tileset, region, reduction, and solution formats. The renderer performs
+one offline replay and passes already composed frames to the shared image
+encoder; it never reconstructs solver state from pixels.
+
 ### Oracle and verifier contracts
 
 | Component | Input | Result | Independence boundary |
@@ -167,6 +177,11 @@ tilings to producers without importing Z3.
 For generic tilesets with duplicate edge tuples, Wang Z3 returns a valid
 positional ID from the constraint-equivalent entries. Its public contract does
 not choose one duplicate over another.
+
+Both Z3 encoders fix `random_seed=0`, `threads=1`, and their explicit constraint
+order. A closed summary records the locked Z3 version, result/model, and stable
+project-owned encoding counts. Raw Z3 statistics and internal debug/search
+order are deliberately outside the stable contract.
 
 ### Witness correspondence boundary
 

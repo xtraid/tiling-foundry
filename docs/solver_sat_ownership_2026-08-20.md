@@ -6,11 +6,19 @@ description: Evidence for transferring the verified SAT domain buffer without a 
 section: Solver optimization
 document_kind: Benchmark report
 status: Accepted mechanism
-updated: 2026-08-20
+updated: 2026-08-27
 nav_order: 50
 ---
 
 # Optimized solver SAT ownership transfer — 20 August 2026
+
+<figure class="algorithm-animation">
+  <picture>
+    <source media="(prefers-reduced-motion: reduce)" srcset="{{ '/assets/images/optimized-mechanisms/frame-05.png' | relative_url }}">
+    <img src="{{ '/assets/images/optimized-mechanisms/trace.gif' | relative_url }}" alt="Didactic comparison of the reference solver baseline and the five retained optimized serial mechanisms.">
+  </picture>
+  <figcaption><strong>Didactic replay.</strong> This shared animation locates SAT ownership transfer among the five isolated mechanisms; the measurements below, not the animation, establish its effect. The <a href="{{ '/assets/images/optimized-mechanisms/contact-sheet.png' | relative_url }}">static contact sheet</a> shows all stages.</figcaption>
+</figure>
 
 This report evaluates only construction of a successful solver result. The
 reference path retains the baseline behavior: after independent SAT

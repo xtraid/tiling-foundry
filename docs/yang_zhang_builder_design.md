@@ -44,6 +44,14 @@ Primary source:
 Text parsing, solving, independent verification, scheduling, oracles, solution
 transport, and rendering have separate contracts.
 
+<figure class="algorithm-animation">
+  <picture>
+    <source media="(prefers-reduced-motion: reduce)" srcset="{{ '/assets/images/builder-routing/frame-04.png' | relative_url }}">
+    <img src="{{ '/assets/images/builder-routing/trace.gif' | relative_url }}" alt="Canonical Yang–Zhang region with native variable, forwarder, crossover, and clause gadget spans appearing in construction order.">
+  </picture>
+  <figcaption><strong>Canonical example.</strong> The frames reveal spans from the versioned native construction sidecar; they are not timestamps from an instrumented builder. The <a href="{{ '/assets/images/builder-routing/contact-sheet.png' | relative_url }}">static contact sheet</a> shows all six stages.</figcaption>
+</figure>
+
 ## 1. Module boundary
 
 `yang_zhang` is a deterministic reduction builder:

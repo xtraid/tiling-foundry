@@ -134,6 +134,52 @@ Reduction spans describe the square construction itself, so this view rejects
 the signal permutation, and gadget bounds without importing native code or
 reconstructing builder geometry.
 
+### Offline trace and algorithm animations
+
+The animation modules keep state interpretation separate from image encoding.
+`wang_trace.py` loads a hash-bound `wang-explain-manifest-v3` and independently
+replays its `observed` native events once. `wang_trace_render.py` selects and
+composes frames from those replayed states. `wang_animation.py` receives only
+completed RGB frames and writes deterministic atomic PNGs, a contact sheet,
+and a presentation-only GIF:
+
+```bash
+uv run --locked python wang_trace_render.py \
+  ../tests/fixtures/pipeline_sat_solver_trace/manifest.json \
+  output/solver-trace
+```
+
+Z3 uses a separate `encoding-order` summary. The renderer shows the explicit
+project-owned row-major constraint construction and returned model, never an
+internal Z3 search or debug trace:
+
+```bash
+uv run --locked python wang_z3_summary.py \
+  ../tests/fixtures/pipeline_sat_z3/wang-z3.json \
+  output/z3-encoding
+```
+
+Three additional commands make their source semantics explicit: builder and
+hex are `canonical-example` views over versioned data and pure checked
+transformation respectively; optimized is a `didactic` overview whose dated
+reports, not the animation, establish performance.
+
+```bash
+uv run --locked python wang_algorithm_animation.py builder \
+  ../tests/fixtures/pipeline_sat_reduction_explain/manifest.json \
+  output/builder-routing
+uv run --locked python wang_algorithm_animation.py optimized \
+  output/optimized-mechanisms
+uv run --locked python wang_algorithm_animation.py hex \
+  ../tests/fixtures/wang_solution_v1_square_sat.json \
+  output/square-to-hex
+```
+
+All loaders reject unknown fields and identity drift before rasterization. No
+animation module imports native code; trace rendering and algorithm rendering
+do not import Z3. PNG sources are the deterministic test oracles. GIFs exist
+only for presentation, and every published animation has a static fallback.
+
 ## Input Format
 
 ### palette.json
@@ -282,9 +328,17 @@ Raises `RenderingException` on pipeline errors.
 ├── wang_hex_port.py       # Pure square-to-hex reducer and independent checker
 ├── wang_snapshot.py       # Strict static-snapshot consumer and view compositor
 ├── wang_explain.py        # Shared colored-edge and legend drawing primitives
+├── wang_trace.py          # Strict observed-trace loader and offline replay
+├── wang_trace_render.py   # Trace frame selection and composition CLI
+├── wang_z3_summary.py     # Encoding-order summary consumer and compositor
+├── wang_animation.py      # Deterministic PNG/contact-sheet/GIF encoder
+├── wang_algorithm_animation.py # Canonical and didactic algorithm views
 ├── test_wang_square.py    # Square loader, raster, isolation, CLI, and failures
 ├── test_wang_hex.py       # Port proof obligations, hex raster, golden, and CLI
 ├── test_wang_snapshot.py  # Snapshot contracts, views, isolation, and goldens
+├── test_wang_trace.py     # Hash-bound replay, isolation, and byte stability
+├── test_wang_z3_summary.py # Fixed encoding summaries and byte stability
+├── test_wang_algorithm_animation.py # Source checks and animation goldens
 ├── input/                # Example input files (palette, scene, tiles, sprites)
 ├── output/               # Rendered PNG output goes here
 ├── test_data/
@@ -306,9 +360,9 @@ Raises `RenderingException` on pipeline errors.
 uv run --locked pytest -q
 ```
 
-The complete isolated suite has 238 tests: the 144 preserved legacy tests
-below, 45 Wang square tests, 24 square-to-hex/hex-raster tests, and 25 static
-snapshot/explainability tests.
+The complete isolated suite has 253 tests: the 144 preserved legacy tests
+below, 45 Wang square tests, 24 square-to-hex/hex-raster tests, 25 static
+snapshot/explainability tests, and 15 trace/Z3/algorithm-animation tests.
 To run only the original upstream suite:
 
 ```bash

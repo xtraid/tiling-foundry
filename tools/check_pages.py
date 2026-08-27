@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 import sys
 from datetime import date
@@ -41,6 +42,8 @@ RELATIVE_URL = re.compile(
 )
 MARKDOWN_SOURCE_LINK = re.compile(r"\]\([^)]*\.md(?:[#?][^)]*)?\)")
 HISTORICAL_PDF = "Wang23_C_OpenMP_Architecture_Spec_Merged.pdf"
+FIGURE = re.compile(r"<figure\b[^>]*>.*?</figure>", re.IGNORECASE | re.DOTALL)
+TAG = re.compile(r"<(?:img|source)\b[^>]*>", re.IGNORECASE | re.DOTALL)
 
 
 def fail(errors: list[str], path: Path, message: str) -> None:
@@ -198,11 +201,58 @@ def check_site_structure(errors: list[str]) -> None:
         fail(errors, DOCS / "assets/css/site.css", "unbalanced braces")
 
 
+def check_animated_assets(errors: list[str]) -> None:
+    """Require accessible static fallbacks and one stored copy per GIF."""
+    for path in public_documents():
+        text = path.read_text(encoding="utf-8")
+        figures = FIGURE.findall(text)
+        covered_gifs = sum(figure.lower().count(".gif") for figure in figures)
+        if covered_gifs != text.lower().count(".gif"):
+            fail(errors, path, "animated GIF must be contained in a figure")
+
+        for figure in figures:
+            if ".gif" not in figure.lower():
+                continue
+            tags = TAG.findall(figure)
+            image_tags = [tag for tag in tags if tag.lower().startswith("<img")]
+            source_tags = [tag for tag in tags if tag.lower().startswith("<source")]
+            if not any(
+                ".gif" in tag.lower()
+                and re.search(r'\balt=["\'][^"\']+["\']', tag, re.IGNORECASE)
+                for tag in image_tags
+            ):
+                fail(errors, path, "animated GIF requires nonempty img alt text")
+            if not any(
+                ".png" in tag.lower()
+                and "prefers-reduced-motion: reduce" in tag.lower()
+                for tag in source_tags
+            ):
+                fail(errors, path, "animated GIF requires a reduced-motion PNG source")
+            if not re.search(
+                r"<figcaption\b[^>]*>\s*\S.*?</figcaption>",
+                figure,
+                re.IGNORECASE | re.DOTALL,
+            ):
+                fail(errors, path, "animated GIF requires a nonempty figcaption")
+
+    gif_hashes: dict[bytes, Path] = {}
+    for path in sorted((DOCS / "assets/images").rglob("*.gif")):
+        digest = hashlib.sha256(path.read_bytes()).digest()
+        if digest in gif_hashes:
+            fail(
+                errors,
+                path,
+                f"duplicates animated asset {gif_hashes[digest].relative_to(ROOT)}",
+            )
+        gif_hashes[digest] = path
+
+
 def main() -> int:
     errors: list[str] = []
     permalinks, document_count = check_catalog(errors)
     check_liquid_links(permalinks, errors)
     check_site_structure(errors)
+    check_animated_assets(errors)
 
     if errors:
         for error in errors:

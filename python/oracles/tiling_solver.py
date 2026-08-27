@@ -13,6 +13,7 @@ from model.tileset import (
     Tile,
     Tileset,
 )
+from oracles.z3_config import configured_solver
 
 
 def _validate_tileset(tileset: Tileset) -> None:
@@ -59,18 +60,18 @@ def _edge_terms(
     return tuple(terms)
 
 
-def solve_tiling(region: Region, tileset: Tileset) -> TilingSolveResult:
-    """Solve an existing region without parsing or rebuilding its reduction.
-
-    Each cell is constrained to one tileset edge tuple and adjacent cells
-    share their internal edge-color term. SAT returns one dense row-major tile
-    ID per active cell and ``None`` for inactive cells; UNSAT and UNKNOWN
-    return no tiling. Duplicate edge tuples remain valid, constraint-equivalent
-    tile IDs.
-    """
+def _encode_tiling(
+    region: Region,
+    tileset: Tileset,
+) -> tuple[
+    Solver,
+    tuple[tuple[ArithRef, ArithRef, ArithRef, ArithRef] | None, ...],
+    dict[Tile, int],
+]:
+    """Build the canonical row-major edge-table encoding used by the oracle."""
     _validate_tileset(tileset)
 
-    solver = Solver()
+    solver = configured_solver(Solver())
     edges = _edge_terms(region)
     tile_id_by_edges: dict[Tile, int] = {}
     for tile_id, tile in enumerate(tileset):
@@ -96,6 +97,19 @@ def solve_tiling(region: Region, tileset: Tileset) -> TilingSolveResult:
         for direction, required_color in enumerate(region.boundary[index]):
             if required_color != COLOR_NONE:
                 solver.add(cell_edges[direction] == required_color)
+    return solver, edges, tile_id_by_edges
+
+
+def solve_tiling(region: Region, tileset: Tileset) -> TilingSolveResult:
+    """Solve an existing region without parsing or rebuilding its reduction.
+
+    Each cell is constrained to one tileset edge tuple and adjacent cells
+    share their internal edge-color term. SAT returns one dense row-major tile
+    ID per active cell and ``None`` for inactive cells; UNSAT and UNKNOWN
+    return no tiling. Duplicate edge tuples remain valid, constraint-equivalent
+    tile IDs.
+    """
+    solver, edges, tile_id_by_edges = _encode_tiling(region, tileset)
 
     status = solver.check()
     if status == sat:
