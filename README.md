@@ -74,6 +74,8 @@ solving remains future work.
 | Square-to-hex presentation port | Implemented as a pure in-memory Basire/Culik mapping with a raster-independent checker; no hex solver, schema, or core model |
 | Static explainability snapshots | Implemented for parsed formula, canonical tile sheet, and unassigned region, with hash-bound JSON contracts and square/hex diagnostic views |
 | Reduction construction provenance | Implemented as a separate opt-in native-owned result with exact signal orders, swap-bound gadget spans, manifest v2, and a square overlay view; the compact standard ABI does not allocate it |
+| Native solver event trace | Implemented as separate opt-in reference/optimized entry points with bounded observed events, full initial state, checkpoints, manifest v3, independent offline replay, and deterministic PNG/GIF views |
+| Reproducible Z3 summaries | Implemented for fixed seed/thread settings and explicit Boolean/Wang encoding order, result/model, and stable project-owned counts; no internal Z3 trace claim |
 | Native C JSON layer | Not implemented; `src/io/json.c` is a placeholder |
 | `TaskPlan` and native OpenMP solver | Not implemented; only the build scaffold exists |
 
@@ -107,17 +109,19 @@ The implemented paths are:
                                           |                  |
                                           |                  v
                                 native reference/       Wang Z3
-                                optimized solver           |
-                                       |                   v
-                                       v             Python tiling checker
-                                native verifier
-                                       |
-                            copied tiling + Python checker
-                                       |
-                                       v
-                            wang-solution-v1 --> square PNG (default/explain)
-                                       \
-                                        +--> pure hex port/check --> hex PNG (--hex)
+                                optimized solver          |  \
+                                   |       |              |   +--> encoding-order summary
+                                   |       +--> observed trace      +--> PNG/GIF
+                                   |                 |       v
+                                   v                 |  Python tiling checker
+                            native verifier           v
+                                   |          offline replay --> PNG/GIF
+                        copied tiling + Python checker
+                                   |
+                                   v
+                        wang-solution-v1 --> square PNG (default/explain)
+                                   \
+                                    +--> pure hex port/check --> hex PNG (--hex)
 ```
 
 The witness bridge relates exact Boolean assignments to the variable cells of
@@ -153,11 +157,11 @@ diagram.
 Planned work remains separated into independently reviewed changes. The new
 priority is explainability across the deterministic pipeline:
 
-1. define bounded, deterministic event traces for native DFS and explicit
-   encoding summaries for Z3, then render partial states by replay;
-2. publish a compact formula-to-final-image gallery and optional technical
+1. publish a compact formula-to-final-image gallery and optional technical
    report from versioned examples;
-3. resume serial MRV and hard-UNSAT evidence before `TaskPlan` and OpenMP work.
+2. resume serial MRV and hard-UNSAT evidence;
+3. define `TaskPlan` only after the serial evidence, then implement and measure
+   real OpenMP execution.
 
 The implementation follows a deliberately small design rule: each datum has one
 owner, derived state is computed when needed, and future metadata is not added to
@@ -180,7 +184,7 @@ make check
 
 The imported renderer remains a separate locked Python project. Its Pillow and
 NumPy dependencies are not installed by the root project or exercised by
-`make check`. Run its 238-test combined suite independently:
+`make check`. Run its 253-test combined suite independently:
 
 ```sh
 cd renderer
@@ -220,6 +224,28 @@ opt-in final explainability views.
 The [reduction explanation contract](docs/wang_reduction_explanation.md)
 defines native signal/gadget provenance, manifest v2, ownership, replay
 invariants, and the square-only construction overlay.
+The [solver event trace contract](docs/wang_solver_trace.md) defines bounded
+native capture, manifest v3, semantic replay, checkpoints, truncation, and the
+presentation-only animation boundary.
+
+To export one observed reference run and render selected replay states:
+
+```sh
+make shared
+uv run python tools/export_solver_trace.py \
+  tests/instances/pipeline_sat.cm13 build/solver-trace/manifest.json \
+  --event-capacity 4096 --checkpoint-interval 128 --checkpoint-capacity 32
+cd renderer
+uv run --locked python wang_trace_render.py \
+  ../build/solver-trace/manifest.json ../build/solver-trace/rendered
+```
+
+The fixed-configuration Boolean and Wang Z3 summaries are exported separately:
+
+```sh
+uv run python tools/export_z3_encoding_summaries.py \
+  tests/instances/pipeline_sat.cm13 build/z3-summaries
+```
 
 Useful individual targets:
 

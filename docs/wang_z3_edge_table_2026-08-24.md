@@ -6,7 +6,7 @@ description: Constraint model, correctness evidence, and before/after smoke meas
 section: Cross-engine benchmarks
 document_kind: Oracle model report
 status: Current implementation
-updated: 2026-08-24
+updated: 2026-08-27
 nav_order: 30
 ---
 
@@ -24,6 +24,29 @@ replaces the previous per-adjacency support implications without changing the
 public `solve_tiling()` result contract. `SAT`, `UNSAT`, `UNKNOWN`, dense
 row-major witnesses, inactive cells, boundary colors, and generic tilesets are
 preserved.
+
+<figure class="algorithm-animation">
+  <picture>
+    <source media="(prefers-reduced-motion: reduce)" srcset="{{ '/assets/images/z3-encoding/frame-03.png' | relative_url }}">
+    <img src="{{ '/assets/images/z3-encoding/trace.gif' | relative_url }}" alt="Canonical Wang Z3 example progressing through the project-defined row-major encoding order to the returned model.">
+  </picture>
+  <figcaption><strong>Encoding order.</strong> The frames replay the project-owned constraint construction and returned result; they do not claim to expose Z3's internal search or debug order. The <a href="{{ '/assets/images/z3-encoding/contact-sheet.png' | relative_url }}">static contact sheet</a> shows all five stages.</figcaption>
+</figure>
+
+## Reproducible summary boundary
+
+Both project oracles construct their solver through one fixed configuration:
+Z3 version `5.1.0` in the committed example, `random_seed=0`, and `threads=1`.
+The closed `z3-encoding-summary-v1` documents label their semantics
+`encoding-order` and preserve source hashes, the result status, the returned
+assignment or dense Wang model, exact assertion order, and deterministic
+project-owned counts. The Wang example records 444 active cells, 944 edge
+terms, 832 shared internal edges, 23 unique tile tuples, and 556 assertions.
+
+Internal Z3 statistics are deliberately excluded because their values are not
+a stable replay contract, even across repeated solves in one process. No
+solver debug trace, branching order, propagation order, or proof trace is
+exported or inferred by the renderer.
 
 ## Constraint model
 

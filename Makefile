@@ -45,6 +45,7 @@ SERIAL_SOURCES := \
 	src/crosscheck/yang_zhang_witness.c \
 	src/solver/byte_support_table.c \
 	src/solver/failed_leaf_trace.c \
+	src/solver/solver_event_trace.c \
 	src/solver/solver_serial.c \
 	src/verify/verify_tiling.c \
 	src/io/json.c \

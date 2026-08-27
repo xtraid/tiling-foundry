@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:tiling-foundry:schema:z3-encoding-summary-v1",
+  "title": "Tiling Foundry explicit Z3 encoding summary v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "semantics",
+    "engine",
+    "source_formula_sha256",
+    "region_sha256",
+    "z3",
+    "status",
+    "encoding",
+    "model",
+    "statistics"
+  ],
+  "properties": {
+    "schema": {"const": "z3-encoding-summary-v1"},
+    "semantics": {"const": "encoding-order"},
+    "engine": {"enum": ["boolean-z3", "wang-z3"]},
+    "source_formula_sha256": {"$ref": "#/$defs/sha256"},
+    "region_sha256": {
+      "oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]
+    },
+    "z3": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "parameters"],
+      "properties": {
+        "version": {"type": "string", "minLength": 1},
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["random_seed", "threads"],
+          "properties": {
+            "random_seed": {"const": 0},
+            "threads": {"const": 1}
+          }
+        }
+      }
+    },
+    "status": {"enum": ["sat", "unsat", "unknown"]},
+    "encoding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "order",
+        "variable_count",
+        "width",
+        "height",
+        "active_cell_count",
+        "edge_term_count",
+        "shared_internal_edge_count",
+        "unique_tile_tuple_count",
+        "assertion_count"
+      ],
+      "properties": {
+        "order": {
+          "type": "array",
+          "minItems": 3,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "variable_count": {"type": "integer", "minimum": 1},
+        "width": {"type": "integer", "minimum": 0},
+        "height": {"type": "integer", "minimum": 0},
+        "active_cell_count": {"type": "integer", "minimum": 0},
+        "edge_term_count": {"type": "integer", "minimum": 0},
+        "shared_internal_edge_count": {"type": "integer", "minimum": 0},
+        "unique_tile_tuple_count": {"type": "integer", "minimum": 0},
+        "assertion_count": {"type": "integer", "minimum": 1}
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assignment", "cells"],
+      "properties": {
+        "assignment": {
+          "oneOf": [
+            {"type": "array", "items": {"type": "boolean"}},
+            {"type": "null"}
+          ]
+        },
+        "cells": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": ["integer", "null"],
+                "minimum": 0,
+                "maximum": 22
+              }
+            },
+            {"type": "null"}
+          ]
+        }
+      }
+    },
+    "statistics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "value"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "value": {"type": "integer", "minimum": 0}
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"engine": {"const": "boolean-z3"}}},
+      "then": {"properties": {"region_sha256": {"type": "null"}}},
+      "else": {
+        "properties": {
+          "region_sha256": {"$ref": "#/$defs/sha256"},
+          "encoding": {
+            "properties": {"unique_tile_tuple_count": {"const": 23}}
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

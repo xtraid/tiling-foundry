@@ -1,0 +1,52 @@
+{
+  "schema": "z3-encoding-summary-v1",
+  "semantics": "encoding-order",
+  "engine": "boolean-z3",
+  "source_formula_sha256": "3caaa6b29ac988fb4f51cc7071202d83ea1591ba6170e683b6da449cb3641542",
+  "region_sha256": null,
+  "z3": {
+    "version": "5.1.0",
+    "parameters": {
+      "random_seed": 0,
+      "threads": 1
+    }
+  },
+  "status": "sat",
+  "encoding": {
+    "order": [
+      "variables:ascending-id",
+      "clauses:source-order",
+      "clause-positions:left-to-right"
+    ],
+    "variable_count": 3,
+    "width": 0,
+    "height": 0,
+    "active_cell_count": 0,
+    "edge_term_count": 0,
+    "shared_internal_edge_count": 0,
+    "unique_tile_tuple_count": 0,
+    "assertion_count": 3
+  },
+  "model": {
+    "assignment": [
+      false,
+      true,
+      false
+    ],
+    "cells": null
+  },
+  "statistics": [
+    {
+      "name": "variables",
+      "value": 3
+    },
+    {
+      "name": "assertions",
+      "value": 3
+    },
+    {
+      "name": "model-entries",
+      "value": 3
+    }
+  ]
+}

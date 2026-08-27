@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:tiling-foundry:schema:wang-solver-trace-v1",
+  "title": "Tiling Foundry observed native solver trace v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "semantics",
+    "solver",
+    "status",
+    "geometry",
+    "source_formula_sha256",
+    "region_sha256",
+    "solution_sha256",
+    "layout",
+    "capacity",
+    "initial_domains",
+    "events",
+    "checkpoints"
+  ],
+  "properties": {
+    "schema": {"const": "wang-solver-trace-v1"},
+    "semantics": {"const": "observed"},
+    "solver": {"enum": ["reference", "optimized"]},
+    "status": {"enum": ["sat", "unsat"]},
+    "geometry": {"const": "square"},
+    "source_formula_sha256": {"$ref": "#/$defs/sha256"},
+    "region_sha256": {"$ref": "#/$defs/sha256"},
+    "solution_sha256": {
+      "oneOf": [
+        {"$ref": "#/$defs/sha256"},
+        {"type": "null"}
+      ]
+    },
+    "layout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height", "tile_count", "indexing"],
+      "properties": {
+        "width": {"type": "integer", "minimum": 1},
+        "height": {"type": "integer", "minimum": 1},
+        "tile_count": {"const": 23},
+        "indexing": {"const": "row-major"}
+      }
+    },
+    "capacity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_capacity",
+        "observed_event_count",
+        "truncated",
+        "checkpoint_interval",
+        "checkpoint_capacity",
+        "checkpoints_truncated"
+      ],
+      "properties": {
+        "event_capacity": {"type": "integer", "minimum": 2},
+        "observed_event_count": {"type": "integer", "minimum": 2},
+        "truncated": {"type": "boolean"},
+        "checkpoint_interval": {"type": "integer", "minimum": 0},
+        "checkpoint_capacity": {"type": "integer", "minimum": 0},
+        "checkpoints_truncated": {"type": "boolean"}
+      }
+    },
+    "initial_domains": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/domain"}
+    },
+    "events": {
+      "type": "array",
+      "minItems": 2,
+      "items": {"$ref": "#/$defs/event"}
+    },
+    "checkpoints": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/checkpoint"}
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "sat"}}},
+      "then": {"properties": {"solution_sha256": {"$ref": "#/$defs/sha256"}}},
+      "else": {"properties": {"solution_sha256": {"type": "null"}}}
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "domain": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 8388607
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sequence",
+        "kind",
+        "phase",
+        "reason",
+        "depth",
+        "cell",
+        "change_mark",
+        "old_domain",
+        "new_domain",
+        "status"
+      ],
+      "properties": {
+        "sequence": {"type": "integer", "minimum": 0},
+        "kind": {
+          "enum": [
+            "root",
+            "propagation",
+            "decision",
+            "domain_reduction",
+            "conflict",
+            "backtrack",
+            "result"
+          ]
+        },
+        "phase": {
+          "type": ["string", "null"],
+          "enum": [null, "initial", "search"]
+        },
+        "reason": {
+          "type": ["string", "null"],
+          "enum": [null, "decision", "propagation"]
+        },
+        "depth": {"type": "integer", "minimum": 0},
+        "cell": {"type": ["integer", "null"], "minimum": 0},
+        "change_mark": {"type": "integer", "minimum": 0},
+        "old_domain": {
+          "oneOf": [{"$ref": "#/$defs/domain"}, {"type": "null"}]
+        },
+        "new_domain": {
+          "oneOf": [{"$ref": "#/$defs/domain"}, {"type": "null"}]
+        },
+        "status": {
+          "type": ["string", "null"],
+          "enum": [null, "sat", "unsat"]
+        }
+      }
+    },
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_sequence", "change_mark", "domains"],
+      "properties": {
+        "event_sequence": {"type": "integer", "minimum": 0},
+        "change_mark": {"type": "integer", "minimum": 0},
+        "domains": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/domain"}
+        }
+      }
+    }
+  }
+}

@@ -6,7 +6,7 @@ description: Domain propagation, deterministic search, ownership, diagnostics, a
 section: Architecture and correctness
 document_kind: Technical reference
 status: Current implementation
-updated: 2026-08-25
+updated: 2026-08-27
 nav_order: 20
 ---
 
@@ -15,8 +15,17 @@ nav_order: 20
 The native reference and optimized entry points share one Wang-search core and
 the same public status, ownership, diagnostic, and initial-domain contracts.
 This page describes that core, the independent verifier applied to every SAT
-result, and the optional failed-leaf diagnostics. Public headers and regression
-tests remain authoritative for exact ABI behavior.
+result, the optional semantic event trace, and the optional failed-leaf
+diagnostics. Public headers and regression tests remain authoritative for
+exact ABI behavior.
+
+<figure class="algorithm-animation">
+  <picture>
+    <source media="(prefers-reduced-motion: reduce)" srcset="{{ '/assets/images/solver-trace/frame-002517.png' | relative_url }}">
+    <img src="{{ '/assets/images/solver-trace/trace.gif' | relative_url }}" alt="Observed reference solver domains narrowing across root initialization, propagation, decisions, and the final SAT result.">
+  </picture>
+  <figcaption><strong>Observed state.</strong> An offline consumer replays selected events from one complete 2,896-event reference run; skipped visual frames do not imply skipped solver events. The <a href="{{ '/assets/images/solver-trace/contact-sheet.png' | relative_url }}">static contact sheet</a> shows every rendered frame.</figcaption>
+</figure>
 
 ## 1. Scope and dependency boundary
 
@@ -55,10 +64,12 @@ The relevant public boundaries are:
 | `wang/region.h` | Validated dense row-major geometry and exposed boundary colors |
 | `wang/verify.h` | Independent validation of a complete dense tiling |
 | `wang/solver.h` | Domains, options, statuses, result ownership, metrics, and both solve entry points |
+| `wang/solver_trace.h` | Opt-in bounded semantic events, checkpoints, traced entry points, and trace ownership |
 
 The implementation lives primarily in `src/verify/verify_tiling.c`,
 `src/solver/solver_serial.c`, `src/solver/byte_support_table.c`, and
-`src/solver/failed_leaf_trace.c`. It has no mutable global search state.
+`src/solver/failed_leaf_trace.c`, and `src/solver/solver_event_trace.c`. It has
+no mutable global search state.
 
 ## 2. Independent tiling verifier
 
@@ -321,11 +332,12 @@ Only a `WANG_VERIFY_VALID` candidate is published. Rejection converts the
 internal result to `WANG_SOLVE_ERROR` because it exposes a solver defect rather
 than a valid UNSAT decision.
 
-Trace finalization is the last fallible operation before publication. After it
-succeeds, the reference path copies verified domains into a caller-owned
-snapshot. The optimized path transfers its verified private domain buffer and
-detaches it from private state. Any diagnostic best-leaf buffer accumulated
-during a satisfiable run remains private and is freed.
+Failed-leaf file finalization is the last fallible operation before ordinary
+result publication. After it succeeds, the reference path copies verified
+domains into a caller-owned snapshot. The optimized path transfers its
+verified private domain buffer and detaches it from private state. Any
+diagnostic best-leaf buffer accumulated during a satisfiable run remains
+private and is freed.
 
 ## 8. UNSAT selection and snapshot policy
 
@@ -366,9 +378,49 @@ Metrics-enabled runs are diagnostic work measurements, not timing samples.
 Elapsed time and process peak RSS are measured by the benchmark harness outside
 the solver result.
 
-## 10. Binary failed-leaf trace
+## 10. Opt-in semantic event trace
 
-### 10.1 Semantics and format
+`wang/solver_trace.h` adds traced reference and optimized entry points without
+changing `WangSolverOptions`, `WangSolveResult`, or either ordinary entry
+point. A caller supplies an event capacity of at least two and may additionally
+request bounded full-state checkpoints. Every allocation is performed before
+search begins. Disabled ordinary solving allocates no event or checkpoint
+storage and publishes the same status, witness, metrics, and ownership as
+before.
+
+The trace begins with the full dense domain state after root restriction and
+then records stable semantic events in observed order:
+
+1. `root` publishes the initial replay base;
+2. `domain_reduction` carries one exact old/new domain delta and its decision
+   or propagation reason;
+3. `propagation` marks the end of an initial or search propagation interval;
+4. `decision`, `conflict`, and `backtrack` expose DFS control points with depth
+   and trail change marks;
+5. `result` terminates the run with `SAT` or `UNSAT`.
+
+The recorder preserves a prefix and always reserves the final slot for
+`result`. If the prefix fills, `truncated` becomes true and the terminal
+sequence number exposes the number of omitted observed events; missing deltas
+are never invented. Checkpoints contain a full dense domain row after every
+configured interval while their independent capacity lasts. The replay model
+validates event shapes, monotone domain reductions, exact rollback marks,
+checkpoint equality, terminal status, and the complete SAT state when the
+trace is not truncated.
+
+`WangTracedSolveResult` jointly owns the ordinary result and trace storage.
+Publication is transactional: invalid options, allocation failure, internal
+recording failure, or rejected SAT verification leave a conforming output
+destroyed. The combined destructor is null-safe and idempotent. The JSON and
+raster consumers live downstream in Python and `renderer/`; neither is part of
+the solver, and the GIF is presentation rather than a correctness check.
+
+The closed transport is documented in the
+[solver event trace contract]({{ '/wang-solver-trace/' | relative_url }}).
+
+## 11. Binary failed-leaf trace
+
+### 11.1 Semantics and format
 
 `WANG_SOLVE_TRACE_FAILED_LEAVES` writes every observed failed leaf up to
 `failed_leaf_capacity`. The trace may contain records even when the final
@@ -404,7 +456,7 @@ record_size = align_up(raw_record_size, 8)
 The writer uses explicit offsets and byte helpers, so the file format does not
 depend on C struct padding or host `sizeof` results.
 
-### 10.2 Writer lifecycle and failure cleanup
+### 11.2 Writer lifecycle and failure cleanup
 
 Checked arithmetic establishes the maximum mapping size before file creation.
 The writer opens the path with `O_RDWR | O_CREAT | O_TRUNC`, expands it with
@@ -427,7 +479,7 @@ impossible record bound marks the writer failed, returns an internal
 The writer is private to the serial solver module. It is not a general
 serialization API and has no shared-writer or multithreaded contract.
 
-## 11. Error handling and lifetimes
+## 12. Error handling and lifetimes
 
 Allocation sizes and dense products use checked arithmetic. Private state owns
 domains, neighbor masks, byte-support tables, trail storage, queue storage,
@@ -441,7 +493,7 @@ keeps a conforming output destroyed on every error. Ownership transfer in the
 optimized SAT path occurs immediately before private cleanup, preventing both
 double frees and leaks on late failures.
 
-## 12. Verification evidence
+## 13. Verification evidence
 
 The verifier regressions cover null and length errors, invalid or incomplete
 tile IDs, inactive assignments, boundary mismatches in every direction,
@@ -465,12 +517,19 @@ magic and version fields, record geometry, exact final size, truncation at
 capacity, readability after unmap/close, and unlinking after post-creation setup
 or finalization failure.
 
+Semantic event-trace tests run the same SAT backtracking region through both
+ordinary and traced reference/optimized calls. They require identical statuses,
+witness bytes, and public metrics; deterministic event equality; independent
+replay of all seven event kinds; bounded-prefix terminal publication;
+checkpoint validation; root-conflict UNSAT; invalid-option rejection; and
+idempotent cleanup.
+
 Yang–Zhang integration includes shared SAT and UNSAT fixtures, the documented
 three-variable satisfying instance, a clause-row regression, and all 1,701
 canonical formulas through three variables checked against the independent
 Boolean oracle.
 
-## 13. Reproduction and profiling
+## 14. Reproduction and profiling
 
 The standard local gates are:
 
@@ -488,7 +547,7 @@ attribution. Dated reports in the
 [solver optimization section]({{ '/#solver-optimization' | relative_url }})
 record the evidence for each retained optimized mechanism.
 
-## 14. Current guarantees and limits
+## 15. Current guarantees and limits
 
 The implementation returns distinct SAT, UNSAT, and ERROR statuses; verifies
 every SAT witness independently; returns dense domains for SAT and only for
@@ -497,7 +556,7 @@ without that allocation; and removes trace output after post-creation setup or
 finalization failure. Private caches and optimized storage remain derived from
 domains, geometry, and `TILESET` rather than becoming new constraint sources.
 
-The failed-leaf snapshot and trace are diagnostics, not formal UNSAT
-certificates. The implemented paths are serial. `TaskPlan`, OpenMP execution,
-clause learning, backjumping, persistent memoization, rendering, and JSON
-export remain outside this solver contract.
+The failed-leaf snapshot and both trace forms are diagnostics, not formal
+UNSAT certificates. The implemented paths are serial. `TaskPlan`, OpenMP
+execution, clause learning, backjumping, persistent memoization, rendering,
+and JSON export remain outside this solver contract.

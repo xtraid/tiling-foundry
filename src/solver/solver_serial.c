@@ -2,6 +2,7 @@
 
 #include "byte_support_table.h"
 #include "failed_leaf_trace.h"
+#include "solver_event_trace.h"
 #include "wang/tile.h"
 #include "wang/verify.h"
 
@@ -95,6 +96,11 @@ typedef struct {
     bool capture_unsat_snapshot;
     WangSolverMetrics metrics;
     FailedLeafWriter writer;
+
+    SolverEventTrace event_trace;
+    bool trace_events;
+    size_t trace_change_mark;
+    size_t trace_search_base;
 } SolverState;
 
 typedef enum {
@@ -226,6 +232,7 @@ static void solver_state_destroy(SolverState *state)
     if (state->writer.active) {
         (void)failed_leaf_writer_finish(&state->writer);
     }
+    solver_event_trace_discard(&state->event_trace);
     free(state->domains);
     free(state->neighbor_mask);
     free(state->byte_support);
@@ -470,12 +477,18 @@ static void begin_trail_interval(SolverState *state)
 static bool restrict_domain(
     SolverState *state,
     size_t cell_index,
-    uint32_t new_domain
+    uint32_t new_domain,
+    WangSolveTraceReason trace_reason,
+    size_t depth
 )
 {
     const uint32_t old_domain = state->domains[cell_index];
     if (old_domain == new_domain) {
         return true;
+    }
+
+    if (state->trace_events && state->trace_change_mark == SIZE_MAX) {
+        return false;
     }
 
     if (state->record_trail) {
@@ -526,6 +539,24 @@ static bool restrict_domain(
         if (state->trail_count > state->metrics.trail_peak) {
             state->metrics.trail_peak = state->trail_count;
         }
+    }
+    if (state->trace_events) {
+        ++state->trace_change_mark;
+        solver_event_trace_record(
+            &state->event_trace,
+            WANG_TRACE_EVENT_DOMAIN_REDUCTION,
+            state->trail_phase == TRAIL_PHASE_INITIAL
+                ? WANG_TRACE_PHASE_INITIAL
+                : WANG_TRACE_PHASE_SEARCH,
+            trace_reason,
+            depth,
+            cell_index,
+            state->trace_change_mark,
+            old_domain,
+            new_domain,
+            WANG_SOLVE_ERROR,
+            state->domains
+        );
     }
     return true;
 }
@@ -605,7 +636,8 @@ static uint32_t supported_neighbor_domain(
 
 static PropagateStatus propagate_queue(
     SolverState *state,
-    size_t *out_conflict_cell
+    size_t *out_conflict_cell,
+    size_t depth
 )
 {
     size_t head = 0;
@@ -645,7 +677,13 @@ static PropagateStatus propagate_queue(
                 continue;
             }
 
-            if (!restrict_domain(state, adjacent, new_domain)) {
+            if (!restrict_domain(
+                    state,
+                    adjacent,
+                    new_domain,
+                    WANG_TRACE_REASON_PROPAGATION,
+                    depth
+                )) {
                 queue_discard_pending(state, head);
                 return PROPAGATE_ERROR;
             }
@@ -669,14 +707,15 @@ static PropagateStatus propagate_queue(
 static PropagateStatus propagate_from_cell(
     SolverState *state,
     size_t cell_index,
-    size_t *out_conflict_cell
+    size_t *out_conflict_cell,
+    size_t depth
 )
 {
     state->queue_count = 0;
     if (!queue_push(state, cell_index)) {
         return PROPAGATE_ERROR;
     }
-    return propagate_queue(state, out_conflict_cell);
+    return propagate_queue(state, out_conflict_cell, depth);
 }
 
 static PropagateStatus propagate_initial(
@@ -691,7 +730,7 @@ static PropagateStatus propagate_initial(
             return PROPAGATE_ERROR;
         }
     }
-    return propagate_queue(state, out_conflict_cell);
+    return propagate_queue(state, out_conflict_cell, 0);
 }
 
 static bool record_failed_leaf(
@@ -899,6 +938,7 @@ static WangSolveStatus search(
         SearchFrame *frame = &stack.frames[stack.count - 1];
         if (frame->candidates == 0) {
             const size_t entry_mark = frame->entry_mark;
+            const size_t frame_cell = frame->cell_index;
             --stack.count;
             if (stack.count == 0) {
                 status = WANG_SOLVE_UNSAT;
@@ -906,6 +946,23 @@ static WangSolveStatus search(
             }
 
             rollback_to(state, entry_mark);
+            if (state->trace_events) {
+                state->trace_change_mark =
+                    state->trace_search_base + entry_mark;
+                solver_event_trace_record(
+                    &state->event_trace,
+                    WANG_TRACE_EVENT_BACKTRACK,
+                    WANG_TRACE_PHASE_SEARCH,
+                    WANG_TRACE_REASON_NONE,
+                    stack.count,
+                    frame_cell,
+                    state->trace_change_mark,
+                    0,
+                    0,
+                    WANG_SOLVE_ERROR,
+                    state->domains
+                );
+            }
             if (state->collect_metrics) {
                 ++state->metrics.backtracks;
             }
@@ -915,6 +972,23 @@ static WangSolveStatus search(
         const TileId tile = first_set_tile(frame->candidates);
         const uint32_t singleton = UINT32_C(1) << tile;
         frame->candidates &= frame->candidates - UINT32_C(1);
+        const size_t branch_depth = stack.count;
+
+        if (state->trace_events) {
+            solver_event_trace_record(
+                &state->event_trace,
+                WANG_TRACE_EVENT_DECISION,
+                WANG_TRACE_PHASE_SEARCH,
+                WANG_TRACE_REASON_NONE,
+                branch_depth,
+                frame->cell_index,
+                state->trace_change_mark,
+                state->domains[frame->cell_index],
+                singleton,
+                WANG_SOLVE_ERROR,
+                state->domains
+            );
+        }
 
         if (state->collect_metrics) {
             ++state->metrics.decisions;
@@ -922,7 +996,13 @@ static WangSolveStatus search(
 
         const size_t mark = state->trail_count;
         begin_trail_interval(state);
-        if (!restrict_domain(state, frame->cell_index, singleton)) {
+        if (!restrict_domain(
+                state,
+                frame->cell_index,
+                singleton,
+                WANG_TRACE_REASON_DECISION,
+                branch_depth
+            )) {
             rollback_to(state, mark);
             break;
         }
@@ -931,7 +1011,8 @@ static WangSolveStatus search(
         const PropagateStatus propagated = propagate_from_cell(
             state,
             frame->cell_index,
-            &conflict_cell
+            &conflict_cell,
+            branch_depth
         );
 
         if (propagated == PROPAGATE_ERROR) {
@@ -939,8 +1020,37 @@ static WangSolveStatus search(
             break;
         }
 
-        const size_t branch_depth = stack.count;
+        if (state->trace_events) {
+            solver_event_trace_record(
+                &state->event_trace,
+                WANG_TRACE_EVENT_PROPAGATION,
+                WANG_TRACE_PHASE_SEARCH,
+                WANG_TRACE_REASON_NONE,
+                branch_depth,
+                frame->cell_index,
+                state->trace_change_mark,
+                0,
+                0,
+                WANG_SOLVE_ERROR,
+                state->domains
+            );
+        }
         if (propagated == PROPAGATE_CONFLICT) {
+            if (state->trace_events) {
+                solver_event_trace_record(
+                    &state->event_trace,
+                    WANG_TRACE_EVENT_CONFLICT,
+                    WANG_TRACE_PHASE_SEARCH,
+                    WANG_TRACE_REASON_NONE,
+                    branch_depth,
+                    conflict_cell,
+                    state->trace_change_mark,
+                    0,
+                    0,
+                    WANG_SOLVE_ERROR,
+                    state->domains
+                );
+            }
             if (!record_failed_leaf(
                     state,
                     conflict_cell,
@@ -973,6 +1083,22 @@ static WangSolveStatus search(
         }
 
         rollback_to(state, mark);
+        if (state->trace_events) {
+            state->trace_change_mark = state->trace_search_base + mark;
+            solver_event_trace_record(
+                &state->event_trace,
+                WANG_TRACE_EVENT_BACKTRACK,
+                WANG_TRACE_PHASE_SEARCH,
+                WANG_TRACE_REASON_NONE,
+                branch_depth,
+                frame->cell_index,
+                state->trace_change_mark,
+                0,
+                0,
+                WANG_SOLVE_ERROR,
+                state->domains
+            );
+        }
         if (state->collect_metrics) {
             ++state->metrics.backtracks;
         }
@@ -1203,11 +1329,17 @@ static WangSolveStatus solve_wang_core(
     const Region *region,
     const WangSolverOptions *options,
     WangSolveResult *out_result,
-    SolverMechanisms mechanisms
+    SolverMechanisms mechanisms,
+    const WangSolveTraceOptions *trace_options,
+    WangSolveTrace *out_trace
 )
 {
     if (!result_is_destroyed(out_result) ||
-        !solver_options_are_valid(options)) {
+        !solver_options_are_valid(options) ||
+        ((trace_options == NULL) != (out_trace == NULL)) ||
+        (trace_options != NULL &&
+         (!solver_event_trace_options_are_valid(trace_options) ||
+          !solver_event_trace_is_destroyed(out_trace)))) {
         return WANG_SOLVE_ERROR;
     }
 
@@ -1268,9 +1400,35 @@ static WangSolveStatus solve_wang_core(
         return WANG_SOLVE_ERROR;
     }
 
-    const bool trace_requested = options != NULL &&
+    if (trace_options != NULL) {
+        if (!solver_event_trace_init(
+                &state.event_trace,
+                trace_options,
+                state.domains,
+                state.cell_count
+            )) {
+            solver_state_destroy(&state);
+            return WANG_SOLVE_ERROR;
+        }
+        state.trace_events = true;
+        solver_event_trace_record(
+            &state.event_trace,
+            WANG_TRACE_EVENT_ROOT,
+            WANG_TRACE_PHASE_INITIAL,
+            WANG_TRACE_REASON_NONE,
+            0,
+            SIZE_MAX,
+            0,
+            0,
+            0,
+            WANG_SOLVE_ERROR,
+            state.domains
+        );
+    }
+
+    const bool failed_leaf_trace_requested = options != NULL &&
         (options->flags & WANG_SOLVE_TRACE_FAILED_LEAVES) != 0;
-    if (trace_requested && !failed_leaf_writer_init(
+    if (failed_leaf_trace_requested && !failed_leaf_writer_init(
             &state.writer,
             options->failed_leaf_path,
             options->failed_leaf_capacity,
@@ -1282,6 +1440,21 @@ static WangSolveStatus solve_wang_core(
 
     WangSolveStatus status;
     if (initial_conflict != SIZE_MAX) {
+        if (state.trace_events) {
+            solver_event_trace_record(
+                &state.event_trace,
+                WANG_TRACE_EVENT_CONFLICT,
+                WANG_TRACE_PHASE_INITIAL,
+                WANG_TRACE_REASON_NONE,
+                0,
+                initial_conflict,
+                state.trace_change_mark,
+                0,
+                0,
+                WANG_SOLVE_ERROR,
+                state.domains
+            );
+        }
         if (!record_failed_leaf(&state, initial_conflict, 0)) {
             solver_state_destroy(&state);
             return WANG_SOLVE_ERROR;
@@ -1298,7 +1471,37 @@ static WangSolveStatus solve_wang_core(
             solver_state_destroy(&state);
             return WANG_SOLVE_ERROR;
         }
+        if (state.trace_events) {
+            solver_event_trace_record(
+                &state.event_trace,
+                WANG_TRACE_EVENT_PROPAGATION,
+                WANG_TRACE_PHASE_INITIAL,
+                WANG_TRACE_REASON_NONE,
+                0,
+                SIZE_MAX,
+                state.trace_change_mark,
+                0,
+                0,
+                WANG_SOLVE_ERROR,
+                state.domains
+            );
+        }
         if (initial_status == PROPAGATE_CONFLICT) {
+            if (state.trace_events) {
+                solver_event_trace_record(
+                    &state.event_trace,
+                    WANG_TRACE_EVENT_CONFLICT,
+                    WANG_TRACE_PHASE_INITIAL,
+                    WANG_TRACE_REASON_NONE,
+                    0,
+                    conflict_cell,
+                    state.trace_change_mark,
+                    0,
+                    0,
+                    WANG_SOLVE_ERROR,
+                    state.domains
+                );
+            }
             if (!record_failed_leaf(&state, conflict_cell, 0)) {
                 solver_state_destroy(&state);
                 return WANG_SOLVE_ERROR;
@@ -1308,6 +1511,7 @@ static WangSolveStatus solve_wang_core(
             state.trail_count = 0;
             state.trail_phase = TRAIL_PHASE_SEARCH;
             state.record_trail = true;
+            state.trace_search_base = state.trace_change_mark;
             status = search(&state, mechanisms.stack_mode);
         }
     }
@@ -1352,6 +1556,19 @@ static WangSolveStatus solve_wang_core(
     }
 
     if (status == WANG_SOLVE_ERROR) {
+        solver_state_destroy(&state);
+        return WANG_SOLVE_ERROR;
+    }
+
+    if (state.trace_events && !solver_event_trace_finish(
+            &state.event_trace,
+            status,
+            state.best_depth,
+            status == WANG_SOLVE_SAT ? SIZE_MAX : state.best_conflict_cell,
+            state.trace_change_mark,
+            state.domains,
+            out_trace
+        )) {
         solver_state_destroy(&state);
         return WANG_SOLVE_ERROR;
     }
@@ -1403,7 +1620,9 @@ WangSolveStatus wang_solve_serial(
             .transfer_sat_domains = false,
             .use_bytewise_support = false,
             .deduplicate_queue = false,
-        }
+        },
+        NULL,
+        NULL
     );
 }
 
@@ -1423,6 +1642,67 @@ WangSolveStatus wang_solve_optimized(
             .transfer_sat_domains = true,
             .use_bytewise_support = true,
             .deduplicate_queue = WANG_OPTIMIZED_QUEUE_DEDUP != 0,
-        }
+        },
+        NULL,
+        NULL
+    );
+}
+
+static bool traced_result_is_destroyed(const WangTracedSolveResult *result)
+{
+    return result != NULL &&
+        result_is_destroyed(&result->solve) &&
+        solver_event_trace_is_destroyed(&result->trace);
+}
+
+WangSolveStatus wang_solve_serial_traced(
+    const Region *region,
+    const WangSolverOptions *solver_options,
+    const WangSolveTraceOptions *trace_options,
+    WangTracedSolveResult *out_result
+)
+{
+    if (!traced_result_is_destroyed(out_result)) {
+        return WANG_SOLVE_ERROR;
+    }
+    return solve_wang_core(
+        region,
+        solver_options,
+        &out_result->solve,
+        (SolverMechanisms) {
+            .stack_mode = SEARCH_STACK_FIXED,
+            .record_initial_trail = true,
+            .transfer_sat_domains = false,
+            .use_bytewise_support = false,
+            .deduplicate_queue = false,
+        },
+        trace_options,
+        &out_result->trace
+    );
+}
+
+WangSolveStatus wang_solve_optimized_traced(
+    const Region *region,
+    const WangSolverOptions *solver_options,
+    const WangSolveTraceOptions *trace_options,
+    WangTracedSolveResult *out_result
+)
+{
+    if (!traced_result_is_destroyed(out_result)) {
+        return WANG_SOLVE_ERROR;
+    }
+    return solve_wang_core(
+        region,
+        solver_options,
+        &out_result->solve,
+        (SolverMechanisms) {
+            .stack_mode = SEARCH_STACK_DYNAMIC,
+            .record_initial_trail = false,
+            .transfer_sat_domains = true,
+            .use_bytewise_support = true,
+            .deduplicate_queue = WANG_OPTIMIZED_QUEUE_DEDUP != 0,
+        },
+        trace_options,
+        &out_result->trace
     );
 }

@@ -44,11 +44,11 @@ uv run --locked pytest -q
 ```
 
 The import baseline remains 144 collected tests and 144 passing tests. The
-combined local suite is 238 tests: 144 preserved legacy tests, 45 Wang square
-tests, 24 square-to-hex/hex-raster tests, and 25 static
-snapshot/explainability tests. Keep the renderer environment under
-`renderer/.venv`; its local `.gitignore` excludes that environment and
-generated Python/build files.
+combined local suite is 253 tests: 144 preserved legacy tests, 45 Wang square
+tests, 24 square-to-hex/hex-raster tests, 25 static
+snapshot/explainability tests, and 15 trace/Z3/algorithm-animation tests. Keep
+the renderer environment under `renderer/.venv`; its local `.gitignore`
+excludes that environment and generated Python/build files.
 
 The preserved `renderer/.github/workflows/ci.yml` is nested upstream evidence;
 GitHub does not run it as a workflow of the containing repository. The
