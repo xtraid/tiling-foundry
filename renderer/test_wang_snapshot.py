@@ -27,6 +27,8 @@ from wang_hex_port import WangSquareRenderError
 from wang_snapshot import (
     FORMULA_SCHEMA,
     MANIFEST_SCHEMA,
+    REDUCTION_MANIFEST_SCHEMA,
+    REDUCTION_SCHEMA,
     REGION_SCHEMA,
     TILESET_SCHEMA,
     load_explainability_bundle,
@@ -44,6 +46,11 @@ ROOT = RENDERER_DIR.parent
 SOLUTION = ROOT / "tests/fixtures/wang_solution_v1_square_sat.json"
 SNAPSHOT_DIRECTORY = ROOT / "tests/fixtures/pipeline_sat_explain"
 MANIFEST = SNAPSHOT_DIRECTORY / "manifest.json"
+REDUCTION_SNAPSHOT_DIRECTORY = (
+    ROOT / "tests/fixtures/pipeline_sat_reduction_explain"
+)
+REDUCTION_MANIFEST = REDUCTION_SNAPSHOT_DIRECTORY / "manifest.json"
+REDUCTION_GOLDEN = RENDERER_DIR / "test_data/pipeline_sat_reduction.png"
 GOLDENS = {
     ("formula", False): RENDERER_DIR / "test_data/pipeline_sat_formula.png",
     ("tileset", False): RENDERER_DIR / "test_data/pipeline_sat_tileset_square.png",
@@ -82,6 +89,34 @@ def test_versioned_fixture_manifest_references_expected_closed_contracts():
     assert manifest["artifacts"]["region"]["schema"] == REGION_SCHEMA
     for reference in manifest["artifacts"].values():
         encoded = (SNAPSHOT_DIRECTORY / reference["path"]).read_bytes()
+        assert hashlib.sha256(encoded).hexdigest() == reference["sha256"]
+
+
+def test_loads_native_reduction_provenance_without_native_imports():
+    bundle = load_explainability_bundle(REDUCTION_MANIFEST)
+
+    assert bundle.reduction is not None
+    assert bundle.reduction.variable_count == 3
+    assert (bundle.reduction.width, bundle.reduction.height) == (41, 11)
+    assert tuple(
+        signal.token_id for signal in bundle.reduction.source_signals
+    ) == (0, 1, 2, 9, 3, 4, 5, 10, 6, 7, 8)
+    assert tuple(
+        gadget.swap_row
+        for gadget in bundle.reduction.gadgets
+        if gadget.kind == "crossover"
+    ) == (3, 2, 3, 7, 6, 7)
+    assert "native._lib" not in sys.modules
+
+
+def test_v2_manifest_references_the_closed_reduction_contract():
+    manifest = json.loads(REDUCTION_MANIFEST.read_text(encoding="utf-8"))
+
+    assert manifest["schema"] == REDUCTION_MANIFEST_SCHEMA
+    assert manifest["stage"] == "reduction"
+    assert manifest["artifacts"]["reduction"]["schema"] == REDUCTION_SCHEMA
+    for reference in manifest["artifacts"].values():
+        encoded = (REDUCTION_SNAPSHOT_DIRECTORY / reference["path"]).read_bytes()
         assert hashlib.sha256(encoded).hexdigest() == reference["sha256"]
 
 
@@ -197,6 +232,20 @@ def test_snapshot_views_match_pixel_stable_goldens(tmp_path, view, hex_mode):
     assert output.read_bytes() == GOLDENS[(view, hex_mode)].read_bytes()
 
 
+def test_reduction_view_matches_native_provenance_golden(tmp_path):
+    output = tmp_path / "reduction.png"
+
+    render_pipeline_snapshot(
+        REDUCTION_MANIFEST,
+        output,
+        view="reduction",
+    )
+
+    assert output.read_bytes() == REDUCTION_GOLDEN.read_bytes()
+    with Image.open(output) as image:
+        assert image.mode == "RGB"
+
+
 @pytest.mark.parametrize("hex_mode", (False, True))
 def test_solution_explain_views_match_separate_goldens(tmp_path, hex_mode):
     output = tmp_path / "render.png"
@@ -269,6 +318,22 @@ def test_formula_view_rejects_hex_and_unknown_snapshot_view(tmp_path):
         )
 
 
+def test_reduction_view_requires_v2_and_rejects_hex(tmp_path):
+    with pytest.raises(WangSquareRenderError, match="requires a.*v2"):
+        render_pipeline_snapshot(
+            MANIFEST,
+            tmp_path / "reduction.png",
+            view="reduction",
+        )
+    with pytest.raises(WangSquareRenderError, match="not meaningful"):
+        render_pipeline_snapshot(
+            REDUCTION_MANIFEST,
+            tmp_path / "reduction-hex.png",
+            view="reduction",
+            hex_mode=True,
+        )
+
+
 def test_cli_dispatches_snapshot_view_and_explain_solution(tmp_path):
     snapshot_output = tmp_path / "snapshot.png"
     wang_square.main(
@@ -279,6 +344,12 @@ def test_cli_dispatches_snapshot_view_and_explain_solution(tmp_path):
     solution_output = tmp_path / "solution.png"
     wang_square.main([str(SOLUTION), str(solution_output), "--explain"])
     assert solution_output.read_bytes() == SOLUTION_GOLDENS[False].read_bytes()
+
+    reduction_output = tmp_path / "reduction.png"
+    wang_square.main(
+        [str(REDUCTION_MANIFEST), str(reduction_output), "--view", "reduction"]
+    )
+    assert reduction_output.read_bytes() == REDUCTION_GOLDEN.read_bytes()
 
 
 def test_snapshot_consumer_imports_in_isolated_renderer_process():

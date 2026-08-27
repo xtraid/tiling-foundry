@@ -124,6 +124,11 @@ solver events nor a partial assignment. Deterministic event traces, replayed
 partial states, and algorithm-specific ordering require a separate trace
 contract because native DFS and Z3 do not expose the same kind of step.
 
+The next construction boundary is implemented separately by the
+[reduction explanation contract]({{ '/wang-reduction-explanation/' | relative_url }}).
+Its opt-in manifest v2 adds native-produced signals, adjacent-swap replay, and
+gadget spans while leaving this manifest v1 and the generic `Region` unchanged.
+
 The producer is standard-library-only and depends on copied immutable models.
 The renderer independently consumes the JSON without importing `libwang.so`,
 native adapters, or Z3. Golden PNGs cover all five static geometry/view pairs

@@ -211,7 +211,10 @@ reduction stages:
   its active mask;
 - complete colors on every exposed side, including the staircase notches;
 - variable, clause, and isolated crossover boundary markers;
-- transactional transfer of the exact adjacent-swap trace.
+- transactional transfer of the exact adjacent-swap trace;
+- immutable source/target signal and gadget-span provenance from the same
+  construction, as specified by the
+  [reduction explanation contract]({{ '/wang-reduction-explanation/' | relative_url }}).
 
 Parsing, solving, tile selection, and persistent gadget annotations belong to
 other modules. The

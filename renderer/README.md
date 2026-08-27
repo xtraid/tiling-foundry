@@ -118,6 +118,22 @@ square-to-hex reducer and checker before rasterization. Formula view rejects
 `--hex`; region view intentionally contains no assignment or partial solver
 state.
 
+An opt-in `wang-explain-manifest-v2` adds the construction provenance produced
+by the native Yang–Zhang builder. Render its exact source/target signals,
+adjacent-swap gadget spans, formula, and unassigned region with:
+
+```bash
+uv run --locked python wang_square.py \
+  ../tests/fixtures/pipeline_sat_reduction_explain/manifest.json \
+  output/reduction.png \
+  --view reduction
+```
+
+Reduction spans describe the square construction itself, so this view rejects
+`--hex`. The consumer verifies artifact hashes, formula and region identity,
+the signal permutation, and gadget bounds without importing native code or
+reconstructing builder geometry.
+
 ## Input Format
 
 ### palette.json
@@ -274,6 +290,7 @@ Raises `RenderingException` on pipeline errors.
 ├── test_data/
 │   ├── wang_solution_v1_square_sat.png # Square golden for the Wang fixture
 │   ├── wang_solution_v1_hex_sat.png    # Pointy-top hex golden for the same fixture
+│   ├── pipeline_sat_reduction.png      # Native reduction-provenance golden
 │   ├── palette_ok.json             # Valid 16-color palette
 │   ├── palette_wrong_count.json    # Only 3 colors (invalid)
 │   ├── palette_wrong_value.json    # Component > 255 (invalid)
@@ -289,8 +306,8 @@ Raises `RenderingException` on pipeline errors.
 uv run --locked pytest -q
 ```
 
-The complete isolated suite has 234 tests: the 144 preserved legacy tests
-below, 45 Wang square tests, 24 square-to-hex/hex-raster tests, and 21 static
+The complete isolated suite has 238 tests: the 144 preserved legacy tests
+below, 45 Wang square tests, 24 square-to-hex/hex-raster tests, and 25 static
 snapshot/explainability tests.
 To run only the original upstream suite:
 

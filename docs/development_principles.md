@@ -86,18 +86,18 @@ A module is implemented when it has:
 | `tile` | Fixed tileset, colors, and local matching | Search state |
 | `permutation` | Signal tokens and adjacent-swap generation | Region geometry |
 | `region` | Active cells and exposed boundary constraints | Solver domains and scheduling |
-| `yang_zhang` | Reduction construction and the transferred swap trace | Solver state and duplicated permutation data |
+| `yang_zhang` | Reduction construction, transferred swap trace, and immutable signal/gadget provenance | Solver state and presentation metadata |
 | `solver` | Domains, trail, assignments, and search state | Formula and reduction semantics |
 | `verify` | Stateless validation of a candidate tiling | Search logic and solver caches |
 | `crosscheck` | Stateless Boolean/Wang witness translation over a live reduction | Generic solver internals, clause validity, and copied swap data |
 | `task_plan` | Future derived scheduling data | `Region` or serial-solver ownership |
-| `python/model` | Pure immutable data contracts | I/O, ctypes, Z3, and native ownership |
+| `python/model` | Pure immutable formula, region, tiling, and reduction-explanation contracts | I/O, ctypes, Z3, and native ownership |
 | `python/native` | C ABI adaptation, scoped native lifetimes, and complete copy-out | Solver logic and escaping native pointers |
 | `python/crosscheck` | Scoped composition of adapters, Z3, and independent checkers | Persistent native state and duplicated reduction semantics |
 | `python/oracles` | Independent solvers and checkers over pure models | Parsing, filesystem I/O, and reduction construction |
-| `python/formats` | Solution and static pipeline snapshot validation and deterministic export | Native lifetimes, solving, and presentation |
+| `python/formats` | Solution, static-stage, and reduction-provenance validation and deterministic export | Native lifetimes, solving, and presentation |
 | `renderer/wang_hex_port.py` | Pure square-to-hex mapping, inverse checks, and matching-equivalence checks | Raster geometry, semantic verification, and solver access |
-| `renderer/wang_snapshot.py` | Strict hash-bound snapshot consumption and static formula, tile-sheet, and region composition | Native access, solving, and semantic verification |
+| `renderer/wang_snapshot.py` | Strict hash-bound formula, tile-sheet, region, and recorded reduction-provenance views | Native access, solving, and geometry reconstruction |
 | `renderer/wang_square.py` | One CLI for solution and static views, with square/default or hex/explicit rasterization | Semantic verification and solver access |
 
 `include/wang/task_plan.h`, `src/parallel/solver_openmp.c`, and the two modules
@@ -108,8 +108,9 @@ the implemented solution contract and exporter are Python modules under
 ### Native and Python ownership flow
 
 The C parser and Yang–Zhang builder own native allocations. The adapters copy
-complete values into immutable Python `Formula`, `Region`, tileset, and tiling
-models. No ctypes pointer reaches those models or their consumers.
+complete values into immutable Python `Formula`, `Region`,
+`ReductionExplanation`, tileset, and tiling models. No ctypes pointer reaches
+those models or their consumers.
 
 ```text
                     C parser + Yang–Zhang builder
@@ -142,8 +143,9 @@ block.
 The reduction coordinator parses once. While the native formula is live, it
 builds the corresponding `YangZhangReduction` and copies any Python views that
 the selected path needs. Cleanup destroys the reduction before the formula.
-The swap trace stays native because no Python consumer uses it. Python models
-are not reverse-marshalled into `Cm13Formula` or `Region`.
+The explanation adapter copies the exact source/target signals, swap-bound
+gadget spans, and region extent before cleanup. Python models are not
+reverse-marshalled into `Cm13Formula` or `Region`.
 
 `native/_lib.py` centralizes lazy `libwang.so` loading.
 `native/reduction_adapter.py` provides the copy-only formula/region path.

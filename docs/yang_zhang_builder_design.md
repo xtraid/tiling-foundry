@@ -16,8 +16,8 @@ nav_order: 20
 
 The builder consumes a validated canonical Cubic Monotone 1-in-3 SAT formula.
 It constructs the colored simply connected `Region` used by the fixed 23-tile
-Yang–Zhang reduction and returns the exact adjacent-swap trace in the same
-transactional result.
+Yang–Zhang reduction and returns the exact adjacent-swap trace plus immutable
+construction provenance in the same transactional result.
 
 This is the implementation contract for builder input validation, routing,
 coordinates, active geometry, exposed boundary colors, ownership, and
@@ -49,7 +49,7 @@ transport, and rendering have separate contracts.
 
 ```text
 validated canonical Cubic Monotone 1-in-3 formula
-    -> colored simply connected Region + exact adjacent-swap trace
+    -> Region + exact adjacent-swap trace + ReductionExplanation
 ```
 
 The builder performs these stages:
@@ -61,7 +61,9 @@ The builder performs these stages:
 4. compute the layout dimensions;
 5. build the complete active mask;
 6. color every exposed unit edge of the region;
-7. return the region and the exact swap array transactionally.
+7. retain the exact source/target signals and emit the gadget spans from those
+   same dimensioned construction stages;
+8. return region, swaps, and explanation transactionally.
 
 Responsibilities outside the builder are:
 
@@ -149,9 +151,16 @@ typedef struct {
 
     AdjacentSwap *swaps;
     size_t swap_count;
+
+    ReductionExplanation explanation;
 } YangZhangReduction;
 
 bool yang_zhang_build(
+    const Cm13Formula *formula,
+    YangZhangReduction *out_reduction
+);
+
+bool yang_zhang_build_explained(
     const Cm13Formula *formula,
     YangZhangReduction *out_reduction
 );
@@ -162,8 +171,11 @@ void yang_zhang_reduction_destroy(YangZhangReduction *reduction);
 The exact array returned by `yang_zhang_permutation_build()` is transferred
 into `YangZhangReduction`; it is not copied. It is retained as a diagnostic
 trace of the reduction and as possible input to later task-plan preprocessing.
-The reference solver and independent verifier receive only `Region` and do not
-use this logical trace.
+The explanation retains the source and target arrays that were actually passed
+to that permutation build and records half-open variable, forwarder, crossover,
+and clause rectangles. The reference solver and independent verifier receive
+only `Region` and do not use this diagnostic provenance. Its full data contract
+is the [reduction explanation reference]({{ '/wang-reduction-explanation/' | relative_url }}).
 
 The output starts in the destroyed state:
 
@@ -171,10 +183,13 @@ The output starts in the destroyed state:
 YangZhangReduction reduction = {0};
 ```
 
-`yang_zhang_build()` requires a destroyed/zeroed output. On success, the caller
-owns both `region.cells` and `swaps`. On every failure, the output remains in
-the destroyed state. `yang_zhang_reduction_destroy()` accepts null, destroys
-the region, frees the swap array, and resets every field to zero/null.
+Both build entry points require a destroyed/zeroed output. The standard call
+owns `region.cells` and `swaps` while leaving `explanation` destroyed, so it
+does not allocate provenance. The opt-in explained call additionally owns the
+arrays borrowed through `explanation`. On every failure, the output remains in
+the destroyed state.
+`yang_zhang_reduction_destroy()` accepts null, releases all three results, and
+resets every field to zero/null.
 
 The builder is safe to call concurrently for immutable formulas when each call
 uses a distinct output object. It owns no global mutable state.

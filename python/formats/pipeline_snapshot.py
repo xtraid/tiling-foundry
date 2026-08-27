@@ -18,6 +18,17 @@ import tempfile
 from typing import Final
 
 from model.formula import Formula
+from model.reduction_explanation import (
+    GADGET_CLAUSE,
+    GADGET_CROSSOVER,
+    GADGET_LEFT_FORWARD,
+    GADGET_RIGHT_FORWARD,
+    GADGET_VARIABLE,
+    SIGNAL_REDUNDANT,
+    SIGNAL_VARIABLE,
+    ReductionExplanation,
+    ReductionSignal,
+)
 from model.region import Region
 from model.tileset import COLOR_NONE, TILESET, Tileset
 
@@ -26,9 +37,22 @@ FORMULA_SCHEMA: Final = "cm13-formula-snapshot-v1"
 TILESET_SCHEMA: Final = "wang-tileset-snapshot-v1"
 REGION_SCHEMA: Final = "wang-region-snapshot-v1"
 MANIFEST_SCHEMA: Final = "wang-explain-manifest-v1"
+REDUCTION_SCHEMA: Final = "wang-reduction-explanation-v1"
+REDUCTION_MANIFEST_SCHEMA: Final = "wang-explain-manifest-v2"
 GEOMETRY: Final = "square"
 STAGE: Final = "region"
+REDUCTION_STAGE: Final = "reduction"
 DIRECTIONS: Final = ("N", "E", "S", "W")
+SIGNAL_KINDS: Final = frozenset({SIGNAL_VARIABLE, SIGNAL_REDUNDANT})
+GADGET_KINDS: Final = frozenset(
+    {
+        GADGET_VARIABLE,
+        GADGET_LEFT_FORWARD,
+        GADGET_CROSSOVER,
+        GADGET_RIGHT_FORWARD,
+        GADGET_CLAUSE,
+    }
+)
 _OFFSETS: Final = ((0, -1), (1, 0), (0, 1), (-1, 0))
 _SHA256_PATTERN: Final = re.compile(r"[0-9a-f]{64}")
 
@@ -381,6 +405,231 @@ def validate_region_snapshot(document: object) -> None:
                 )
 
 
+def _validate_explanation_signals(
+    value: object,
+    path: str,
+    *,
+    variable_count: int,
+    height: int,
+) -> tuple[tuple[str, int, int | None, int | None], ...]:
+    signals = _require_array(value, path)
+    if len(signals) != height:
+        _fail(path, "length must equal the explanation height")
+    identities: list[tuple[str, int, int | None, int | None]] = []
+    token_ids: set[int] = set()
+    occurrences = [0] * variable_count
+    redundant_count = 0
+    for row, raw_signal in enumerate(signals):
+        item_path = f"{path}[{row}]"
+        signal = _require_object(raw_signal, item_path)
+        _require_exact_fields(
+            signal,
+            frozenset({"row", "kind", "token_id", "variable", "occurrence"}),
+            item_path,
+        )
+        actual_row = _require_integer(
+            signal["row"],
+            f"{item_path}.row",
+            nonnegative=True,
+        )
+        if actual_row != row:
+            _fail(f"{item_path}.row", f"must equal canonical row {row}")
+        kind = _require_string(signal["kind"], f"{item_path}.kind")
+        if kind not in SIGNAL_KINDS:
+            _fail(f"{item_path}.kind", "is not a supported signal kind")
+        token_id = _require_integer(
+            signal["token_id"],
+            f"{item_path}.token_id",
+            nonnegative=True,
+        )
+        if token_id in token_ids:
+            _fail(path, "token_id values must be unique")
+        token_ids.add(token_id)
+        if kind == SIGNAL_VARIABLE:
+            variable = _require_integer(
+                signal["variable"],
+                f"{item_path}.variable",
+                nonnegative=True,
+            )
+            occurrence = _require_integer(
+                signal["occurrence"],
+                f"{item_path}.occurrence",
+                nonnegative=True,
+            )
+            if variable >= variable_count:
+                _fail(f"{item_path}.variable", "is outside the formula")
+            if occurrence >= 3:
+                _fail(f"{item_path}.occurrence", "must be 0, 1, or 2")
+            occurrences[variable] += 1
+        else:
+            if signal["variable"] is not None or signal["occurrence"] is not None:
+                _fail(item_path, "redundant signal metadata must be null")
+            variable = None
+            occurrence = None
+            redundant_count += 1
+        identities.append((kind, token_id, variable, occurrence))
+    if any(count != 3 for count in occurrences):
+        _fail(path, "must contain three signals for every variable")
+    if redundant_count != variable_count - 1:
+        _fail(path, "has an invalid redundant signal count")
+    return tuple(identities)
+
+
+def validate_reduction_explanation_snapshot(document: object) -> None:
+    """Validate native-produced Yang-Zhang construction provenance."""
+    root = _require_object(document, "$")
+    _require_exact_fields(
+        root,
+        frozenset(
+            {
+                "schema",
+                "geometry",
+                "source_formula_sha256",
+                "region_sha256",
+                "variable_count",
+                "bounds",
+                "signals",
+                "gadgets",
+            }
+        ),
+        "$",
+    )
+    _require_literal(root["schema"], REDUCTION_SCHEMA, "$.schema")
+    _require_literal(root["geometry"], GEOMETRY, "$.geometry")
+    _require_sha256(root["source_formula_sha256"], "$.source_formula_sha256")
+    _require_sha256(root["region_sha256"], "$.region_sha256")
+    variable_count = _require_integer(
+        root["variable_count"],
+        "$.variable_count",
+        nonnegative=True,
+    )
+    if variable_count == 0:
+        _fail("$.variable_count", "must be positive")
+
+    bounds = _require_object(root["bounds"], "$.bounds")
+    _require_exact_fields(
+        bounds,
+        frozenset({"x_begin", "x_end", "y_begin", "y_end"}),
+        "$.bounds",
+    )
+    x_begin = _require_integer(
+        bounds["x_begin"],
+        "$.bounds.x_begin",
+        nonnegative=True,
+    )
+    x_end = _require_integer(
+        bounds["x_end"],
+        "$.bounds.x_end",
+        nonnegative=True,
+    )
+    y_begin = _require_integer(
+        bounds["y_begin"],
+        "$.bounds.y_begin",
+        nonnegative=True,
+    )
+    y_end = _require_integer(
+        bounds["y_end"],
+        "$.bounds.y_end",
+        nonnegative=True,
+    )
+    if x_begin != 0 or y_begin != 0 or x_end <= 0 or y_end <= 0:
+        _fail("$.bounds", "must be a nonempty zero-origin half-open box")
+    if y_end != 4 * variable_count - 1:
+        _fail("$.bounds.y_end", "must equal 4 * variable_count - 1")
+
+    signals = _require_object(root["signals"], "$.signals")
+    _require_exact_fields(signals, frozenset({"source", "target"}), "$.signals")
+    source = _validate_explanation_signals(
+        signals["source"],
+        "$.signals.source",
+        variable_count=variable_count,
+        height=y_end,
+    )
+    target = _validate_explanation_signals(
+        signals["target"],
+        "$.signals.target",
+        variable_count=variable_count,
+        height=y_end,
+    )
+    if frozenset(source) != frozenset(target):
+        _fail("$.signals", "source and target must contain the same tokens")
+
+    gadgets = _require_array(root["gadgets"], "$.gadgets")
+    populations: dict[str, list[int]] = {kind: [] for kind in GADGET_KINDS}
+    crossover_rows: list[int] = []
+    for index, raw_gadget in enumerate(gadgets):
+        path = f"$.gadgets[{index}]"
+        gadget = _require_object(raw_gadget, path)
+        _require_exact_fields(
+            gadget,
+            frozenset({"kind", "ordinal", "bounds", "swap_row"}),
+            path,
+        )
+        kind = _require_string(gadget["kind"], f"{path}.kind")
+        if kind not in GADGET_KINDS:
+            _fail(f"{path}.kind", "is not a supported gadget kind")
+        ordinal = _require_integer(
+            gadget["ordinal"],
+            f"{path}.ordinal",
+            nonnegative=True,
+        )
+        populations[kind].append(ordinal)
+        gadget_bounds = _require_object(gadget["bounds"], f"{path}.bounds")
+        _require_exact_fields(
+            gadget_bounds,
+            frozenset({"x_begin", "x_end", "y_begin", "y_end"}),
+            f"{path}.bounds",
+        )
+        coordinates = tuple(
+            _require_integer(
+                gadget_bounds[name],
+                f"{path}.bounds.{name}",
+                nonnegative=True,
+            )
+            for name in ("x_begin", "x_end", "y_begin", "y_end")
+        )
+        gx_begin, gx_end, gy_begin, gy_end = coordinates
+        if gx_end <= gx_begin or gy_end <= gy_begin:
+            _fail(f"{path}.bounds", "must be a nonempty half-open rectangle")
+        if gx_end > x_end or gy_end > y_end:
+            _fail(f"{path}.bounds", "must lie inside the explanation bounds")
+        if kind == GADGET_CROSSOVER:
+            swap_row = _require_integer(
+                gadget["swap_row"],
+                f"{path}.swap_row",
+                nonnegative=True,
+            )
+            if swap_row >= y_end - 1:
+                _fail(f"{path}.swap_row", "is outside the signal rows")
+            if gx_end - gx_begin != swap_row + 1:
+                _fail(f"{path}.bounds", "width must equal swap_row + 1")
+            crossover_rows.append(swap_row)
+        elif gadget["swap_row"] is not None:
+            _fail(f"{path}.swap_row", "must be null outside crossovers")
+
+    expected_populations = {
+        GADGET_VARIABLE: variable_count,
+        GADGET_LEFT_FORWARD: 1,
+        GADGET_CROSSOVER: len(crossover_rows),
+        GADGET_RIGHT_FORWARD: 1,
+        GADGET_CLAUSE: variable_count,
+    }
+    for kind, expected_count in expected_populations.items():
+        if populations[kind] != list(range(expected_count)):
+            _fail(
+                "$.gadgets",
+                f"{kind} ordinals must equal 0..{expected_count - 1}",
+            )
+    replay = list(source)
+    for swap_row in crossover_rows:
+        replay[swap_row], replay[swap_row + 1] = (
+            replay[swap_row + 1],
+            replay[swap_row],
+        )
+    if tuple(replay) != target:
+        _fail("$.gadgets", "crossover program does not produce target signals")
+
+
 def _validate_reference(
     value: object,
     path: str,
@@ -420,6 +669,36 @@ def validate_explain_manifest(document: object) -> None:
         ("formula", FORMULA_SCHEMA),
         ("tileset", TILESET_SCHEMA),
         ("region", REGION_SCHEMA),
+    ):
+        _validate_reference(
+            artifacts[name],
+            f"$.artifacts.{name}",
+            expected_schema=schema,
+        )
+
+
+def validate_reduction_explain_manifest(document: object) -> None:
+    """Validate the v2 manifest that adds native reduction provenance."""
+    root = _require_object(document, "$")
+    _require_exact_fields(
+        root,
+        frozenset({"schema", "stage", "source_formula_sha256", "artifacts"}),
+        "$",
+    )
+    _require_literal(root["schema"], REDUCTION_MANIFEST_SCHEMA, "$.schema")
+    _require_literal(root["stage"], REDUCTION_STAGE, "$.stage")
+    _require_sha256(root["source_formula_sha256"], "$.source_formula_sha256")
+    artifacts = _require_object(root["artifacts"], "$.artifacts")
+    _require_exact_fields(
+        artifacts,
+        frozenset({"formula", "tileset", "region", "reduction"}),
+        "$.artifacts",
+    )
+    for name, schema in (
+        ("formula", FORMULA_SCHEMA),
+        ("tileset", TILESET_SCHEMA),
+        ("region", REGION_SCHEMA),
+        ("reduction", REDUCTION_SCHEMA),
     ):
         _validate_reference(
             artifacts[name],
@@ -488,6 +767,8 @@ def load_pipeline_snapshot(path: str | Path) -> dict[str, object]:
         TILESET_SCHEMA: validate_tileset_snapshot,
         REGION_SCHEMA: validate_region_snapshot,
         MANIFEST_SCHEMA: validate_explain_manifest,
+        REDUCTION_SCHEMA: validate_reduction_explanation_snapshot,
+        REDUCTION_MANIFEST_SCHEMA: validate_reduction_explain_manifest,
     }
     validator = validators.get(schema)
     if validator is None:
@@ -496,26 +777,25 @@ def load_pipeline_snapshot(path: str | Path) -> dict[str, object]:
     return document
 
 
-def load_explainability_bundle(
+def _load_manifest_artifacts(
     manifest_path: str | Path,
-) -> tuple[
-    dict[str, object],
-    dict[str, object],
-    dict[str, object],
-    dict[str, object],
-]:
-    """Load a manifest and its three hash-bound artifacts."""
+    *,
+    manifest_schema: str,
+    artifact_schemas: tuple[tuple[str, str], ...],
+) -> tuple[dict[str, object], dict[str, dict[str, object]]]:
     path = Path(manifest_path)
     manifest = load_pipeline_snapshot(path)
-    if manifest["schema"] != MANIFEST_SCHEMA:
-        _fail("$.schema", f"must equal {MANIFEST_SCHEMA!r}")
+    if manifest["schema"] != manifest_schema:
+        _fail("$.schema", f"must equal {manifest_schema!r}")
     artifacts = _require_object(manifest["artifacts"], "$.artifacts")
+    validators = {
+        FORMULA_SCHEMA: validate_formula_snapshot,
+        TILESET_SCHEMA: validate_tileset_snapshot,
+        REGION_SCHEMA: validate_region_snapshot,
+        REDUCTION_SCHEMA: validate_reduction_explanation_snapshot,
+    }
     loaded: dict[str, dict[str, object]] = {}
-    for name, schema in (
-        ("formula", FORMULA_SCHEMA),
-        ("tileset", TILESET_SCHEMA),
-        ("region", REGION_SCHEMA),
-    ):
+    for name, schema in artifact_schemas:
         reference = _require_object(artifacts[name], f"$.artifacts.{name}")
         artifact_name, expected_digest = _validate_reference(
             reference,
@@ -538,13 +818,15 @@ def load_explainability_bundle(
         document = _load_json_bytes(encoded, str(artifact_path))
         if document.get("schema") != schema:
             _fail(f"$.artifacts.{name}.schema", "does not match artifact")
-        {
-            FORMULA_SCHEMA: validate_formula_snapshot,
-            TILESET_SCHEMA: validate_tileset_snapshot,
-            REGION_SCHEMA: validate_region_snapshot,
-        }[schema](document)
+        validators[schema](document)
         loaded[name] = document
+    return manifest, loaded
 
+
+def _validate_base_bundle_identity(
+    manifest: dict[str, object],
+    loaded: dict[str, dict[str, object]],
+) -> str:
     formula = loaded["formula"]
     region = loaded["region"]
     tileset = loaded["tileset"]
@@ -572,7 +854,144 @@ def load_explainability_bundle(
                     f"region.boundary[{index}].{direction}",
                     "is absent from the referenced tileset color set",
                 )
-    return manifest, formula, tileset, region
+    return source_digest
+
+
+def load_explainability_bundle(
+    manifest_path: str | Path,
+) -> tuple[
+    dict[str, object],
+    dict[str, object],
+    dict[str, object],
+    dict[str, object],
+]:
+    """Load a v1 manifest and its three hash-bound artifacts."""
+    artifact_schemas = (
+        ("formula", FORMULA_SCHEMA),
+        ("tileset", TILESET_SCHEMA),
+        ("region", REGION_SCHEMA),
+    )
+    manifest, loaded = _load_manifest_artifacts(
+        manifest_path,
+        manifest_schema=MANIFEST_SCHEMA,
+        artifact_schemas=artifact_schemas,
+    )
+    _validate_base_bundle_identity(manifest, loaded)
+    return manifest, loaded["formula"], loaded["tileset"], loaded["region"]
+
+
+def load_reduction_explainability_bundle(
+    manifest_path: str | Path,
+) -> tuple[
+    dict[str, object],
+    dict[str, object],
+    dict[str, object],
+    dict[str, object],
+    dict[str, object],
+]:
+    """Load a v2 manifest and verify formula, region, and provenance identity."""
+    artifact_schemas = (
+        ("formula", FORMULA_SCHEMA),
+        ("tileset", TILESET_SCHEMA),
+        ("region", REGION_SCHEMA),
+        ("reduction", REDUCTION_SCHEMA),
+    )
+    manifest, loaded = _load_manifest_artifacts(
+        manifest_path,
+        manifest_schema=REDUCTION_MANIFEST_SCHEMA,
+        artifact_schemas=artifact_schemas,
+    )
+    source_digest = _validate_base_bundle_identity(manifest, loaded)
+    reduction = loaded["reduction"]
+    if reduction["source_formula_sha256"] != source_digest:
+        _fail(
+            "reduction.source_formula_sha256",
+            "does not match the manifest formula identity",
+        )
+    artifacts = _require_object(manifest["artifacts"], "$.artifacts")
+    region_reference = _require_object(artifacts["region"], "$.artifacts.region")
+    if reduction["region_sha256"] != region_reference["sha256"]:
+        _fail(
+            "reduction.region_sha256",
+            "does not match the referenced region artifact",
+        )
+    if reduction["variable_count"] != loaded["formula"]["variable_count"]:
+        _fail(
+            "reduction.variable_count",
+            "does not match the referenced formula",
+        )
+    variable_count = reduction["variable_count"]
+    expected_source: list[tuple[str, int, int | None, int | None]] = []
+    for variable in range(variable_count):
+        expected_source.extend(
+            (SIGNAL_VARIABLE, 3 * variable + occurrence, variable, occurrence)
+            for occurrence in range(3)
+        )
+        if variable + 1 < variable_count:
+            expected_source.append(
+                (SIGNAL_REDUNDANT, 3 * variable_count + variable, None, None)
+            )
+    expected_target: list[tuple[str, int, int | None, int | None]] = []
+    next_occurrence = [0] * variable_count
+    clauses = _require_array(loaded["formula"]["clauses"], "formula.clauses")
+    for clause_id, raw_clause in enumerate(clauses):
+        clause = _require_object(raw_clause, f"formula.clauses[{clause_id}]")
+        variables = _require_array(
+            clause["variables"],
+            f"formula.clauses[{clause_id}].variables",
+        )
+        for variable in variables:
+            occurrence = next_occurrence[variable]
+            next_occurrence[variable] += 1
+            expected_target.append(
+                (SIGNAL_VARIABLE, 3 * variable + occurrence, variable, occurrence)
+            )
+        if clause_id + 1 < variable_count:
+            expected_target.append(
+                (SIGNAL_REDUNDANT, 3 * variable_count + clause_id, None, None)
+            )
+    signals = _require_object(reduction["signals"], "reduction.signals")
+    actual_sequences: list[tuple[tuple[str, int, int | None, int | None], ...]] = []
+    for name in ("source", "target"):
+        sequence = _require_array(signals[name], f"reduction.signals.{name}")
+        actual_sequences.append(
+            tuple(
+                (
+                    item["kind"],
+                    item["token_id"],
+                    item["variable"],
+                    item["occurrence"],
+                )
+                for item in sequence
+            )
+        )
+    if actual_sequences[0] != tuple(expected_source):
+        _fail("reduction.signals.source", "does not match the formula variables")
+    if actual_sequences[1] != tuple(expected_target):
+        _fail("reduction.signals.target", "does not match the formula clauses")
+    reduction_bounds = _require_object(reduction["bounds"], "reduction.bounds")
+    region_bounds = _require_object(loaded["region"]["bounds"], "region.bounds")
+    region_width = (
+        region_bounds["max_x_inclusive"]
+        - region_bounds["min_x_inclusive"]
+        + 1
+    )
+    region_height = (
+        region_bounds["max_y_inclusive"]
+        - region_bounds["min_y_inclusive"]
+        + 1
+    )
+    if reduction_bounds["x_end"] != region_width:
+        _fail("reduction.bounds.x_end", "does not match the region width")
+    if reduction_bounds["y_end"] != region_height:
+        _fail("reduction.bounds.y_end", "does not match the region height")
+    return (
+        manifest,
+        loaded["formula"],
+        loaded["tileset"],
+        loaded["region"],
+        reduction,
+    )
 
 
 def build_formula_snapshot(
@@ -680,6 +1099,68 @@ def build_region_snapshot(
     return document
 
 
+def build_reduction_explanation_snapshot(
+    explanation: ReductionExplanation,
+    *,
+    source_formula_sha256: str,
+    region_sha256: str,
+) -> dict[str, object]:
+    """Build a snapshot from copied provenance produced by the native builder."""
+    if not isinstance(explanation, ReductionExplanation):
+        raise TypeError("explanation must be a ReductionExplanation")
+    _require_sha256(source_formula_sha256, "source_formula_sha256")
+    _require_sha256(region_sha256, "region_sha256")
+
+    def signal_document(signal: ReductionSignal) -> dict[str, object]:
+        return {
+            "row": signal.row,
+            "kind": signal.kind,
+            "token_id": signal.token_id,
+            "variable": signal.variable,
+            "occurrence": signal.occurrence,
+        }
+
+    document: dict[str, object] = {
+        "schema": REDUCTION_SCHEMA,
+        "geometry": GEOMETRY,
+        "source_formula_sha256": source_formula_sha256,
+        "region_sha256": region_sha256,
+        "variable_count": explanation.variable_count,
+        "bounds": {
+            "x_begin": 0,
+            "x_end": explanation.width,
+            "y_begin": 0,
+            "y_end": explanation.height,
+        },
+        "signals": {
+            "source": [
+                signal_document(signal)
+                for signal in explanation.source_signals
+            ],
+            "target": [
+                signal_document(signal)
+                for signal in explanation.target_signals
+            ],
+        },
+        "gadgets": [
+            {
+                "kind": gadget.kind,
+                "ordinal": gadget.ordinal,
+                "bounds": {
+                    "x_begin": gadget.x_begin,
+                    "x_end": gadget.x_end,
+                    "y_begin": gadget.y_begin,
+                    "y_end": gadget.y_end,
+                },
+                "swap_row": gadget.swap_row,
+            }
+            for gadget in explanation.gadgets
+        ],
+    }
+    validate_reduction_explanation_snapshot(document)
+    return document
+
+
 def _encode_document(document: dict[str, object]) -> bytes:
     serialized = json.dumps(
         document,
@@ -716,17 +1197,25 @@ def _write_atomic(path: Path, encoded: bytes) -> None:
                 pass
 
 
-def dump_pipeline_snapshots(
+def _dump_snapshot_bundle(
     manifest_path: str | Path,
     source_path: str | Path,
     formula: Formula,
     region: Region,
     *,
     origin: tuple[int, int] = (0, 0),
+    explanation: ReductionExplanation | None,
 ) -> Path:
-    """Write content-addressed artifacts, then atomically install a manifest."""
     destination = Path(manifest_path)
     source = Path(source_path)
+    if explanation is not None and (
+        explanation.variable_count != formula.variable_count
+        or explanation.width != region.width
+        or explanation.height != region.height
+    ):
+        raise PipelineSnapshotError(
+            "reduction explanation identity does not match formula and region"
+        )
     try:
         source_bytes = source.read_bytes()
     except OSError as error:
@@ -768,13 +1257,87 @@ def dump_pipeline_snapshots(
             "schema": schema,
         }
 
+    if explanation is not None:
+        region_reference = _require_object(
+            references["region"],
+            "references.region",
+        )
+        explanation_document = build_reduction_explanation_snapshot(
+            explanation,
+            source_formula_sha256=source_digest,
+            region_sha256=region_reference["sha256"],
+        )
+        encoded = _encode_document(explanation_document)
+        digest = hashlib.sha256(encoded).hexdigest()
+        artifact_name = f"reduction-{digest}.json"
+        if artifact_name == destination.name:
+            raise PipelineSnapshotError(
+                "manifest filename must not collide with a generated "
+                f"artifact: {artifact_name}"
+            )
+        _write_atomic(destination.parent / artifact_name, encoded)
+        references["reduction"] = {
+            "path": artifact_name,
+            "sha256": digest,
+            "schema": REDUCTION_SCHEMA,
+        }
+
+    manifest_schema = (
+        REDUCTION_MANIFEST_SCHEMA if explanation is not None else MANIFEST_SCHEMA
+    )
+    stage = REDUCTION_STAGE if explanation is not None else STAGE
     manifest: dict[str, object] = {
-        "schema": MANIFEST_SCHEMA,
-        "stage": STAGE,
+        "schema": manifest_schema,
+        "stage": stage,
         "source_formula_sha256": source_digest,
         "artifacts": references,
     }
-    validate_explain_manifest(manifest)
+    if explanation is None:
+        validate_explain_manifest(manifest)
+    else:
+        validate_reduction_explain_manifest(manifest)
     _write_atomic(destination, _encode_document(manifest))
-    load_explainability_bundle(destination)
+    if explanation is None:
+        load_explainability_bundle(destination)
+    else:
+        load_reduction_explainability_bundle(destination)
     return destination
+
+
+def dump_pipeline_snapshots(
+    manifest_path: str | Path,
+    source_path: str | Path,
+    formula: Formula,
+    region: Region,
+    *,
+    origin: tuple[int, int] = (0, 0),
+) -> Path:
+    """Write v1 static artifacts, then atomically install their manifest."""
+    return _dump_snapshot_bundle(
+        manifest_path,
+        source_path,
+        formula,
+        region,
+        origin=origin,
+        explanation=None,
+    )
+
+
+def dump_reduction_explanation_snapshots(
+    manifest_path: str | Path,
+    source_path: str | Path,
+    formula: Formula,
+    region: Region,
+    explanation: ReductionExplanation,
+    *,
+    origin: tuple[int, int] = (0, 0),
+) -> Path:
+    """Write v2 artifacts including native construction provenance."""
+    return _dump_snapshot_bundle(
+        manifest_path,
+        source_path,
+        formula,
+        region,
+        origin=origin,
+        explanation=explanation,
+    )

@@ -7,30 +7,45 @@
 
 #include "wang/formula.h"
 #include "wang/permutation.h"
+#include "wang/reduction_explanation.h"
 #include "wang/region.h"
 
 /*
  * Result of a Yang-Zhang reduction build.
  *
- * On successful construction, the caller owns both region.cells and swaps.
- * Initialize this object to zero before use and release it with
- * yang_zhang_reduction_destroy().
+ * On successful construction, the caller owns region.cells and swaps. The
+ * explained builder additionally owns the storage borrowed through
+ * explanation. Initialize this object to zero before use and release every
+ * owned allocation with yang_zhang_reduction_destroy().
  */
 typedef struct {
     Region region;
 
     AdjacentSwap *swaps;
     size_t swap_count;
+
+    ReductionExplanation explanation;
 } YangZhangReduction;
 
 /*
  * Build the colored region and adjacent-swap trace for a canonical CM1-in-3
- * formula. The formula is borrowed and is never modified.
+ * formula. The formula is borrowed and is never modified. This standard path
+ * leaves explanation destroyed and performs no provenance allocation.
  *
  * The output must be zero-initialized or previously destroyed. Construction
  * is transactional: on failure, the output remains in the destroyed state.
  */
 bool yang_zhang_build(
+    const Cm13Formula *formula,
+    YangZhangReduction *out_reduction
+);
+
+/*
+ * Build the same region and swap trace while also retaining immutable signal
+ * and gadget provenance. Geometry and swap generation share the standard
+ * implementation; this opt-in entry point only changes explanation ownership.
+ */
+bool yang_zhang_build_explained(
     const Cm13Formula *formula,
     YangZhangReduction *out_reduction
 );

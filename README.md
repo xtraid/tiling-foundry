@@ -73,6 +73,7 @@ solving remains future work.
 | Wang diagnostic renderer | Implemented as one presentation-only CLI with byte-stable square default and explicit `--hex` mode in the isolated `renderer/` project |
 | Square-to-hex presentation port | Implemented as a pure in-memory Basire/Culik mapping with a raster-independent checker; no hex solver, schema, or core model |
 | Static explainability snapshots | Implemented for parsed formula, canonical tile sheet, and unassigned region, with hash-bound JSON contracts and square/hex diagnostic views |
+| Reduction construction provenance | Implemented as an opt-in native-owned explanation with exact signal orders, swap-bound gadget spans, manifest v2, and a square overlay view; the standard build does not allocate it |
 | Native C JSON layer | Not implemented; `src/io/json.c` is a placeholder |
 | `TaskPlan` and native OpenMP solver | Not implemented; only the build scaffold exists |
 
@@ -97,13 +98,14 @@ The implemented paths are:
                           |                                      v
                           |                             Boolean witness checker
                           v
-                  Yang–Zhang builder --> Region
-                                          |  |\
-                                          |  | +--> static manifest --> region view
-                                          |  |                         + tile sheet
-                                          |  +----> copied Region + TILESET
-                                          |                |
-                                          |                v
+                  Yang–Zhang builder --> Region + ReductionExplanation
+                                          |  |  |\
+                                          |  |  | +--> v2 manifest --> reduction view
+                                          |  |  +----> v1 manifest --> region view
+                                          |  |                           + tile sheet
+                                          |  +-------> copied Region + TILESET
+                                          |                  |
+                                          |                  v
                                 native reference/       Wang Z3
                                 optimized solver           |
                                        |                   v
@@ -151,12 +153,11 @@ diagram.
 Planned work remains separated into independently reviewed changes. The new
 priority is explainability across the deterministic pipeline:
 
-1. add provenance overlays from formula positions to region structures without
-   changing the generic `Region` model;
-2. define bounded, deterministic event traces for native DFS and explicit
+1. define bounded, deterministic event traces for native DFS and explicit
    encoding summaries for Z3, then render partial states by replay;
-3. publish a compact formula-to-final-image gallery from versioned examples;
-4. resume serial MRV and hard-UNSAT evidence before `TaskPlan` and OpenMP work.
+2. publish a compact formula-to-final-image gallery and optional technical
+   report from versioned examples;
+3. resume serial MRV and hard-UNSAT evidence before `TaskPlan` and OpenMP work.
 
 The implementation follows a deliberately small design rule: each datum has one
 owner, derived state is computed when needed, and future metadata is not added to
@@ -179,7 +180,7 @@ make check
 
 The imported renderer remains a separate locked Python project. Its Pillow and
 NumPy dependencies are not installed by the root project or exercised by
-`make check`. Run its 234-test combined suite independently:
+`make check`. Run its 238-test combined suite independently:
 
 ```sh
 cd renderer
@@ -216,6 +217,9 @@ inverse proof, checker boundary, and integer axial raster convention.
 The [static snapshot contract](docs/wang_explainability_snapshots.md) documents
 the real formula-to-region export and the formula, tile-sheet, region, and
 opt-in final explainability views.
+The [reduction explanation contract](docs/wang_reduction_explanation.md)
+defines native signal/gadget provenance, manifest v2, ownership, replay
+invariants, and the square-only construction overlay.
 
 Useful individual targets:
 

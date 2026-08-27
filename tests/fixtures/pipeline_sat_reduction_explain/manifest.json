@@ -1,0 +1,27 @@
+{
+  "schema": "wang-explain-manifest-v2",
+  "stage": "reduction",
+  "source_formula_sha256": "3caaa6b29ac988fb4f51cc7071202d83ea1591ba6170e683b6da449cb3641542",
+  "artifacts": {
+    "formula": {
+      "path": "formula-5098eb9a85adebf28757b1368e9307fdb5fea0617de3256b717ead1af1d67815.json",
+      "sha256": "5098eb9a85adebf28757b1368e9307fdb5fea0617de3256b717ead1af1d67815",
+      "schema": "cm13-formula-snapshot-v1"
+    },
+    "tileset": {
+      "path": "tileset-462a102690c420bfe52a634e7b365a6be3bfcf59169f0acd96264831196723fa.json",
+      "sha256": "462a102690c420bfe52a634e7b365a6be3bfcf59169f0acd96264831196723fa",
+      "schema": "wang-tileset-snapshot-v1"
+    },
+    "region": {
+      "path": "region-aad4dc7dcb46ed070995bf975248a7f2f0bf27d69db3eb653208d08c5826199a.json",
+      "sha256": "aad4dc7dcb46ed070995bf975248a7f2f0bf27d69db3eb653208d08c5826199a",
+      "schema": "wang-region-snapshot-v1"
+    },
+    "reduction": {
+      "path": "reduction-6abbea9333509f852d59ed9be943d76380a49bfbdcf0f1c13e923e9ec4c4f3e2.json",
+      "sha256": "6abbea9333509f852d59ed9be943d76380a49bfbdcf0f1c13e923e9ec4c4f3e2",
+      "schema": "wang-reduction-explanation-v1"
+    }
+  }
+}

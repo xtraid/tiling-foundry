@@ -11,22 +11,28 @@ from unittest.mock import patch
 from formats.pipeline_snapshot import (
     FORMULA_SCHEMA,
     MANIFEST_SCHEMA,
+    REDUCTION_MANIFEST_SCHEMA,
+    REDUCTION_SCHEMA,
     REGION_SCHEMA,
     TILESET_SCHEMA,
     PipelineSnapshotError,
     build_formula_snapshot,
+    build_reduction_explanation_snapshot,
     build_region_snapshot,
     build_tileset_snapshot,
     dump_pipeline_snapshots,
+    dump_reduction_explanation_snapshots,
     load_explainability_bundle,
     load_pipeline_snapshot,
+    load_reduction_explainability_bundle,
     validate_explain_manifest,
     validate_formula_snapshot,
+    validate_reduction_explanation_snapshot,
     validate_region_snapshot,
     validate_tileset_snapshot,
 )
 from model.tileset import TILESET
-from native.reduction_adapter import load_formula_and_region
+from native.reduction_adapter import load_formula_region_and_explanation
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -38,6 +44,8 @@ SCHEMA_PATHS = {
     TILESET_SCHEMA: ROOT / "schemas/wang-tileset-snapshot-v1.schema.json",
     REGION_SCHEMA: ROOT / "schemas/wang-region-snapshot-v1.schema.json",
     MANIFEST_SCHEMA: ROOT / "schemas/wang-explain-manifest-v1.schema.json",
+    REDUCTION_SCHEMA: ROOT / "schemas/wang-reduction-explanation-v1.schema.json",
+    REDUCTION_MANIFEST_SCHEMA: ROOT / "schemas/wang-explain-manifest-v2.schema.json",
 }
 
 
@@ -47,7 +55,7 @@ def _snapshot_paths(manifest_path: Path) -> dict[str, Path]:
         "manifest": manifest_path,
         **{
             name: manifest_path.parent / manifest["artifacts"][name]["path"]
-            for name in ("formula", "tileset", "region")
+            for name in manifest["artifacts"]
         },
     }
 
@@ -55,7 +63,11 @@ def _snapshot_paths(manifest_path: Path) -> dict[str, Path]:
 class PipelineSnapshotTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.formula, cls.region = load_formula_and_region(SAT_PATH)
+        (
+            cls.formula,
+            cls.region,
+            cls.explanation,
+        ) = load_formula_region_and_explanation(SAT_PATH)
 
     def test_builders_create_closed_valid_snapshots(self) -> None:
         formula = build_formula_snapshot(
@@ -88,7 +100,7 @@ class PipelineSnapshotTests(unittest.TestCase):
         with self.assertRaisesRegex(TypeError, "immutable N/E/S/W"):
             build_tileset_snapshot(((0, 1),))
 
-    def test_publishes_four_closed_draft_2020_12_schemas(self) -> None:
+    def test_publishes_six_closed_draft_2020_12_schemas(self) -> None:
         for contract, path in SCHEMA_PATHS.items():
             with self.subTest(contract=contract):
                 schema = json.loads(path.read_text(encoding="utf-8"))
@@ -137,6 +149,106 @@ class PipelineSnapshotTests(unittest.TestCase):
         self.assertEqual(formula["source"]["sha256"], SOURCE_SHA256)
         self.assertEqual(len(tileset["tiles"]), 23)
         self.assertEqual(sum(region["active"]), 444)
+
+    def test_reduction_snapshot_records_native_signals_and_gadgets(self) -> None:
+        document = build_reduction_explanation_snapshot(
+            self.explanation,
+            source_formula_sha256=SOURCE_SHA256,
+            region_sha256="0" * 64,
+        )
+
+        validate_reduction_explanation_snapshot(document)
+        self.assertEqual(document["schema"], REDUCTION_SCHEMA)
+        self.assertEqual(document["bounds"]["x_end"], self.region.width)
+        self.assertEqual(
+            [signal["token_id"] for signal in document["signals"]["target"]],
+            [0, 1, 3, 9, 2, 4, 6, 10, 5, 7, 8],
+        )
+        self.assertEqual(
+            [
+                gadget["swap_row"]
+                for gadget in document["gadgets"]
+                if gadget["kind"] == "crossover"
+            ],
+            [3, 2, 3, 7, 6, 7],
+        )
+
+        wrong_target = copy.deepcopy(document)
+        first = wrong_target["signals"]["target"][0]
+        second = wrong_target["signals"]["target"][1]
+        for field in ("kind", "token_id", "variable", "occurrence"):
+            first[field], second[field] = second[field], first[field]
+        with self.assertRaisesRegex(PipelineSnapshotError, "does not produce target"):
+            validate_reduction_explanation_snapshot(wrong_target)
+
+        bool_ordinal = copy.deepcopy(document)
+        bool_ordinal["gadgets"][0]["ordinal"] = True
+        with self.assertRaisesRegex(PipelineSnapshotError, "must be an integer"):
+            validate_reduction_explanation_snapshot(bool_ordinal)
+
+    def test_v2_bundle_is_deterministic_and_cross_stage_hash_bound(self) -> None:
+        snapshots: list[dict[str, bytes]] = []
+        for _ in range(2):
+            with tempfile.TemporaryDirectory() as directory:
+                manifest_path = dump_reduction_explanation_snapshots(
+                    Path(directory) / "pipeline.explain.json",
+                    SAT_PATH,
+                    self.formula,
+                    self.region,
+                    self.explanation,
+                    origin=(-2, 4),
+                )
+                snapshots.append(
+                    {
+                        name: path.read_bytes()
+                        for name, path in _snapshot_paths(manifest_path).items()
+                    }
+                )
+                bundle = load_reduction_explainability_bundle(manifest_path)
+
+        self.assertEqual(snapshots[0], snapshots[1])
+        manifest, formula, tileset, region, reduction = bundle
+        self.assertEqual(manifest["schema"], REDUCTION_MANIFEST_SCHEMA)
+        self.assertEqual(formula["source"]["sha256"], SOURCE_SHA256)
+        self.assertEqual(len(tileset["tiles"]), 23)
+        self.assertEqual(region["bounds"]["min_x_inclusive"], -2)
+        self.assertEqual(reduction["variable_count"], 3)
+
+    def test_v2_bundle_rejects_rebound_reduction_with_wrong_region(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manifest_path = dump_reduction_explanation_snapshots(
+                Path(directory) / "pipeline.explain.json",
+                SAT_PATH,
+                self.formula,
+                self.region,
+                self.explanation,
+            )
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            reference = manifest["artifacts"]["reduction"]
+            reduction_path = manifest_path.parent / reference["path"]
+            reduction = json.loads(reduction_path.read_text(encoding="utf-8"))
+            reduction["region_sha256"] = "0" * 64
+            serialized = json.dumps(
+                reduction,
+                ensure_ascii=False,
+                indent=2,
+            )
+            encoded = f"{serialized}\n".encode()
+            digest = hashlib.sha256(encoded).hexdigest()
+            replacement = manifest_path.parent / f"reduction-{digest}.json"
+            replacement.write_bytes(encoded)
+            reference["path"] = replacement.name
+            reference["sha256"] = digest
+            manifest_path.write_text(
+                f"{json.dumps(manifest, ensure_ascii=False, indent=2)}\n",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(
+                PipelineSnapshotError,
+                "does not match the referenced region",
+            ):
+                load_reduction_explainability_bundle(manifest_path)
 
     def test_manifest_rejects_changed_artifact_bytes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -357,6 +469,29 @@ class PipelineSnapshotTests(unittest.TestCase):
         self.assertEqual(bundle[1]["source"]["name"], SAT_PATH.name)
         self.assertEqual(bundle[3]["bounds"]["min_x_inclusive"], -7)
         self.assertEqual(bundle[3]["bounds"]["min_y_inclusive"], 4)
+
+    def test_cli_opt_in_exports_native_reduction_provenance(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            manifest_path = Path(directory) / "nested" / "manifest.json"
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(ROOT / "tools/export_pipeline_snapshots.py"),
+                    str(SAT_PATH),
+                    str(manifest_path),
+                    "--reduction-explanation",
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            bundle = load_reduction_explainability_bundle(manifest_path)
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("reduction=", completed.stdout)
+        self.assertEqual(bundle[0]["schema"], REDUCTION_MANIFEST_SCHEMA)
+        self.assertEqual(bundle[4]["schema"], REDUCTION_SCHEMA)
 
 
 if __name__ == "__main__":
