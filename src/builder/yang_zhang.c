@@ -13,6 +13,140 @@ static bool reduction_is_destroyed(const YangZhangReduction *reduction)
         && reduction->swap_count == 0;
 }
 
+static bool explanation_is_destroyed(
+    const ReductionExplanation *explanation
+)
+{
+    return explanation != NULL
+        && explanation->source_signals == NULL
+        && explanation->target_signals == NULL
+        && explanation->signal_count == 0
+        && explanation->gadgets == NULL
+        && explanation->gadget_count == 0;
+}
+
+static bool build_reduction_explanation(
+    const Cm13Formula *formula,
+    SignalToken *source,
+    SignalToken *target,
+    size_t signal_count,
+    const AdjacentSwap *swaps,
+    size_t swap_count,
+    int32_t width,
+    int32_t height,
+    ReductionExplanation *out_explanation
+)
+{
+    const size_t variable_count = formula->variable_count;
+
+    if (variable_count > (SIZE_MAX - 2u) / 2u) {
+        return false;
+    }
+
+    const size_t fixed_gadget_count = 2u * variable_count + 2u;
+    if (swap_count > SIZE_MAX - fixed_gadget_count) {
+        return false;
+    }
+
+    const size_t gadget_count = fixed_gadget_count + swap_count;
+    if (gadget_count > SIZE_MAX / sizeof(*out_explanation->gadgets)) {
+        return false;
+    }
+
+    ReductionGadgetSpan *gadgets = malloc(
+        gadget_count * sizeof(*gadgets)
+    );
+    if (gadgets == NULL) {
+        return false;
+    }
+
+    size_t gadget_index = 0;
+    for (uint32_t variable = 0;
+         variable < formula->variable_count;
+         ++variable) {
+        const int32_t first_y = (int32_t)(4u * variable);
+        gadgets[gadget_index++] = (ReductionGadgetSpan){
+            .kind = REDUCTION_GADGET_VARIABLE,
+            .ordinal = variable,
+            .x_begin = 0,
+            .x_end = (int32_t)YANG_ZHANG_VARIABLE_WIDTH,
+            .y_begin = first_y,
+            .y_end = first_y + 3,
+            .swap_row = REDUCTION_NO_SWAP_ROW
+        };
+    }
+
+    const int32_t left_begin = (int32_t)YANG_ZHANG_VARIABLE_WIDTH;
+    const int32_t crossover_begin = left_begin +
+        (int32_t)YANG_ZHANG_LEFT_FORWARD_WIDTH;
+    gadgets[gadget_index++] = (ReductionGadgetSpan){
+        .kind = REDUCTION_GADGET_LEFT_FORWARD,
+        .ordinal = 0,
+        .x_begin = left_begin,
+        .x_end = crossover_begin,
+        .y_begin = 0,
+        .y_end = height,
+        .swap_row = REDUCTION_NO_SWAP_ROW
+    };
+
+    int32_t block_x = crossover_begin;
+    for (size_t swap = 0; swap < swap_count; ++swap) {
+        const int32_t block_width = (int32_t)swaps[swap].row + 1;
+        gadgets[gadget_index++] = (ReductionGadgetSpan){
+            .kind = REDUCTION_GADGET_CROSSOVER,
+            .ordinal = (uint32_t)swap,
+            .x_begin = block_x,
+            .x_end = block_x + block_width,
+            .y_begin = 0,
+            .y_end = height,
+            .swap_row = swaps[swap].row
+        };
+        block_x += block_width;
+    }
+
+    const int32_t right_end = block_x +
+        (int32_t)YANG_ZHANG_RIGHT_FORWARD_WIDTH;
+    gadgets[gadget_index++] = (ReductionGadgetSpan){
+        .kind = REDUCTION_GADGET_RIGHT_FORWARD,
+        .ordinal = 0,
+        .x_begin = block_x,
+        .x_end = right_end,
+        .y_begin = 0,
+        .y_end = height,
+        .swap_row = REDUCTION_NO_SWAP_ROW
+    };
+
+    for (size_t clause = 0; clause < formula->clause_count; ++clause) {
+        const int32_t first_y = (int32_t)(4u * clause);
+        const int32_t y_end = clause + 1u < formula->clause_count
+            ? first_y + 4
+            : height;
+        gadgets[gadget_index++] = (ReductionGadgetSpan){
+            .kind = REDUCTION_GADGET_CLAUSE,
+            .ordinal = (uint32_t)clause,
+            .x_begin = right_end,
+            .x_end = width,
+            .y_begin = first_y,
+            .y_end = y_end,
+            .swap_row = REDUCTION_NO_SWAP_ROW
+        };
+    }
+
+    if (gadget_index != gadget_count) {
+        free(gadgets);
+        return false;
+    }
+
+    *out_explanation = (ReductionExplanation){
+        .source_signals = source,
+        .target_signals = target,
+        .signal_count = signal_count,
+        .gadgets = gadgets,
+        .gadget_count = gadget_count
+    };
+    return true;
+}
+
 static bool formula_is_in_reduction_domain(const Cm13Formula *formula)
 {
     if (formula == NULL ||
@@ -312,9 +446,10 @@ static bool paint_crossover_boundaries(
     return true;
 }
 
-bool yang_zhang_build(
+static bool yang_zhang_build_internal(
     const Cm13Formula *formula,
-    YangZhangReduction *out_reduction
+    YangZhangReduction *out_reduction,
+    ReductionExplanation *out_explanation
 )
 {
     SignalToken *source = NULL;
@@ -325,8 +460,11 @@ bool yang_zhang_build(
     int32_t height = 0;
     int32_t width = 0;
     Region region = {0};
+    ReductionExplanation explanation = {0};
 
     if (!reduction_is_destroyed(out_reduction) ||
+        (out_explanation != NULL &&
+         !explanation_is_destroyed(out_explanation)) ||
         !formula_is_in_reduction_domain(formula)) {
         return false;
     }
@@ -349,8 +487,12 @@ bool yang_zhang_build(
         return false;
     }
 
-    free(target);
-    free(source);
+    if (out_explanation == NULL) {
+        free(target);
+        target = NULL;
+        free(source);
+        source = NULL;
+    }
 
     if (!yang_zhang_compute_dimensions(
             formula->variable_count,
@@ -370,16 +512,55 @@ bool yang_zhang_build(
                       YANG_ZHANG_LEFT_FORWARD_WIDTH),
             swaps,
             swap_count
-        )) {
+        ) ||
+        (out_explanation != NULL && !build_reduction_explanation(
+            formula,
+            source,
+            target,
+            signal_count,
+            swaps,
+            swap_count,
+            width,
+            height,
+            &explanation
+        ))) {
         region_destroy(&region);
         free(swaps);
+        free(target);
+        free(source);
         return false;
     }
 
     out_reduction->region = region;
     out_reduction->swaps = swaps;
     out_reduction->swap_count = swap_count;
+    if (out_explanation != NULL) {
+        *out_explanation = explanation;
+    }
     return true;
+}
+
+bool yang_zhang_build(
+    const Cm13Formula *formula,
+    YangZhangReduction *out_reduction
+)
+{
+    return yang_zhang_build_internal(formula, out_reduction, NULL);
+}
+
+bool yang_zhang_build_explained(
+    const Cm13Formula *formula,
+    YangZhangExplainedReduction *out_reduction
+)
+{
+    if (out_reduction == NULL) {
+        return false;
+    }
+    return yang_zhang_build_internal(
+        formula,
+        &out_reduction->reduction,
+        &out_reduction->explanation
+    );
 }
 
 void yang_zhang_reduction_destroy(YangZhangReduction *reduction)
@@ -392,6 +573,21 @@ void yang_zhang_reduction_destroy(YangZhangReduction *reduction)
     free(reduction->swaps);
     reduction->swaps = NULL;
     reduction->swap_count = 0;
+}
+
+void yang_zhang_explained_reduction_destroy(
+    YangZhangExplainedReduction *reduction
+)
+{
+    if (reduction == NULL) {
+        return;
+    }
+
+    yang_zhang_reduction_destroy(&reduction->reduction);
+    free(reduction->explanation.gadgets);
+    free(reduction->explanation.target_signals);
+    free(reduction->explanation.source_signals);
+    reduction->explanation = (ReductionExplanation){0};
 }
 
 bool yang_zhang_compute_dimensions(

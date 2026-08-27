@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:tiling-foundry:schema:wang-explain-manifest-v2",
+  "title": "Tiling Foundry reduction explainability manifest v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "stage", "source_formula_sha256", "artifacts"],
+  "properties": {
+    "schema": {"const": "wang-explain-manifest-v2"},
+    "stage": {"const": "reduction"},
+    "source_formula_sha256": {"$ref": "#/$defs/sha256"},
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["formula", "tileset", "region", "reduction"],
+      "properties": {
+        "formula": {"$ref": "#/$defs/formula_reference"},
+        "tileset": {"$ref": "#/$defs/tileset_reference"},
+        "region": {"$ref": "#/$defs/region_reference"},
+        "reduction": {"$ref": "#/$defs/reduction_reference"}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "artifact_path": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^/\\]+$",
+      "not": {"enum": [".", ".."]}
+    },
+    "formula_reference": {
+      "$ref": "#/$defs/reference",
+      "properties": {"schema": {"const": "cm13-formula-snapshot-v1"}}
+    },
+    "tileset_reference": {
+      "$ref": "#/$defs/reference",
+      "properties": {"schema": {"const": "wang-tileset-snapshot-v1"}}
+    },
+    "region_reference": {
+      "$ref": "#/$defs/reference",
+      "properties": {"schema": {"const": "wang-region-snapshot-v1"}}
+    },
+    "reduction_reference": {
+      "$ref": "#/$defs/reference",
+      "properties": {
+        "schema": {"const": "wang-reduction-explanation-v1"}
+      }
+    },
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "schema"],
+      "properties": {
+        "path": {"$ref": "#/$defs/artifact_path"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "schema": {"type": "string"}
+      }
+    }
+  }
+}

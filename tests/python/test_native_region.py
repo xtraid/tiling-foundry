@@ -12,7 +12,10 @@ from native.region_adapter import (
     _build_region,
     _copy_region,
 )
-from native.reduction_adapter import load_formula_and_region
+from native.reduction_adapter import (
+    load_formula_and_region,
+    load_formula_region_and_explanation,
+)
 
 
 INSTANCE_DIRECTORY = Path(__file__).resolve().parents[1] / "instances"
@@ -63,6 +66,33 @@ class NativeRegionCopyTests(unittest.TestCase):
             ),
             112,
         )
+
+    def test_copies_native_reduction_explanation_before_cleanup(self) -> None:
+        formula, region, explanation = load_formula_region_and_explanation(
+            INSTANCE_DIRECTORY / "pipeline_sat.cm13"
+        )
+
+        self.assertEqual(explanation.variable_count, formula.variable_count)
+        self.assertEqual(
+            (explanation.width, explanation.height),
+            (region.width, region.height),
+        )
+        self.assertEqual(
+            tuple(signal.token_id for signal in explanation.source_signals),
+            (0, 1, 2, 9, 3, 4, 5, 10, 6, 7, 8),
+        )
+        self.assertEqual(
+            tuple(signal.token_id for signal in explanation.target_signals),
+            (0, 1, 3, 9, 2, 4, 6, 10, 5, 7, 8),
+        )
+        crossovers = tuple(
+            gadget
+            for gadget in explanation.gadgets
+            if gadget.kind == "crossover"
+        )
+        self.assertEqual(len(crossovers), 6)
+        self.assertEqual(crossovers[0].x_begin, 3)
+        self.assertEqual(crossovers[-1].x_end, 37)
 
     def test_rejects_invalid_native_extent_before_copying(self) -> None:
         cells = (_RegionCell * 1)()

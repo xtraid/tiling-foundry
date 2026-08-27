@@ -56,6 +56,8 @@ FORMULA_SCHEMA: Final = "cm13-formula-snapshot-v1"
 TILESET_SCHEMA: Final = "wang-tileset-snapshot-v1"
 REGION_SCHEMA: Final = "wang-region-snapshot-v1"
 MANIFEST_SCHEMA: Final = "wang-explain-manifest-v1"
+REDUCTION_SCHEMA: Final = "wang-reduction-explanation-v1"
+REDUCTION_MANIFEST_SCHEMA: Final = "wang-explain-manifest-v2"
 DIRECTIONS: Final = ("N", "E", "S", "W")
 HEX_DIRECTIONS: Final = ("E", "SE", "SW", "W", "NW", "NE")
 _SHA256_PATTERN: Final = re.compile(r"[0-9a-f]{64}")
@@ -63,6 +65,10 @@ _FORMULA_PANEL_WIDTH: Final = 360
 _LEGEND_WIDTH: Final = 190
 _PANEL_GAP: Final = 20
 _HEADER_HEIGHT: Final = 58
+_SIGNAL_KINDS: Final = frozenset({"variable", "redundant"})
+_GADGET_KINDS: Final = frozenset(
+    {"variable", "left_forward", "crossover", "right_forward", "clause"}
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,11 +108,48 @@ class RegionSnapshot:
 
 
 @dataclass(frozen=True, slots=True)
+class ReductionSignalSnapshot:
+    row: int
+    kind: str
+    token_id: int
+    variable: int | None
+    occurrence: int | None
+
+    @property
+    def identity(self) -> tuple[str, int, int | None, int | None]:
+        return (self.kind, self.token_id, self.variable, self.occurrence)
+
+
+@dataclass(frozen=True, slots=True)
+class ReductionGadgetSnapshot:
+    kind: str
+    ordinal: int
+    x_begin: int
+    x_end: int
+    y_begin: int
+    y_end: int
+    swap_row: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class ReductionExplanationSnapshot:
+    source_formula_sha256: str
+    region_sha256: str
+    variable_count: int
+    width: int
+    height: int
+    source_signals: tuple[ReductionSignalSnapshot, ...]
+    target_signals: tuple[ReductionSignalSnapshot, ...]
+    gadgets: tuple[ReductionGadgetSnapshot, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class ExplainabilityBundle:
     source_formula_sha256: str
     formula: FormulaSnapshot
     tileset: TilesetSnapshot
     region: RegionSnapshot
+    reduction: ReductionExplanationSnapshot | None = None
 
 
 def _fail(path: str, message: str) -> None:
@@ -453,8 +496,247 @@ def _parse_region(document: dict[str, object]) -> RegionSnapshot:
     )
 
 
+def _parse_reduction_signal(
+    value: object,
+    path: str,
+    expected_row: int,
+    variable_count: int,
+) -> ReductionSignalSnapshot:
+    signal = _object(value, path)
+    _fields(
+        signal,
+        frozenset({"row", "kind", "token_id", "variable", "occurrence"}),
+        path,
+    )
+    row = _integer(signal["row"], f"{path}.row", nonnegative=True)
+    if row != expected_row:
+        _fail(f"{path}.row", f"must equal canonical row {expected_row}")
+    kind = _string(signal["kind"], f"{path}.kind")
+    if kind not in _SIGNAL_KINDS:
+        _fail(f"{path}.kind", "is not a supported signal kind")
+    token_id = _integer(
+        signal["token_id"],
+        f"{path}.token_id",
+        nonnegative=True,
+    )
+    if kind == "variable":
+        variable = _integer(
+            signal["variable"],
+            f"{path}.variable",
+            nonnegative=True,
+        )
+        occurrence = _integer(
+            signal["occurrence"],
+            f"{path}.occurrence",
+            nonnegative=True,
+        )
+        if variable >= variable_count or occurrence >= 3:
+            _fail(path, "variable identity is outside the formula")
+    else:
+        if signal["variable"] is not None or signal["occurrence"] is not None:
+            _fail(path, "redundant signal metadata must be null")
+        variable = None
+        occurrence = None
+    return ReductionSignalSnapshot(
+        row=row,
+        kind=kind,
+        token_id=token_id,
+        variable=variable,
+        occurrence=occurrence,
+    )
+
+
+def _parse_reduction(document: dict[str, object]) -> ReductionExplanationSnapshot:
+    _fields(
+        document,
+        frozenset(
+            {
+                "schema",
+                "geometry",
+                "source_formula_sha256",
+                "region_sha256",
+                "variable_count",
+                "bounds",
+                "signals",
+                "gadgets",
+            }
+        ),
+        "reduction $",
+    )
+    _literal(document["schema"], REDUCTION_SCHEMA, "reduction $.schema")
+    _literal(document["geometry"], "square", "reduction $.geometry")
+    source_digest = _sha256(
+        document["source_formula_sha256"],
+        "reduction $.source_formula_sha256",
+    )
+    region_digest = _sha256(
+        document["region_sha256"],
+        "reduction $.region_sha256",
+    )
+    variable_count = _integer(
+        document["variable_count"],
+        "reduction $.variable_count",
+        nonnegative=True,
+    )
+    if variable_count == 0:
+        _fail("reduction $.variable_count", "must be positive")
+    bounds = _object(document["bounds"], "reduction $.bounds")
+    _fields(
+        bounds,
+        frozenset({"x_begin", "x_end", "y_begin", "y_end"}),
+        "reduction $.bounds",
+    )
+    x_begin = _integer(
+        bounds["x_begin"],
+        "reduction $.bounds.x_begin",
+        nonnegative=True,
+    )
+    width = _integer(
+        bounds["x_end"],
+        "reduction $.bounds.x_end",
+        nonnegative=True,
+    )
+    y_begin = _integer(
+        bounds["y_begin"],
+        "reduction $.bounds.y_begin",
+        nonnegative=True,
+    )
+    height = _integer(
+        bounds["y_end"],
+        "reduction $.bounds.y_end",
+        nonnegative=True,
+    )
+    if x_begin != 0 or y_begin != 0 or width <= 0:
+        _fail("reduction $.bounds", "must be a nonempty zero-origin box")
+    if height != 4 * variable_count - 1:
+        _fail("reduction $.bounds.y_end", "does not match variable_count")
+
+    signals = _object(document["signals"], "reduction $.signals")
+    _fields(signals, frozenset({"source", "target"}), "reduction $.signals")
+    projected_signals: list[tuple[ReductionSignalSnapshot, ...]] = []
+    for name in ("source", "target"):
+        raw_sequence = _array(signals[name], f"reduction $.signals.{name}")
+        if len(raw_sequence) != height:
+            _fail(f"reduction $.signals.{name}", "length must equal height")
+        sequence = tuple(
+            _parse_reduction_signal(
+                raw_signal,
+                f"reduction $.signals.{name}[{row}]",
+                row,
+                variable_count,
+            )
+            for row, raw_signal in enumerate(raw_sequence)
+        )
+        if len({signal.token_id for signal in sequence}) != height:
+            _fail(f"reduction $.signals.{name}", "token IDs must be unique")
+        projected_signals.append(sequence)
+    source, target = projected_signals
+    if {signal.identity for signal in source} != {
+        signal.identity for signal in target
+    }:
+        _fail("reduction $.signals", "source and target tokens must match")
+
+    raw_gadgets = _array(document["gadgets"], "reduction $.gadgets")
+    gadgets: list[ReductionGadgetSnapshot] = []
+    populations: dict[str, list[int]] = {kind: [] for kind in _GADGET_KINDS}
+    for index, raw_gadget in enumerate(raw_gadgets):
+        path = f"reduction $.gadgets[{index}]"
+        gadget = _object(raw_gadget, path)
+        _fields(
+            gadget,
+            frozenset({"kind", "ordinal", "bounds", "swap_row"}),
+            path,
+        )
+        kind = _string(gadget["kind"], f"{path}.kind")
+        if kind not in _GADGET_KINDS:
+            _fail(f"{path}.kind", "is not a supported gadget kind")
+        ordinal = _integer(
+            gadget["ordinal"],
+            f"{path}.ordinal",
+            nonnegative=True,
+        )
+        populations[kind].append(ordinal)
+        raw_bounds = _object(gadget["bounds"], f"{path}.bounds")
+        _fields(
+            raw_bounds,
+            frozenset({"x_begin", "x_end", "y_begin", "y_end"}),
+            f"{path}.bounds",
+        )
+        coordinates = tuple(
+            _integer(
+                raw_bounds[name],
+                f"{path}.bounds.{name}",
+                nonnegative=True,
+            )
+            for name in ("x_begin", "x_end", "y_begin", "y_end")
+        )
+        gx_begin, gx_end, gy_begin, gy_end = coordinates
+        if gx_end <= gx_begin or gy_end <= gy_begin:
+            _fail(f"{path}.bounds", "must be a nonempty half-open rectangle")
+        if gx_end > width or gy_end > height:
+            _fail(f"{path}.bounds", "lies outside the reduction bounds")
+        if kind == "crossover":
+            swap_row = _integer(
+                gadget["swap_row"],
+                f"{path}.swap_row",
+                nonnegative=True,
+            )
+            if swap_row >= height - 1 or gx_end - gx_begin != swap_row + 1:
+                _fail(path, "crossover row or width is inconsistent")
+        else:
+            if gadget["swap_row"] is not None:
+                _fail(f"{path}.swap_row", "must be null outside crossovers")
+            swap_row = None
+        gadgets.append(
+            ReductionGadgetSnapshot(
+                kind,
+                ordinal,
+                gx_begin,
+                gx_end,
+                gy_begin,
+                gy_end,
+                swap_row,
+            )
+        )
+    expected_counts = {
+        "variable": variable_count,
+        "left_forward": 1,
+        "right_forward": 1,
+        "clause": variable_count,
+    }
+    for kind, count in expected_counts.items():
+        if populations[kind] != list(range(count)):
+            _fail("reduction $.gadgets", f"invalid {kind} gadget ordinals")
+    crossovers = tuple(gadget for gadget in gadgets if gadget.kind == "crossover")
+    if tuple(gadget.ordinal for gadget in crossovers) != tuple(
+        range(len(crossovers))
+    ):
+        _fail("reduction $.gadgets", "invalid crossover gadget ordinals")
+    replay = [signal.identity for signal in source]
+    for crossover in crossovers:
+        swap_row = crossover.swap_row
+        if swap_row is None:
+            _fail("reduction $.gadgets", "crossover is missing its swap row")
+        replay[swap_row], replay[swap_row + 1] = (
+            replay[swap_row + 1],
+            replay[swap_row],
+        )
+    if tuple(replay) != tuple(signal.identity for signal in target):
+        _fail("reduction $.gadgets", "crossover replay does not reach target")
+    return ReductionExplanationSnapshot(
+        source_formula_sha256=source_digest,
+        region_sha256=region_digest,
+        variable_count=variable_count,
+        width=width,
+        height=height,
+        source_signals=source,
+        target_signals=target,
+        gadgets=tuple(gadgets),
+    )
+
+
 def load_explainability_bundle(path: str | Path) -> ExplainabilityBundle:
-    """Load one manifest, verify hashes, and project its three artifacts."""
+    """Load a v1/v2 manifest and independently verify every referenced stage."""
     manifest_path = Path(path)
     manifest = _load_json_bytes(
         _read_bytes(manifest_path, "manifest"),
@@ -465,20 +747,32 @@ def load_explainability_bundle(path: str | Path) -> ExplainabilityBundle:
         frozenset({"schema", "stage", "source_formula_sha256", "artifacts"}),
         "$",
     )
-    _literal(manifest["schema"], MANIFEST_SCHEMA, "$.schema")
-    _literal(manifest["stage"], "region", "$.stage")
+    manifest_schema = _string(manifest["schema"], "$.schema")
+    if manifest_schema == MANIFEST_SCHEMA:
+        _literal(manifest["stage"], "region", "$.stage")
+        expected_schemas = {
+            "formula": FORMULA_SCHEMA,
+            "tileset": TILESET_SCHEMA,
+            "region": REGION_SCHEMA,
+        }
+    elif manifest_schema == REDUCTION_MANIFEST_SCHEMA:
+        _literal(manifest["stage"], "reduction", "$.stage")
+        expected_schemas = {
+            "formula": FORMULA_SCHEMA,
+            "tileset": TILESET_SCHEMA,
+            "region": REGION_SCHEMA,
+            "reduction": REDUCTION_SCHEMA,
+        }
+    else:
+        _fail("$.schema", "must be a supported explainability manifest")
     source_digest = _sha256(
         manifest["source_formula_sha256"],
         "$.source_formula_sha256",
     )
     artifacts = _object(manifest["artifacts"], "$.artifacts")
-    _fields(artifacts, frozenset({"formula", "tileset", "region"}), "$.artifacts")
-    expected_schemas = {
-        "formula": FORMULA_SCHEMA,
-        "tileset": TILESET_SCHEMA,
-        "region": REGION_SCHEMA,
-    }
+    _fields(artifacts, frozenset(expected_schemas), "$.artifacts")
     documents: dict[str, dict[str, object]] = {}
+    artifact_digests: dict[str, str] = {}
     for name, expected_schema in expected_schemas.items():
         reference_path = f"$.artifacts.{name}"
         reference = _object(artifacts[name], reference_path)
@@ -494,6 +788,7 @@ def load_explainability_bundle(path: str | Path) -> ExplainabilityBundle:
         if hashlib.sha256(encoded).hexdigest() != expected_digest:
             _fail(f"{reference_path}.sha256", f"does not match {artifact_name}")
         documents[name] = _load_json_bytes(encoded, str(artifact_path))
+        artifact_digests[name] = expected_digest
 
     formula = _parse_formula(documents["formula"])
     tileset = _parse_tileset(documents["tileset"])
@@ -502,6 +797,62 @@ def load_explainability_bundle(path: str | Path) -> ExplainabilityBundle:
         _fail("$.source_formula_sha256", "does not match formula snapshot")
     if region.source_formula_sha256 != source_digest:
         _fail("$.source_formula_sha256", "does not match region snapshot")
+    reduction: ReductionExplanationSnapshot | None = None
+    if "reduction" in documents:
+        reduction = _parse_reduction(documents["reduction"])
+        if reduction.source_formula_sha256 != source_digest:
+            _fail("reduction $.source_formula_sha256", "does not match formula")
+        if reduction.region_sha256 != artifact_digests["region"]:
+            _fail("reduction $.region_sha256", "does not match region artifact")
+        if reduction.variable_count != formula.variable_count:
+            _fail("reduction $.variable_count", "does not match formula")
+        if (reduction.width, reduction.height) != (region.width, region.height):
+            _fail("reduction $.bounds", "does not match region dimensions")
+        expected_source: list[
+            tuple[str, int, int | None, int | None]
+        ] = []
+        for variable in range(formula.variable_count):
+            expected_source.extend(
+                ("variable", 3 * variable + occurrence, variable, occurrence)
+                for occurrence in range(3)
+            )
+            if variable + 1 < formula.variable_count:
+                expected_source.append(
+                    (
+                        "redundant",
+                        3 * formula.variable_count + variable,
+                        None,
+                        None,
+                    )
+                )
+        expected_target: list[
+            tuple[str, int, int | None, int | None]
+        ] = []
+        next_occurrence = [0] * formula.variable_count
+        for clause_id, clause in enumerate(formula.clauses):
+            for variable in clause:
+                occurrence = next_occurrence[variable]
+                next_occurrence[variable] += 1
+                expected_target.append(
+                    ("variable", 3 * variable + occurrence, variable, occurrence)
+                )
+            if clause_id + 1 < formula.variable_count:
+                expected_target.append(
+                    (
+                        "redundant",
+                        3 * formula.variable_count + clause_id,
+                        None,
+                        None,
+                    )
+                )
+        if tuple(expected_source) != tuple(
+            signal.identity for signal in reduction.source_signals
+        ):
+            _fail("reduction $.signals.source", "does not match formula")
+        if tuple(expected_target) != tuple(
+            signal.identity for signal in reduction.target_signals
+        ):
+            _fail("reduction $.signals.target", "does not match formula")
     colors = set(tileset.colors)
     for index, sides in enumerate(region.boundary):
         if sides is None:
@@ -517,6 +868,7 @@ def load_explainability_bundle(path: str | Path) -> ExplainabilityBundle:
         formula=formula,
         tileset=tileset,
         region=region,
+        reduction=reduction,
     )
 
 
@@ -950,6 +1302,175 @@ def _compose_region_hex(
     return np.asarray(canvas, dtype=np.uint8)
 
 
+def _signal_label(signal: ReductionSignalSnapshot) -> str:
+    if signal.kind == "redundant":
+        return f"r#{signal.token_id}"
+    return f"x{signal.variable}.{signal.occurrence}#{signal.token_id}"
+
+
+def _compose_reduction(
+    bundle: ExplainabilityBundle,
+    pixels_per_cell: int,
+    margin: int,
+) -> np.ndarray:
+    """Compose native gadget spans and signal routing over the built region."""
+    reduction = bundle.reduction
+    if reduction is None:
+        raise WangSquareRenderError(
+            "reduction view requires a wang-explain-manifest-v2 bundle"
+        )
+    ppc = _render_integer(
+        pixels_per_cell,
+        "pixels_per_cell",
+        minimum=MIN_PIXELS_PER_CELL,
+        maximum=MAX_PIXELS_PER_CELL,
+    )
+    checked_margin = _render_integer(
+        margin,
+        "margin",
+        minimum=0,
+        maximum=MAX_MARGIN,
+    )
+    region = bundle.region
+    left_labels = 104
+    right_labels = 150
+    grid_width = region.width * ppc
+    grid_height = region.height * ppc
+    side_width = max(_FORMULA_PANEL_WIDTH, _LEGEND_WIDTH)
+    grid_x = checked_margin + left_labels
+    grid_y = checked_margin + _HEADER_HEIGHT
+    side_x = grid_x + grid_width + right_labels + _PANEL_GAP
+    width = side_x + side_width + checked_margin
+    palette = _palette(bundle)
+    formula_height = 30 + len(_formula_lines(bundle.formula)) * 20
+    legend_rows = (len(palette) + 1) // 2
+    side_height = formula_height + 160 + legend_rows * 22
+    height = max(
+        grid_y + grid_height + checked_margin,
+        grid_y + side_height + checked_margin,
+    )
+    _check_canvas_limits(width, height)
+    canvas = Image.new("RGB", (width, height), EXPLAIN_PANEL_RGB)
+    draw = ImageDraw.Draw(canvas)
+    draw_explain_heading(
+        draw,
+        (checked_margin, checked_margin),
+        title="Yang-Zhang reduction - native construction provenance",
+        subtitle=(
+            "half-open gadget spans and the exact source-to-clause "
+            "permutation; no tile is assigned"
+        ),
+    )
+
+    inactive = square_inactive_tile(ppc)
+    for index, active in enumerate(region.active):
+        x = grid_x + (index % region.width) * ppc
+        y = grid_y + (index // region.width) * ppc
+        if not active:
+            canvas.paste(inactive, (x, y))
+            continue
+        sides = region.boundary[index]
+        if sides is None:
+            _fail("region", "active cell is missing its boundary entry")
+        canvas.paste(square_region_tile(ppc, sides, palette), (x, y))
+
+    font = explain_font(10)
+    for row, (source, target) in enumerate(
+        zip(reduction.source_signals, reduction.target_signals, strict=True)
+    ):
+        text_y = grid_y + row * ppc + max(1, (ppc - 12) // 2)
+        draw.text(
+            (checked_margin, text_y),
+            _signal_label(source),
+            font=font,
+            fill=EXPLAIN_TEXT_RGB,
+        )
+        if row % 4 < 3:
+            destination = f"c{row // 4}[{row % 4}]"
+        else:
+            destination = "gap"
+        draw.text(
+            (grid_x + grid_width + 8, text_y),
+            f"{destination} <- {_signal_label(target)}",
+            font=font,
+            fill=EXPLAIN_TEXT_RGB,
+        )
+
+    gadget_colors = {
+        "variable": (37, 99, 235),
+        "left_forward": (5, 150, 105),
+        "crossover": (217, 119, 6),
+        "right_forward": (8, 145, 178),
+        "clause": (220, 38, 38),
+    }
+    for gadget in reduction.gadgets:
+        color = gadget_colors[gadget.kind]
+        x0 = grid_x + gadget.x_begin * ppc
+        y0 = grid_y + gadget.y_begin * ppc
+        x1 = grid_x + gadget.x_end * ppc - 1
+        y1 = grid_y + gadget.y_end * ppc - 1
+        draw.rectangle((x0, y0, x1, y1), outline=color, width=3)
+        if gadget.kind == "crossover":
+            label = f"X{gadget.ordinal}:s{gadget.swap_row}"
+        elif gadget.kind == "variable":
+            label = f"v{gadget.ordinal}"
+        elif gadget.kind == "clause":
+            label = f"c{gadget.ordinal}"
+        elif gadget.kind == "left_forward":
+            label = "F-in"
+        else:
+            label = "F-out"
+        draw.text(
+            (x0 + 3, y0 + 2),
+            label,
+            font=font,
+            fill=color,
+            stroke_width=2,
+            stroke_fill=EXPLAIN_PANEL_RGB,
+        )
+
+    formula_end = _formula_panel(
+        canvas,
+        bundle,
+        (side_x, grid_y),
+        height - checked_margin,
+    )
+    legend_y = formula_end + 12
+    draw.text(
+        (side_x, legend_y),
+        "Native gadget spans",
+        font=explain_font(15),
+        fill=EXPLAIN_TEXT_RGB,
+    )
+    legend_y += 25
+    for kind in (
+        "variable",
+        "left_forward",
+        "crossover",
+        "right_forward",
+        "clause",
+    ):
+        draw.rectangle(
+            (side_x, legend_y + 2, side_x + 16, legend_y + 14),
+            outline=gadget_colors[kind],
+            width=3,
+        )
+        draw.text(
+            (side_x + 24, legend_y),
+            kind.replace("_", " "),
+            font=explain_font(12),
+            fill=EXPLAIN_TEXT_RGB,
+        )
+        legend_y += 20
+    draw_palette_legend(
+        draw,
+        palette,
+        (side_x, legend_y + 8),
+        columns=2,
+    )
+    return np.asarray(canvas, dtype=np.uint8)
+
+
 def render_pipeline_snapshot(
     input_path: str | Path,
     output_path: str | Path,
@@ -977,8 +1498,14 @@ def render_pipeline_snapshot(
             canvas = _compose_region_hex(bundle, pixels_per_cell, margin)
         else:
             canvas = _compose_region_square(bundle, pixels_per_cell, margin)
+    elif view == "reduction":
+        if hex_mode:
+            raise WangSquareRenderError(
+                "--hex is not meaningful for square reduction provenance"
+            )
+        canvas = _compose_reduction(bundle, pixels_per_cell, margin)
     else:
         raise WangSquareRenderError(
-            "snapshot view must be one of formula, tileset, or region"
+            "snapshot view must be one of formula, tileset, region, or reduction"
         )
     _save_png_atomic(canvas, output_path)

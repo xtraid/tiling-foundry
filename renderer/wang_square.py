@@ -945,7 +945,9 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "input",
-        help="path to wang-solution-v1 JSON or a wang-explain-manifest-v1 file",
+        help=(
+            "path to wang-solution-v1 JSON or a wang-explain-manifest-v1/v2 file"
+        ),
     )
     parser.add_argument("output", help="path to the output PNG")
     parser.add_argument(
@@ -975,7 +977,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--view",
-        choices=("solution", "formula", "tileset", "region"),
+        choices=("solution", "formula", "tileset", "region", "reduction"),
         default="solution",
         help="input stage to render (default: solution)",
     )

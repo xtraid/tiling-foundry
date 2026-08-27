@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:tiling-foundry:schema:wang-reduction-explanation-v1",
+  "title": "Tiling Foundry Yang-Zhang reduction explanation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "geometry",
+    "source_formula_sha256",
+    "region_sha256",
+    "variable_count",
+    "bounds",
+    "signals",
+    "gadgets"
+  ],
+  "properties": {
+    "schema": {"const": "wang-reduction-explanation-v1"},
+    "geometry": {"const": "square"},
+    "source_formula_sha256": {"$ref": "#/$defs/sha256"},
+    "region_sha256": {"$ref": "#/$defs/sha256"},
+    "variable_count": {"type": "integer", "minimum": 1},
+    "bounds": {"$ref": "#/$defs/bounds"},
+    "signals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "target"],
+      "properties": {
+        "source": {
+          "type": "array",
+          "minItems": 3,
+          "items": {"$ref": "#/$defs/signal"}
+        },
+        "target": {
+          "type": "array",
+          "minItems": 3,
+          "items": {"$ref": "#/$defs/signal"}
+        }
+      }
+    },
+    "gadgets": {
+      "type": "array",
+      "minItems": 4,
+      "items": {"$ref": "#/$defs/gadget"}
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "bounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x_begin", "x_end", "y_begin", "y_end"],
+      "properties": {
+        "x_begin": {"type": "integer", "minimum": 0},
+        "x_end": {"type": "integer", "minimum": 1},
+        "y_begin": {"type": "integer", "minimum": 0},
+        "y_end": {"type": "integer", "minimum": 1}
+      }
+    },
+    "signal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["row", "kind", "token_id", "variable", "occurrence"],
+      "properties": {
+        "row": {"type": "integer", "minimum": 0},
+        "kind": {"enum": ["variable", "redundant"]},
+        "token_id": {"type": "integer", "minimum": 0},
+        "variable": {"type": ["integer", "null"], "minimum": 0},
+        "occurrence": {"type": ["integer", "null"], "minimum": 0, "maximum": 2}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"kind": {"const": "variable"}}},
+          "then": {
+            "properties": {
+              "variable": {"type": "integer"},
+              "occurrence": {"type": "integer"}
+            }
+          },
+          "else": {
+            "properties": {
+              "variable": {"type": "null"},
+              "occurrence": {"type": "null"}
+            }
+          }
+        }
+      ]
+    },
+    "gadget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "ordinal", "bounds", "swap_row"],
+      "properties": {
+        "kind": {
+          "enum": [
+            "variable",
+            "left_forward",
+            "crossover",
+            "right_forward",
+            "clause"
+          ]
+        },
+        "ordinal": {"type": "integer", "minimum": 0},
+        "bounds": {"$ref": "#/$defs/bounds"},
+        "swap_row": {"type": ["integer", "null"], "minimum": 0}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"kind": {"const": "crossover"}}},
+          "then": {"properties": {"swap_row": {"type": "integer"}}},
+          "else": {"properties": {"swap_row": {"type": "null"}}}
+        }
+      ]
+    }
+  }
+}

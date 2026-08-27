@@ -6,7 +6,7 @@ description: Data flow, geometry, ownership, and tested invariants of the implem
 section: Yang–Zhang reduction
 document_kind: Implementation contract
 status: Current implementation
-updated: 2026-08-25
+updated: 2026-08-27
 nav_order: 20
 ---
 
@@ -16,8 +16,9 @@ nav_order: 20
 
 The builder consumes a validated canonical Cubic Monotone 1-in-3 SAT formula.
 It constructs the colored simply connected `Region` used by the fixed 23-tile
-Yang–Zhang reduction and returns the exact adjacent-swap trace in the same
-transactional result.
+Yang–Zhang reduction and returns the exact adjacent-swap trace. An opt-in
+result preserves immutable construction provenance with a separate explicit
+lifetime, without changing the standard reduction ABI.
 
 This is the implementation contract for builder input validation, routing,
 coordinates, active geometry, exposed boundary colors, ownership, and
@@ -49,7 +50,8 @@ transport, and rendering have separate contracts.
 
 ```text
 validated canonical Cubic Monotone 1-in-3 formula
-    -> colored simply connected Region + exact adjacent-swap trace
+    -> YangZhangReduction
+    -> optional YangZhangExplainedReduction
 ```
 
 The builder performs these stages:
@@ -61,7 +63,10 @@ The builder performs these stages:
 4. compute the layout dimensions;
 5. build the complete active mask;
 6. color every exposed unit edge of the region;
-7. return the region and the exact swap array transactionally.
+7. retain the exact source/target signals and emit the gadget spans from those
+   same dimensioned construction stages;
+8. return the compact standard result, or the standard result and explanation
+   together through the opt-in wrapper, transactionally.
 
 Responsibilities outside the builder are:
 
@@ -151,19 +156,35 @@ typedef struct {
     size_t swap_count;
 } YangZhangReduction;
 
+typedef struct {
+    YangZhangReduction reduction;
+    ReductionExplanation explanation;
+} YangZhangExplainedReduction;
+
 bool yang_zhang_build(
     const Cm13Formula *formula,
     YangZhangReduction *out_reduction
 );
 
+bool yang_zhang_build_explained(
+    const Cm13Formula *formula,
+    YangZhangExplainedReduction *out_reduction
+);
+
 void yang_zhang_reduction_destroy(YangZhangReduction *reduction);
+void yang_zhang_explained_reduction_destroy(
+    YangZhangExplainedReduction *reduction
+);
 ```
 
 The exact array returned by `yang_zhang_permutation_build()` is transferred
 into `YangZhangReduction`; it is not copied. It is retained as a diagnostic
 trace of the reduction and as possible input to later task-plan preprocessing.
-The reference solver and independent verifier receive only `Region` and do not
-use this logical trace.
+The opt-in wrapper retains the source and target arrays that were actually
+passed to that permutation build and records half-open variable, forwarder,
+crossover, and clause rectangles. The reference solver and independent
+verifier receive only `Region` and do not use this diagnostic provenance. Its
+full data contract is the [reduction explanation reference]({{ '/wang-reduction-explanation/' | relative_url }}).
 
 The output starts in the destroyed state:
 
@@ -171,10 +192,15 @@ The output starts in the destroyed state:
 YangZhangReduction reduction = {0};
 ```
 
-`yang_zhang_build()` requires a destroyed/zeroed output. On success, the caller
-owns both `region.cells` and `swaps`. On every failure, the output remains in
-the destroyed state. `yang_zhang_reduction_destroy()` accepts null, destroys
-the region, frees the swap array, and resets every field to zero/null.
+Both build entry points require a destroyed/zeroed output. The standard call
+owns only `region.cells` and `swaps`, retains its original public layout, frees
+temporary signals as soon as permutation construction finishes, and does not
+allocate provenance. The opt-in call uses a zeroed
+`YangZhangExplainedReduction`; its `explanation` owns the retained signals and
+gadget spans. On every failure, the selected output remains destroyed.
+`yang_zhang_reduction_destroy()` releases the compact result, while
+`yang_zhang_explained_reduction_destroy()` releases and zeros both parts of the
+opt-in wrapper. Both accept null.
 
 The builder is safe to call concurrently for immutable formulas when each call
 uses a distinct output object. It owns no global mutable state.
