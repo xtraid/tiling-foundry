@@ -4,11 +4,13 @@ import unittest
 from model.solver_trace import (
     DOMAIN_ALL,
     SOLVER_REFERENCE,
+    TRACE_BACKTRACK,
     TRACE_DECISION,
     TRACE_DOMAIN_REDUCTION,
     TRACE_INITIAL,
     TRACE_PROPAGATION,
     TRACE_REASON_DECISION,
+    TRACE_REASON_PROPAGATION,
     TRACE_RESULT,
     TRACE_ROOT,
     TRACE_SEARCH,
@@ -111,12 +113,119 @@ class SolverTraceModelTests(unittest.TestCase):
         with self.assertRaises(FrozenInstanceError):
             trace.width = 2  # type: ignore[misc]
 
-    def test_rejects_delta_that_does_not_match_replay_state(self) -> None:
+    def test_rejects_domains_that_do_not_match_replay_state(self) -> None:
         trace = _trace()
-        invalid = replace(trace.events[2], old_domain=3)
+        invalid_decision = replace(trace.events[1], old_domain=3)
+        invalid_reduction = replace(trace.events[2], old_domain=3)
 
         with self.assertRaisesRegex(ValueError, "old_domain"):
-            replace(trace, events=(*trace.events[:2], invalid, *trace.events[3:]))
+            replace(
+                trace,
+                events=(
+                    trace.events[0],
+                    invalid_decision,
+                    invalid_reduction,
+                    *trace.events[3:],
+                ),
+            )
+
+    def test_rejects_decision_that_disagrees_with_its_reduction(self) -> None:
+        trace = _trace()
+        invalid = replace(trace.events[1], new_domain=2)
+
+        with self.assertRaisesRegex(ValueError, "following domain reduction"):
+            replace(trace, events=(trace.events[0], invalid, *trace.events[2:]))
+
+    def test_rejects_backtrack_below_initial_change_floor(self) -> None:
+        events = (
+            SolverTraceEvent(
+                0, TRACE_ROOT, TRACE_INITIAL, None, 0, None, 0, None, None, None
+            ),
+            SolverTraceEvent(
+                1,
+                TRACE_DOMAIN_REDUCTION,
+                TRACE_INITIAL,
+                TRACE_REASON_PROPAGATION,
+                0,
+                0,
+                1,
+                DOMAIN_ALL,
+                3,
+                None,
+            ),
+            SolverTraceEvent(
+                2,
+                TRACE_PROPAGATION,
+                TRACE_INITIAL,
+                None,
+                0,
+                None,
+                1,
+                None,
+                None,
+                None,
+            ),
+            SolverTraceEvent(
+                3, TRACE_DECISION, TRACE_SEARCH, None, 1, 0, 1, 3, 1, None
+            ),
+            SolverTraceEvent(
+                4,
+                TRACE_DOMAIN_REDUCTION,
+                TRACE_SEARCH,
+                TRACE_REASON_DECISION,
+                1,
+                0,
+                2,
+                3,
+                1,
+                None,
+            ),
+            SolverTraceEvent(
+                5, TRACE_BACKTRACK, TRACE_SEARCH, None, 0, 0, 1, None, None, None
+            ),
+            SolverTraceEvent(
+                6,
+                TRACE_RESULT,
+                None,
+                None,
+                0,
+                None,
+                1,
+                None,
+                None,
+                TilingSolveStatus.SAT,
+            ),
+        )
+        trace = SolverTrace(
+            solver=SOLVER_REFERENCE,
+            status=TilingSolveStatus.SAT,
+            width=1,
+            height=1,
+            initial_domains=(DOMAIN_ALL,),
+            events=events,
+            observed_event_count=len(events),
+            event_capacity=len(events),
+            truncated=False,
+            checkpoints=(),
+            checkpoint_interval=0,
+            checkpoint_capacity=0,
+            checkpoints_truncated=False,
+        )
+        self.assertEqual(replay_solver_trace(trace)[-1], (3,))
+
+        invalid = replace(events[5], change_mark=0)
+        with self.assertRaisesRegex(ValueError, "backtrack change_mark"):
+            replace(trace, events=(*events[:5], invalid, events[6]))
+
+    def test_rejects_every_out_of_range_non_null_cell_before_dispatch(self) -> None:
+        trace = _trace()
+        for index in (1, 3):
+            with self.subTest(kind=trace.events[index].kind):
+                invalid = replace(trace.events[index], cell=trace.width * trace.height)
+                events = list(trace.events)
+                events[index] = invalid
+                with self.assertRaisesRegex(ValueError, "cell lies outside"):
+                    replace(trace, events=tuple(events))
 
     def test_rejects_checkpoint_that_reconstructs_another_state(self) -> None:
         trace = _trace()

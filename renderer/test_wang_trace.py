@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import hashlib
 import json
 from pathlib import Path
@@ -11,7 +12,7 @@ from PIL import Image
 import pytest
 
 from wang_hex_port import WangSquareRenderError
-from wang_trace import load_trace_bundle
+from wang_trace import TraceEvent, TraceSnapshot, load_trace_bundle, replay_trace
 from wang_trace_render import render_trace_assets
 
 
@@ -28,6 +29,59 @@ def _tree_bytes(directory: Path) -> dict[str, bytes]:
         for path in directory.rglob("*")
         if path.is_file()
     }
+
+
+def _rewrite_artifact(copied, manifest, name, document):
+    encoded = (json.dumps(document, ensure_ascii=False, indent=2) + "\n").encode(
+        "utf-8"
+    )
+    digest = hashlib.sha256(encoded).hexdigest()
+    artifact_name = f"{name}-{digest}.json"
+    (copied / artifact_name).write_bytes(encoded)
+    manifest["artifacts"][name]["path"] = artifact_name
+    manifest["artifacts"][name]["sha256"] = digest
+    return digest
+
+
+def _small_trace():
+    events = (
+        TraceEvent(0, "root", "initial", None, 0, None, 0, None, None, None),
+        TraceEvent(
+            1,
+            "domain_reduction",
+            "initial",
+            "propagation",
+            0,
+            0,
+            1,
+            (1 << 23) - 1,
+            3,
+            None,
+        ),
+        TraceEvent(2, "propagation", "initial", None, 0, None, 1, None, None, None),
+        TraceEvent(3, "decision", "search", None, 1, 0, 1, 3, 1, None),
+        TraceEvent(4, "domain_reduction", "search", "decision", 1, 0, 2, 3, 1, None),
+        TraceEvent(5, "backtrack", "search", None, 0, 0, 1, None, None, None),
+        TraceEvent(6, "result", None, None, 0, None, 1, None, None, "sat"),
+    )
+    return TraceSnapshot(
+        solver="reference",
+        status="sat",
+        source_formula_sha256="1" * 64,
+        region_sha256="2" * 64,
+        solution_sha256="3" * 64,
+        width=1,
+        height=1,
+        event_capacity=len(events),
+        observed_event_count=len(events),
+        truncated=False,
+        checkpoint_interval=0,
+        checkpoint_capacity=0,
+        checkpoints_truncated=False,
+        initial_domains=((1 << 23) - 1,),
+        events=events,
+        checkpoints=(),
+    )
 
 
 def test_loads_and_replays_hash_bound_trace_without_solver_imports():
@@ -90,6 +144,91 @@ def test_rejects_semantic_delta_tampering_even_with_updated_hash(tmp_path):
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
     with pytest.raises(WangSquareRenderError, match="old_domain"):
+        load_trace_bundle(manifest_path)
+
+
+def test_replay_rejects_false_decisions_backtracks_and_cells():
+    trace = _small_trace()
+    assert replay_trace(trace)[-1] == (3,)
+
+    events = list(trace.events)
+    events[3] = replace(events[3], new_domain=2)
+    with pytest.raises(WangSquareRenderError, match="following domain reduction"):
+        replay_trace(replace(trace, events=tuple(events)))
+
+    events = list(trace.events)
+    events[5] = replace(events[5], change_mark=0)
+    with pytest.raises(WangSquareRenderError, match="backtrack mark"):
+        replay_trace(replace(trace, events=tuple(events)))
+
+    for index in (3, 2):
+        events = list(trace.events)
+        events[index] = replace(events[index], cell=1)
+        with pytest.raises(WangSquareRenderError, match="outside layout"):
+            replay_trace(replace(trace, events=tuple(events)))
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    (
+        ("tile_table", "tile_table"),
+        ("active", "active map"),
+        ("boundary", "solution.*boundary"),
+        ("bounds", "solution.*bounds"),
+    ),
+)
+def test_rejects_solution_identity_drift(tmp_path, mutation, message):
+    copied = tmp_path / "bundle"
+    shutil.copytree(FIXTURE_DIRECTORY, copied)
+    manifest_path = copied / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    solution_reference = manifest["artifacts"]["solution"]
+    solution = json.loads(
+        (copied / solution_reference["path"]).read_text(encoding="utf-8")
+    )
+    if mutation == "tile_table":
+        for tile in solution["tile_table"]:
+            for direction in ("N", "E", "S", "W"):
+                tile["edges"][direction] += 100
+        for sides in solution["boundary"]:
+            if sides is None:
+                continue
+            for direction in ("N", "E", "S", "W"):
+                if sides[direction] is not None:
+                    sides[direction] += 100
+    elif mutation == "active":
+        index = next(
+            index
+            for index, tile_id in enumerate(solution["cells"])
+            if tile_id is not None
+        )
+        solution["cells"][index] = None
+        solution["boundary"][index] = None
+    elif mutation == "boundary":
+        sides = next(
+            sides
+            for sides in solution["boundary"]
+            if sides is not None
+            and any(value is not None for value in sides.values())
+        )
+        direction = next(
+            direction
+            for direction, value in sides.items()
+            if value is not None
+        )
+        sides[direction] = None
+    else:
+        for coordinate in ("min_x_inclusive", "max_x_inclusive"):
+            solution["bounds"][coordinate] += 1
+
+    solution_digest = _rewrite_artifact(copied, manifest, "solution", solution)
+    trace_reference = manifest["artifacts"]["trace"]
+    trace = json.loads((copied / trace_reference["path"]).read_text(encoding="utf-8"))
+    trace["solution_sha256"] = solution_digest
+    _rewrite_artifact(copied, manifest, "trace", trace)
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(WangSquareRenderError, match=message):
         load_trace_bundle(manifest_path)
 
 

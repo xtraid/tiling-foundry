@@ -422,6 +422,7 @@ def replay_trace(trace: TraceSnapshot) -> tuple[tuple[int, ...], ...]:
 
     domains = list(trace.initial_domains)
     changes: list[tuple[int, int]] = []
+    search_change_floor: int | None = None
     states: list[tuple[int, ...]] = []
     checkpoints = {item.event_sequence: item for item in trace.checkpoints}
     if len(checkpoints) != len(trace.checkpoints):
@@ -453,6 +454,13 @@ def replay_trace(trace: TraceSnapshot) -> tuple[tuple[int, ...], ...]:
         _fail("trace $.capacity.checkpoints_truncated", "is inconsistent")
 
     for index, event in enumerate(trace.events):
+        if event.cell is not None and event.cell >= area:
+            _fail(f"trace $.events[{index}].cell", "lies outside layout")
+        if event.phase == "search":
+            if search_change_floor is None:
+                search_change_floor = len(changes)
+        elif event.phase == "initial" and search_change_floor is not None:
+            _fail(f"trace $.events[{index}].phase", "returns to initial after search")
         if event.kind != "result" and event.status is not None:
             _fail(f"trace $.events[{index}].status", "is reserved for result")
         if event.kind != "domain_reduction" and event.reason is not None:
@@ -469,7 +477,7 @@ def replay_trace(trace: TraceSnapshot) -> tuple[tuple[int, ...], ...]:
         elif event.kind == "domain_reduction":
             if event.phase not in _PHASES or event.reason not in _REASONS:
                 _fail(f"trace $.events[{index}]", "reduction needs phase and reason")
-            if event.cell is None or event.cell >= area:
+            if event.cell is None:
                 _fail(f"trace $.events[{index}].cell", "lies outside layout")
             if event.old_domain is None or event.new_domain is None:
                 _fail(f"trace $.events[{index}]", "reduction needs both domains")
@@ -482,7 +490,11 @@ def replay_trace(trace: TraceSnapshot) -> tuple[tuple[int, ...], ...]:
             if event.change_mark != len(changes):
                 _fail(f"trace $.events[{index}].change_mark", "is inconsistent")
         elif event.kind == "backtrack":
-            if event.phase != "search" or event.change_mark > len(changes):
+            if (
+                event.phase != "search"
+                or search_change_floor is None
+                or not search_change_floor <= event.change_mark <= len(changes)
+            ):
                 _fail(f"trace $.events[{index}]", "backtrack mark is inconsistent")
             while len(changes) > event.change_mark:
                 cell, previous = changes.pop()
@@ -503,6 +515,20 @@ def replay_trace(trace: TraceSnapshot) -> tuple[tuple[int, ...], ...]:
                 _fail(f"trace $.events[{index}].new_domain", "is not a singleton")
             if event.old_domain is None or event.new_domain & ~event.old_domain:
                 _fail(f"trace $.events[{index}]", "decision lies outside old domain")
+            next_event = trace.events[index + 1]
+            if next_event.sequence == event.sequence + 1 and not (
+                next_event.kind == "domain_reduction"
+                and next_event.phase == event.phase
+                and next_event.reason == "decision"
+                and next_event.depth == event.depth
+                and next_event.cell == event.cell
+                and next_event.old_domain == event.old_domain
+                and next_event.new_domain == event.new_domain
+            ):
+                _fail(
+                    f"trace $.events[{index}]",
+                    "decision does not match its following domain reduction",
+                )
         elif event.kind == "propagation":
             if event.phase not in _PHASES:
                 _fail(f"trace $.events[{index}].phase", "is required")
@@ -648,8 +674,24 @@ def load_trace_bundle(path: str | Path) -> TraceBundle:
         solution = _project_wang_presentation(documents["solution"])
         if trace.solution_sha256 != digests["solution"]:
             _fail("trace $.solution_sha256", "does not match solution")
-        if (solution.width, solution.height) != (trace.width, trace.height):
-            _fail("solution $.bounds", "does not match trace layout")
+        if (
+            solution.min_x,
+            solution.min_y,
+            solution.max_x,
+            solution.max_y,
+        ) != (
+            region.min_x,
+            region.min_y,
+            region.max_x,
+            region.max_y,
+        ):
+            _fail("solution $.bounds", "does not match referenced region")
+        if solution.tile_edges != tileset.tile_edges:
+            _fail("solution $.tile_table", "does not match referenced tileset")
+        if tuple(cell is not None for cell in solution.cells) != region.active:
+            _fail("solution $.cells", "active map does not match referenced region")
+        if solution.boundary != region.boundary:
+            _fail("solution $.boundary", "does not match referenced region")
         if not trace.truncated:
             final_domains = replay_trace(trace)[-1]
             expected_domains = tuple(

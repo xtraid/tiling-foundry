@@ -23,6 +23,24 @@ INSTANCE = ROOT / "tests/instances/pipeline_sat.cm13"
 COMMITTED = ROOT / "tests/fixtures/pipeline_sat_solver_trace"
 
 
+def _rewrite_artifact(
+    manifest_path: Path,
+    manifest: dict[str, object],
+    name: str,
+    document: dict[str, object],
+) -> str:
+    encoded = (json.dumps(document, ensure_ascii=False, indent=2) + "\n").encode(
+        "utf-8"
+    )
+    digest = hashlib.sha256(encoded).hexdigest()
+    artifact_name = f"{name}-{digest}.json"
+    (manifest_path.parent / artifact_name).write_bytes(encoded)
+    reference = manifest["artifacts"][name]
+    reference["path"] = artifact_name
+    reference["sha256"] = digest
+    return digest
+
+
 class SolverTraceSnapshotTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -59,6 +77,39 @@ class SolverTraceSnapshotTests(unittest.TestCase):
         event["old_domain"] ^= 1
         with self.assertRaisesRegex(PipelineSnapshotError, "old_domain"):
             validate_solver_trace_snapshot(corrupted)
+
+    def test_standalone_validator_binds_solution_digest_to_status(self) -> None:
+        document = build_solver_trace_snapshot(
+            self.values[-1],
+            source_formula_sha256="1" * 64,
+            region_sha256="2" * 64,
+            solution_sha256="3" * 64,
+        )
+        sat_without_solution = copy.deepcopy(document)
+        sat_without_solution["solution_sha256"] = None
+        with self.assertRaisesRegex(PipelineSnapshotError, "present exactly for SAT"):
+            validate_solver_trace_snapshot(sat_without_solution)
+
+        unsat_with_solution = copy.deepcopy(document)
+        unsat_with_solution["status"] = "unsat"
+        with self.assertRaisesRegex(PipelineSnapshotError, "present exactly for SAT"):
+            validate_solver_trace_snapshot(unsat_with_solution)
+
+    def test_standalone_validator_normalizes_out_of_range_cells(self) -> None:
+        document = build_solver_trace_snapshot(
+            self.values[-1],
+            source_formula_sha256="1" * 64,
+            region_sha256="2" * 64,
+            solution_sha256="3" * 64,
+        )
+        area = document["layout"]["width"] * document["layout"]["height"]
+        for kind in ("decision", "propagation"):
+            with self.subTest(kind=kind):
+                invalid = copy.deepcopy(document)
+                event = next(item for item in invalid["events"] if item["kind"] == kind)
+                event["cell"] = area
+                with self.assertRaisesRegex(PipelineSnapshotError, "cell lies outside"):
+                    validate_solver_trace_snapshot(invalid)
 
     def test_dump_is_deterministic_hash_bound_and_cross_checked(self) -> None:
         generated: list[dict[str, bytes]] = []
@@ -142,6 +193,83 @@ class SolverTraceSnapshotTests(unittest.TestCase):
 
             with self.assertRaisesRegex(PipelineSnapshotError, "inactive cell"):
                 load_solver_trace_bundle(manifest_path)
+
+    def test_loader_rejects_solution_identity_drift(self) -> None:
+        for mutation, message in (
+            ("tile_table", "tile_table"),
+            ("active", "active map"),
+            ("boundary", "solution.boundary"),
+            ("bounds", "solution.bounds"),
+        ):
+            with (
+                self.subTest(mutation=mutation),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                manifest_path = dump_solver_trace_bundle(
+                    Path(directory) / "manifest.json",
+                    INSTANCE,
+                    *self.values,
+                )
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                solution_reference = manifest["artifacts"]["solution"]
+                solution = json.loads(
+                    (manifest_path.parent / solution_reference["path"]).read_text(
+                        encoding="utf-8"
+                    )
+                )
+                if mutation == "tile_table":
+                    for tile in solution["tile_table"]:
+                        for direction in ("N", "E", "S", "W"):
+                            tile["edges"][direction] += 100
+                    for sides in solution["boundary"]:
+                        if sides is None:
+                            continue
+                        for direction in ("N", "E", "S", "W"):
+                            if sides[direction] is not None:
+                                sides[direction] += 100
+                elif mutation == "active":
+                    index = next(
+                        index
+                        for index, tile_id in enumerate(solution["cells"])
+                        if tile_id is not None
+                    )
+                    solution["cells"][index] = None
+                    solution["boundary"][index] = None
+                elif mutation == "boundary":
+                    sides = next(
+                        sides
+                        for sides in solution["boundary"]
+                        if sides is not None
+                        and any(value is not None for value in sides.values())
+                    )
+                    direction = next(
+                        direction
+                        for direction, value in sides.items()
+                        if value is not None
+                    )
+                    sides[direction] = None
+                else:
+                    for coordinate in (
+                        "min_x_inclusive",
+                        "max_x_inclusive",
+                    ):
+                        solution["bounds"][coordinate] += 1
+
+                solution_digest = _rewrite_artifact(
+                    manifest_path, manifest, "solution", solution
+                )
+                trace_reference = manifest["artifacts"]["trace"]
+                trace = json.loads(
+                    (manifest_path.parent / trace_reference["path"]).read_text(
+                        encoding="utf-8"
+                    )
+                )
+                trace["solution_sha256"] = solution_digest
+                _rewrite_artifact(manifest_path, manifest, "trace", trace)
+                manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+                with self.assertRaisesRegex(PipelineSnapshotError, message):
+                    load_solver_trace_bundle(manifest_path)
 
     def test_publishes_closed_draft_2020_12_schemas(self) -> None:
         for contract in (TRACE_SCHEMA, TRACE_MANIFEST_SCHEMA):

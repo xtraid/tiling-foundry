@@ -221,12 +221,20 @@ def replay_solver_trace(
     """
     domains = list(trace.initial_domains)
     changes: list[tuple[int, int]] = []
+    search_change_floor: int | None = None
     states: list[tuple[int, ...]] = []
     checkpoints = {item.event_sequence: item for item in trace.checkpoints}
     if len(checkpoints) != len(trace.checkpoints):
         raise ValueError("checkpoint event sequences must be unique")
 
     for index, event in enumerate(trace.events):
+        if event.cell is not None and event.cell >= len(domains):
+            raise ValueError("trace event cell lies outside the trace")
+        if event.phase == TRACE_SEARCH:
+            if search_change_floor is None:
+                search_change_floor = len(changes)
+        elif event.phase == TRACE_INITIAL and search_change_floor is not None:
+            raise ValueError("initial phase cannot follow search")
         if event.kind != TRACE_RESULT and event.status is not None:
             raise ValueError("only the result event may publish a status")
         if event.kind != TRACE_DOMAIN_REDUCTION and event.reason is not None:
@@ -243,7 +251,7 @@ def replay_solver_trace(
         elif event.kind == TRACE_DOMAIN_REDUCTION:
             if event.phase not in TRACE_PHASES or event.reason not in TRACE_REASONS:
                 raise ValueError("domain reduction requires phase and reason")
-            if event.cell is None or event.cell >= len(domains):
+            if event.cell is None:
                 raise ValueError("domain reduction cell lies outside the trace")
             if event.old_domain is None or event.new_domain is None:
                 raise ValueError("domain reduction requires old and new domains")
@@ -258,7 +266,11 @@ def replay_solver_trace(
             if event.change_mark != len(changes):
                 raise ValueError("domain reduction change_mark is inconsistent")
         elif event.kind == TRACE_BACKTRACK:
-            if event.phase != TRACE_SEARCH or event.change_mark > len(changes):
+            if (
+                event.phase != TRACE_SEARCH
+                or search_change_floor is None
+                or not search_change_floor <= event.change_mark <= len(changes)
+            ):
                 raise ValueError("backtrack change_mark is inconsistent")
             while len(changes) > event.change_mark:
                 cell, old_domain = changes.pop()
@@ -282,6 +294,19 @@ def replay_solver_trace(
                 raise ValueError("decision new_domain must be a singleton")
             if event.old_domain is None or event.new_domain & ~event.old_domain:
                 raise ValueError("decision must select from its old domain")
+            next_event = trace.events[index + 1]
+            if next_event.sequence == event.sequence + 1 and not (
+                next_event.kind == TRACE_DOMAIN_REDUCTION
+                and next_event.phase == event.phase
+                and next_event.reason == TRACE_REASON_DECISION
+                and next_event.depth == event.depth
+                and next_event.cell == event.cell
+                and next_event.old_domain == event.old_domain
+                and next_event.new_domain == event.new_domain
+            ):
+                raise ValueError(
+                    "decision does not match its following domain reduction"
+                )
         elif event.kind == TRACE_PROPAGATION:
             if event.phase not in TRACE_PHASES:
                 raise ValueError("propagation requires a phase")
