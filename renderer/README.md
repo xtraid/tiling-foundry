@@ -149,6 +149,14 @@ uv run --locked python wang_trace_render.py \
   output/solver-trace
 ```
 
+The static projection of the same v3 manifest can also drive the existing
+formula, tileset, region, and reduction views. It verifies every reference by
+schema and hash but deliberately does not replay trace or solution content;
+the trace consumer remains their semantic validator. This lets the root opt-in
+dossier generator reuse one trace bundle without synthesizing a second v1/v2
+manifest. The renderer still imports neither native code nor Z3, and it does
+not own LaTeX or report metadata.
+
 Z3 uses a separate `encoding-order` summary. The renderer shows the explicit
 project-owned row-major constraint construction and returned model, never an
 internal Z3 search or debug trace:
@@ -360,9 +368,9 @@ Raises `RenderingException` on pipeline errors.
 uv run --locked pytest -q
 ```
 
-The complete isolated suite has 253 tests: the 144 preserved legacy tests
-below, 45 Wang square tests, 24 square-to-hex/hex-raster tests, 25 static
-snapshot/explainability tests, and 15 trace/Z3/algorithm-animation tests.
+The complete isolated suite has 262 tests: the 144 preserved legacy tests
+below, 45 Wang square tests, 24 square-to-hex/hex-raster tests, 29 static
+snapshot/explainability tests, and 20 trace/Z3/algorithm-animation tests.
 To run only the original upstream suite:
 
 ```bash

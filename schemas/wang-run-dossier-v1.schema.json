@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xtraid.github.io/tiling-foundry/schemas/wang-run-dossier-v1.schema.json",
+  "title": "Tiling Foundry observed-run dossier v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "case", "source", "environment", "solver", "timings", "artifacts"],
+  "properties": {
+    "schema": {"const": "wang-run-dossier-v1"},
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "classification", "description"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
+        "title": {"type": "string", "minLength": 1},
+        "classification": {
+          "enum": [
+            "sat-end-to-end",
+            "unsat-root-conflict",
+            "unsat-propagation-contradiction",
+            "unsat-non-superficial-search"
+          ]
+        },
+        "description": {"type": "string", "minLength": 1}
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["captured_at_utc", "platform", "python", "git_commit"],
+      "properties": {
+        "captured_at_utc": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
+        "platform": {"type": "string", "minLength": 1},
+        "python": {"type": "string", "minLength": 1},
+        "git_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+      }
+    },
+    "solver": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "engine",
+        "semantics",
+        "status",
+        "expected_status",
+        "initial_domain_overrides",
+        "trace",
+        "replay"
+      ],
+      "properties": {
+        "engine": {"enum": ["reference", "optimized"]},
+        "semantics": {"const": "observed"},
+        "status": {"enum": ["sat", "unsat"]},
+        "expected_status": {"enum": ["sat", "unsat"]},
+        "initial_domain_overrides": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["cell", "domain"],
+            "properties": {
+              "cell": {"type": "integer", "minimum": 0},
+              "domain": {"type": "integer", "minimum": 0, "maximum": 8388607}
+            }
+          }
+        },
+        "trace": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "event_capacity",
+            "observed_event_count",
+            "truncated",
+            "checkpoint_interval",
+            "checkpoint_capacity",
+            "checkpoint_count",
+            "event_counts",
+            "max_depth"
+          ],
+          "properties": {
+            "event_capacity": {"type": "integer", "minimum": 2},
+            "observed_event_count": {"type": "integer", "minimum": 2},
+            "truncated": {"const": false},
+            "checkpoint_interval": {"type": "integer", "minimum": 0},
+            "checkpoint_capacity": {"type": "integer", "minimum": 0},
+            "checkpoint_count": {"type": "integer", "minimum": 0},
+            "event_counts": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["root", "propagation", "decision", "domain_reduction", "conflict", "backtrack", "result"],
+              "properties": {
+                "root": {"type": "integer", "minimum": 0},
+                "propagation": {"type": "integer", "minimum": 0},
+                "decision": {"type": "integer", "minimum": 0},
+                "domain_reduction": {"type": "integer", "minimum": 0},
+                "conflict": {"type": "integer", "minimum": 0},
+                "backtrack": {"type": "integer", "minimum": 0},
+                "result": {"type": "integer", "minimum": 0}
+              }
+            },
+            "max_depth": {"type": "integer", "minimum": 0}
+          }
+        },
+        "replay": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["trace_scope", "frame_scope", "unsat_certificate"],
+          "properties": {
+            "trace_scope": {"const": "complete"},
+            "frame_scope": {"const": "selected"},
+            "unsat_certificate": {"const": false}
+          }
+        }
+      }
+    },
+    "timings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["clock", "identity", "stages"],
+      "properties": {
+        "clock": {"const": "monotonic-perf-counter-ns"},
+        "identity": {"const": "environment-specific-observation"},
+        "stages": {
+          "type": "array",
+          "minItems": 7,
+          "maxItems": 7,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "performed", "elapsed_ns"],
+            "properties": {
+              "name": {
+                "enum": ["parse", "region_build", "encoding", "solve", "verify", "export", "render"]
+              },
+              "performed": {"type": "boolean"},
+              "elapsed_ns": {"type": ["integer", "null"], "minimum": 0}
+            }
+          }
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "minProperties": 8,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256", "media_type", "role"],
+        "properties": {
+          "path": {"type": "string", "pattern": "^assets/(?!.*(?:^|/)\\.\\.?/).+"},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "media_type": {"enum": ["application/json", "image/png", "image/gif"]},
+          "role": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}

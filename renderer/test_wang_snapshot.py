@@ -50,6 +50,7 @@ REDUCTION_SNAPSHOT_DIRECTORY = (
     ROOT / "tests/fixtures/pipeline_sat_reduction_explain"
 )
 REDUCTION_MANIFEST = REDUCTION_SNAPSHOT_DIRECTORY / "manifest.json"
+TRACE_MANIFEST = ROOT / "tests/fixtures/pipeline_sat_solver_trace/manifest.json"
 REDUCTION_GOLDEN = RENDERER_DIR / "test_data/pipeline_sat_reduction.png"
 GOLDENS = {
     ("formula", False): RENDERER_DIR / "test_data/pipeline_sat_formula.png",
@@ -244,6 +245,32 @@ def test_reduction_view_matches_native_provenance_golden(tmp_path):
     assert output.read_bytes() == REDUCTION_GOLDEN.read_bytes()
     with Image.open(output) as image:
         assert image.mode == "RGB"
+
+
+@pytest.mark.parametrize(
+    ("view", "golden"),
+    (
+        ("formula", GOLDENS[("formula", False)]),
+        ("region", GOLDENS[("region", False)]),
+        ("reduction", REDUCTION_GOLDEN),
+    ),
+)
+def test_v3_trace_manifest_reuses_static_snapshot_views(tmp_path, view, golden):
+    output = tmp_path / f"{view}.png"
+
+    render_pipeline_snapshot(TRACE_MANIFEST, output, view=view)
+
+    assert output.read_bytes() == golden.read_bytes()
+    assert "native._lib" not in sys.modules
+
+
+def test_v3_static_projection_does_not_import_or_replay_trace_consumer():
+    sys.modules.pop("wang_trace", None)
+
+    bundle = load_explainability_bundle(TRACE_MANIFEST)
+
+    assert bundle.reduction is not None
+    assert "wang_trace" not in sys.modules
 
 
 @pytest.mark.parametrize("hex_mode", (False, True))

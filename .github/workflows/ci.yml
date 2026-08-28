@@ -74,6 +74,14 @@ jobs:
         working-directory: renderer
         run: uv run --locked pytest -q
 
+      - name: Install isolated report compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends texlive-latex-base
+
+      - name: Compile opt-in run dossier without shell escape
+        run: make run-dossier-smoke
+
   strict-compilers:
     runs-on: ubuntu-latest
 

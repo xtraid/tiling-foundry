@@ -1,0 +1,16 @@
+{
+  "schema": "wang-run-case-v1",
+  "id": "sat-end-to-end",
+  "title": "SAT formula-to-witness observed run",
+  "classification": "sat-end-to-end",
+  "description": "A complete optimized native run from a parsed CM13 formula through reduction, verified square witness, checked hex presentation, and selected replay frames.",
+  "source": "tests/instances/pipeline_sat.cm13",
+  "solver": "optimized",
+  "expected_status": "sat",
+  "trace": {
+    "event_capacity": 8192,
+    "checkpoint_interval": 128,
+    "checkpoint_capacity": 64
+  },
+  "initial_domain_overrides": []
+}

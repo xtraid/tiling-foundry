@@ -1,0 +1,21 @@
+{
+  "schema": "wang-run-case-v1",
+  "id": "unsat-propagation",
+  "title": "UNSAT contradiction during initial propagation",
+  "classification": "unsat-propagation-contradiction",
+  "description": "An observed constrained solve whose locally valid singleton on active cell zero propagates to an empty domain before search begins.",
+  "source": "tests/instances/pipeline_sat.cm13",
+  "solver": "optimized",
+  "expected_status": "unsat",
+  "trace": {
+    "event_capacity": 8192,
+    "checkpoint_interval": 128,
+    "checkpoint_capacity": 64
+  },
+  "initial_domain_overrides": [
+    {
+      "cell": 0,
+      "domain": 8
+    }
+  ]
+}

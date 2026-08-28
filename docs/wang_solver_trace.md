@@ -161,3 +161,8 @@ Z3 uses a different boundary. Its versioned summaries are explicitly labeled
 `encoding-order`, fix version, seed and thread count, and record the
 project-defined constraint order, returned result/model, and stable
 project-owned counts. They do not expose or infer Z3's internal search order.
+
+The [observed-run dossier index]({{ '/run-dossiers/' | relative_url }}) lists
+the versioned SAT and UNSAT cases that reuse this trace and rendering chain in
+an opt-in LaTeX/PDF report. It adds no second replay path and does not turn
+UNSAT diagnostics into a proof certificate.
