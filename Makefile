@@ -89,7 +89,7 @@ OPENMP_LIBRARY := $(LIB_DIR)/libwang_openmp.a
 	strict-check sanitizer-check analyzer-check valgrind-check \
 	cachegrind-check benchmark benchmark-smoke benchmark-compare \
 	benchmark-compare-smoke coverage coverage-c coverage-python \
-	parser-fuzz parser-fuzz-smoke parser-fuzz-corpus clean
+	parser-fuzz parser-fuzz-smoke parser-fuzz-corpus run-dossier-smoke clean
 
 all: serial shared
 
@@ -166,6 +166,16 @@ pages-check:
 
 generated-pages-check:
 	$(PYTHON) tools/check_generated_pages.py $(PAGES_BUILD_DIR)
+
+run-dossier-smoke: shared
+	$(RM) -r $(BUILD_DIR)/run-dossier-smoke
+	$(UV) run --frozen python tools/generate_run_dossier.py \
+		examples/run-cases/unsat-root-conflict.json \
+		$(BUILD_DIR)/run-dossier-smoke \
+		--tex-engine pdflatex --max-frames 8
+	test -s $(BUILD_DIR)/run-dossier-smoke/report.tex
+	test -s $(BUILD_DIR)/run-dossier-smoke/report.pdf
+	test -s $(BUILD_DIR)/run-dossier-smoke/run.json
 
 c-check: serial $(C_TEST_BINS)
 	@set -e; \

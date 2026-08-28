@@ -76,6 +76,7 @@ solving remains future work.
 | Reduction construction provenance | Implemented as a separate opt-in native-owned result with exact signal orders, swap-bound gadget spans, manifest v2, and a square overlay view; the compact standard ABI does not allocate it |
 | Native solver event trace | Implemented as separate opt-in reference/optimized entry points with bounded observed events, full initial state, checkpoints, manifest v3, independent offline replay, and deterministic PNG/GIF views |
 | Reproducible Z3 summaries | Implemented for fixed seed/thread settings and explicit Boolean/Wang encoding order, result/model, and stable project-owned counts; no internal Z3 trace claim |
+| Observed-run dossier | Implemented as one opt-in generator of closed raw run metadata, fixed LaTeX, PDF, and reused trace/square/hex assets; four versioned SAT/UNSAT case definitions cover distinct execution shapes |
 | Native C JSON layer | Not implemented; `src/io/json.c` is a placeholder |
 | `TaskPlan` and native OpenMP solver | Not implemented; only the build scaffold exists |
 
@@ -157,10 +158,8 @@ diagram.
 Planned work remains separated into independently reviewed changes. The new
 priority is explainability across the deterministic pipeline:
 
-1. publish a compact formula-to-final-image gallery and optional technical
-   report from versioned examples;
-2. resume serial MRV and hard-UNSAT evidence;
-3. define `TaskPlan` only after the serial evidence, then implement and measure
+1. resume serial MRV and hard-UNSAT evidence;
+2. define `TaskPlan` only after the serial evidence, then implement and measure
    real OpenMP execution.
 
 The implementation follows a deliberately small design rule: each datum has one
@@ -184,7 +183,7 @@ make check
 
 The imported renderer remains a separate locked Python project. Its Pillow and
 NumPy dependencies are not installed by the root project or exercised by
-`make check`. Run its 253-test combined suite independently:
+`make check`. Run its 262-test combined suite independently:
 
 ```sh
 cd renderer
@@ -227,6 +226,9 @@ invariants, and the square-only construction overlay.
 The [solver event trace contract](docs/wang_solver_trace.md) defines bounded
 native capture, manifest v3, semantic replay, checkpoints, truncation, and the
 presentation-only animation boundary.
+The [observed-run dossier contract](docs/run_dossiers.md) defines the four
+versioned case classes, authoritative raw metadata, fixed TeX scaffolding,
+asset reuse, atomic output, and UNSAT evidence boundary.
 
 To export one observed reference run and render selected replay states:
 
@@ -246,6 +248,22 @@ The fixed-configuration Boolean and Wang Z3 summaries are exported separately:
 uv run python tools/export_z3_encoding_summaries.py \
   tests/instances/pipeline_sat.cm13 build/z3-summaries
 ```
+
+To generate one self-contained report outside the ordinary run path, provide
+pdfLaTeX and select a versioned case explicitly:
+
+```sh
+make shared
+uv run --frozen python tools/generate_run_dossier.py \
+  examples/run-cases/sat-end-to-end.json \
+  build/run-dossiers/sat-end-to-end \
+  --tex-engine pdflatex
+```
+
+The compiler is invoked without shell escape. `run.json` preserves raw stage
+durations and hashes; the PDF reuses the validated trace frames and existing
+square/hex renderers. TeX remains an opt-in CI/tooling dependency, not a root
+Python dependency.
 
 Useful individual targets:
 

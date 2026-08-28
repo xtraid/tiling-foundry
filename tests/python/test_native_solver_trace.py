@@ -5,9 +5,11 @@ import unittest
 from pathlib import Path
 
 from model.solver_trace import (
+    DOMAIN_ALL,
     SOLVER_OPTIMIZED,
     SOLVER_REFERENCE,
     TRACE_DECISION,
+    TRACE_CONFLICT,
     TRACE_DOMAIN_REDUCTION,
     TRACE_PROPAGATION,
     TRACE_RESULT,
@@ -102,6 +104,55 @@ class NativeSolverTraceTests(unittest.TestCase):
                 INSTANCE,
                 checkpoint_interval=2,
                 checkpoint_capacity=0,
+            )
+
+    def test_initial_domain_overrides_distinguish_root_and_propagation_conflicts(self) -> None:
+        _, region, *_ = solve_native_pipeline_trace(INSTANCE, optimized=True)
+        base = tuple(DOMAIN_ALL if active else 0 for active in region.active)
+
+        empty = tuple(0 if index == 0 else domain for index, domain in enumerate(base))
+        *_, root_trace = solve_native_pipeline_trace(
+            INSTANCE,
+            optimized=True,
+            initial_domains=empty,
+            checkpoint_interval=0,
+            checkpoint_capacity=0,
+        )
+        self.assertEqual(
+            tuple(event.kind for event in root_trace.events),
+            (TRACE_ROOT, TRACE_CONFLICT, TRACE_RESULT),
+        )
+        self.assertEqual(root_trace.events[1].phase, "initial")
+
+        singleton = tuple(8 if index == 0 else domain for index, domain in enumerate(base))
+        *_, propagation_trace = solve_native_pipeline_trace(
+            INSTANCE,
+            optimized=True,
+            initial_domains=singleton,
+            checkpoint_interval=0,
+            checkpoint_capacity=0,
+        )
+        kinds = tuple(event.kind for event in propagation_trace.events)
+        self.assertIn(TRACE_DOMAIN_REDUCTION, kinds)
+        self.assertIn(TRACE_PROPAGATION, kinds)
+        self.assertIn(TRACE_CONFLICT, kinds)
+        self.assertNotIn(TRACE_DECISION, kinds)
+        self.assertEqual(
+            next(event for event in propagation_trace.events if event.kind == TRACE_CONFLICT).phase,
+            "initial",
+        )
+
+    def test_initial_domain_validation_is_type_strict(self) -> None:
+        _, region, *_ = solve_native_pipeline_trace(INSTANCE, optimized=True)
+        domains = [DOMAIN_ALL if active else 0 for active in region.active]
+        domains[0] = True
+        with self.assertRaisesRegex(ValueError, "canonical Wang domain"):
+            solve_native_pipeline_trace(INSTANCE, initial_domains=domains)
+
+        with self.assertRaisesRegex(ValueError, "unique sorted cells"):
+            solve_native_pipeline_trace(
+                INSTANCE,
+                initial_domain_overrides=((1, DOMAIN_ALL), (0, DOMAIN_ALL)),
             )
 
 

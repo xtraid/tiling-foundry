@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from ctypes import (
     CDLL,
     POINTER,
@@ -17,6 +18,7 @@ from functools import cache
 
 from model.region import Region
 from model.solver_trace import (
+    DOMAIN_ALL,
     SOLVER_OPTIMIZED,
     SOLVER_REFERENCE,
     TRACE_BACKTRACK,
@@ -243,6 +245,7 @@ def _solve_native_traced(
     event_capacity: int,
     checkpoint_interval: int,
     checkpoint_capacity: int,
+    initial_domains: Sequence[int] | None = None,
 ) -> tuple[TilingSolveResult, SolverTrace]:
     """Run one traced solve and copy all caller-owned native storage."""
     for name, value in (
@@ -257,6 +260,36 @@ def _solve_native_traced(
     if (checkpoint_interval == 0) != (checkpoint_capacity == 0):
         raise ValueError(
             "checkpoint_interval and checkpoint_capacity must be jointly set"
+        )
+
+    copied_domains: tuple[int, ...] | None = None
+    native_domains: object | None = None
+    solver_options: _WangSolverOptions | None = None
+    if initial_domains is not None:
+        try:
+            copied_domains = tuple(initial_domains)
+        except TypeError as error:
+            raise ValueError("initial_domains must be a finite integer sequence") from error
+        if len(copied_domains) != len(region.active):
+            raise ValueError("initial_domains length must match the region area")
+        for index, (active, domain) in enumerate(
+            zip(region.active, copied_domains, strict=True)
+        ):
+            if type(domain) is not int or not 0 <= domain <= DOMAIN_ALL:
+                raise ValueError(
+                    f"initial_domains[{index}] is not a canonical Wang domain"
+                )
+            if not active and domain != 0:
+                raise ValueError(
+                    f"initial_domains[{index}] must be zero for an inactive cell"
+                )
+        native_domains = (c_uint32 * len(copied_domains))(*copied_domains)
+        solver_options = _WangSolverOptions(
+            flags=0,
+            failed_leaf_path=None,
+            failed_leaf_capacity=0,
+            initial_domains=native_domains,
+            initial_domain_count=len(copied_domains),
         )
 
     native_options = _WangSolveTraceOptions(
@@ -275,7 +308,7 @@ def _solve_native_traced(
     try:
         status_code = solve(
             byref(native_reduction.region),
-            None,
+            None if solver_options is None else byref(solver_options),
             byref(native_options),
             byref(native_result),
         )

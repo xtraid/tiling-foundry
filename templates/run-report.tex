@@ -1,0 +1,25 @@
+\documentclass[11pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[a4paper,margin=20mm]{geometry}
+\usepackage{array}
+\usepackage{graphicx}
+
+\ifdefined\pdfinfoomitdate
+  \pdfinfoomitdate=1
+\fi
+\ifdefined\pdftrailerid
+  \pdftrailerid{}
+\fi
+\ifdefined\pdfsuppressptexinfo
+  \pdfsuppressptexinfo=15
+\fi
+
+\title{@@TITLE@@}
+\author{Tiling Foundry observed-run dossier}
+\date{}
+
+\begin{document}
+\maketitle
+@@BODY@@
+\end{document}

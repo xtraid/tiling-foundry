@@ -1,0 +1,21 @@
+{
+  "schema": "wang-run-case-v1",
+  "id": "unsat-root-conflict",
+  "title": "UNSAT immediate root conflict",
+  "classification": "unsat-root-conflict",
+  "description": "An observed constrained solve whose caller-supplied empty domain on active cell zero is rejected immediately in the initial phase.",
+  "source": "tests/instances/pipeline_sat.cm13",
+  "solver": "optimized",
+  "expected_status": "unsat",
+  "trace": {
+    "event_capacity": 8192,
+    "checkpoint_interval": 128,
+    "checkpoint_capacity": 64
+  },
+  "initial_domain_overrides": [
+    {
+      "cell": 0,
+      "domain": 0
+    }
+  ]
+}

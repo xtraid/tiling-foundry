@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xtraid.github.io/tiling-foundry/schemas/wang-run-case-v1.schema.json",
+  "title": "Tiling Foundry observed-run dossier case v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "id",
+    "title",
+    "classification",
+    "description",
+    "source",
+    "solver",
+    "expected_status",
+    "trace",
+    "initial_domain_overrides"
+  ],
+  "properties": {
+    "schema": {"const": "wang-run-case-v1"},
+    "id": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
+    "title": {"type": "string", "minLength": 1},
+    "classification": {
+      "enum": [
+        "sat-end-to-end",
+        "unsat-root-conflict",
+        "unsat-propagation-contradiction",
+        "unsat-non-superficial-search"
+      ]
+    },
+    "description": {"type": "string", "minLength": 1},
+    "source": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.?/).+\\.cm13$"},
+    "solver": {"enum": ["reference", "optimized"]},
+    "expected_status": {"enum": ["sat", "unsat"]},
+    "trace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_capacity", "checkpoint_interval", "checkpoint_capacity"],
+      "properties": {
+        "event_capacity": {"type": "integer", "minimum": 2, "maximum": 100000},
+        "checkpoint_interval": {"type": "integer", "minimum": 0},
+        "checkpoint_capacity": {"type": "integer", "minimum": 0}
+      }
+    },
+    "initial_domain_overrides": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["cell", "domain"],
+        "properties": {
+          "cell": {"type": "integer", "minimum": 0},
+          "domain": {"type": "integer", "minimum": 0, "maximum": 8388607}
+        }
+      }
+    }
+  }
+}

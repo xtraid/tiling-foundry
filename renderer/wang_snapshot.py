@@ -736,7 +736,7 @@ def _parse_reduction(document: dict[str, object]) -> ReductionExplanationSnapsho
 
 
 def load_explainability_bundle(path: str | Path) -> ExplainabilityBundle:
-    """Load a v1/v2 manifest and independently verify every referenced stage."""
+    """Load static v1/v2/v3 stages, hash-binding non-static v3 artifacts."""
     manifest_path = Path(path)
     manifest = _load_json_bytes(
         _read_bytes(manifest_path, "manifest"),
@@ -763,6 +763,16 @@ def load_explainability_bundle(path: str | Path) -> ExplainabilityBundle:
             "region": REGION_SCHEMA,
             "reduction": REDUCTION_SCHEMA,
         }
+    elif manifest_schema == "wang-explain-manifest-v3":
+        _literal(manifest["stage"], "solver-trace", "$.stage")
+        expected_schemas = {
+            "formula": FORMULA_SCHEMA,
+            "tileset": TILESET_SCHEMA,
+            "region": REGION_SCHEMA,
+            "reduction": REDUCTION_SCHEMA,
+            "trace": "wang-solver-trace-v1",
+            "solution": "wang-solution-v1",
+        }
     else:
         _fail("$.schema", "must be a supported explainability manifest")
     source_digest = _sha256(
@@ -775,6 +785,10 @@ def load_explainability_bundle(path: str | Path) -> ExplainabilityBundle:
     artifact_digests: dict[str, str] = {}
     for name, expected_schema in expected_schemas.items():
         reference_path = f"$.artifacts.{name}"
+        if artifacts[name] is None:
+            if name != "solution":
+                _fail(reference_path, "must not be null")
+            continue
         reference = _object(artifacts[name], reference_path)
         _fields(reference, frozenset({"path", "sha256", "schema"}), reference_path)
         artifact_name = _basename(reference["path"], f"{reference_path}.path")
@@ -787,7 +801,10 @@ def load_explainability_bundle(path: str | Path) -> ExplainabilityBundle:
         encoded = _read_bytes(artifact_path, f"{name} artifact")
         if hashlib.sha256(encoded).hexdigest() != expected_digest:
             _fail(f"{reference_path}.sha256", f"does not match {artifact_name}")
-        documents[name] = _load_json_bytes(encoded, str(artifact_path))
+        document = _load_json_bytes(encoded, str(artifact_path))
+        if document.get("schema") != expected_schema:
+            _fail(f"{reference_path}.schema", "does not match artifact")
+        documents[name] = document
         artifact_digests[name] = expected_digest
 
     formula = _parse_formula(documents["formula"])
