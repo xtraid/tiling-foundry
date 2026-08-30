@@ -34,6 +34,8 @@ typedef struct {
     uint64_t support_byte_lookups;
     size_t support_table_bytes;
     uint64_t mrv_cells_scanned;
+    uint64_t mrv_index_word_probes;
+    size_t mrv_index_bytes;
     uint64_t initial_trail_writes;
     uint64_t search_trail_writes;
     uint64_t initial_trail_rewrites;

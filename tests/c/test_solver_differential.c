@@ -412,6 +412,12 @@ static void test_generic_backtracking_case(void)
     );
     assert(reference_metrics.backtracks > 0);
     assert(optimized_metrics.backtracks == reference_metrics.backtracks);
+    assert(reference_metrics.mrv_index_word_probes == 0);
+    assert(reference_metrics.mrv_index_bytes == 0);
+    assert(reference_metrics.mrv_cells_scanned == 83);
+    assert(optimized_metrics.mrv_index_word_probes == 7);
+    assert(optimized_metrics.mrv_index_bytes == 192);
+    assert(optimized_metrics.mrv_cells_scanned == 22);
     assert(reference_metrics.initial_trail_writes > 0);
     assert(optimized_metrics.initial_trail_writes == 0);
     assert(reference_metrics.search_trail_writes > 0);
@@ -523,15 +529,39 @@ static bool boolean_oracle(const Cm13Formula *formula)
 static void assert_yang_zhang_pair(Cm13Formula *formula)
 {
     YangZhangReduction reduction = {0};
+    const WangSolveStatus expected = boolean_oracle(formula)
+        ? WANG_SOLVE_SAT
+        : WANG_SOLVE_UNSAT;
     assert(yang_zhang_build(formula, &reduction));
     assert_semantic_pair(
         &reduction.region,
         NULL,
         NULL,
-        boolean_oracle(formula) ? WANG_SOLVE_SAT : WANG_SOLVE_UNSAT,
+        expected,
         NULL,
         NULL
     );
+
+    const WangSolverOptions options = {
+        .flags = WANG_SOLVE_COLLECT_METRICS,
+    };
+    WangSolverMetrics reference_metrics = {0};
+    WangSolverMetrics optimized_metrics = {0};
+    assert_semantic_pair(
+        &reduction.region,
+        &options,
+        &options,
+        expected,
+        &reference_metrics,
+        &optimized_metrics
+    );
+    if (expected == WANG_SOLVE_UNSAT &&
+        optimized_metrics.dfs_nodes == 1) {
+        assert(reference_metrics.mrv_index_word_probes == 0);
+        assert(optimized_metrics.mrv_index_word_probes == 0);
+        assert(reference_metrics.mrv_index_bytes == 0);
+        assert(optimized_metrics.mrv_index_bytes == 0);
+    }
     yang_zhang_reduction_destroy(&reduction);
 }
 
@@ -595,6 +625,10 @@ static void test_unsat_diagnostic_modes(void)
     assert(optimized_metrics.enqueue_attempts == 0);
     assert(reference_metrics.queue_dedup_index_bytes == 0);
     assert(optimized_metrics.queue_dedup_index_bytes == 0);
+    assert(reference_metrics.mrv_index_word_probes == 0);
+    assert(optimized_metrics.mrv_index_word_probes == 0);
+    assert(reference_metrics.mrv_index_bytes == 0);
+    assert(optimized_metrics.mrv_index_bytes == 0);
 
     char reference_path[] = "/tmp/wang-reference-diff-XXXXXX";
     char optimized_path[] = "/tmp/wang-optimized-diff-XXXXXX";
@@ -663,6 +697,10 @@ static void test_queue_dedup_index_skips_no_arc_case(void)
     assert(optimized_metrics.queue_peak == 1);
     assert(reference_metrics.queue_dedup_index_bytes == 0);
     assert(optimized_metrics.queue_dedup_index_bytes == 0);
+    assert(reference_metrics.mrv_index_word_probes == 0);
+    assert(optimized_metrics.mrv_index_word_probes == 0);
+    assert(reference_metrics.mrv_index_bytes == 0);
+    assert(optimized_metrics.mrv_index_bytes == 0);
 
     region_destroy(&region);
 }
@@ -705,6 +743,14 @@ static void assert_invalid_contract(SolveFunction solve)
     result.metrics.support_table_bytes = 1;
     assert(solve(&region, NULL, &result) == WANG_SOLVE_ERROR);
     result.metrics.support_table_bytes = 0;
+
+    result.metrics.mrv_index_word_probes = 1;
+    assert(solve(&region, NULL, &result) == WANG_SOLVE_ERROR);
+    result.metrics.mrv_index_word_probes = 0;
+
+    result.metrics.mrv_index_bytes = 1;
+    assert(solve(&region, NULL, &result) == WANG_SOLVE_ERROR);
+    result.metrics.mrv_index_bytes = 0;
 
     result.metrics.enqueue_attempts = 1;
     assert(solve(&region, NULL, &result) == WANG_SOLVE_ERROR);

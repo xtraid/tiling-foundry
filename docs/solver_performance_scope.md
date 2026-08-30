@@ -44,7 +44,7 @@ Conceptually:
                    +------------+------------+
                    |                         |
              reference path          performance path
-             linear MRV              derived MRV index, if measured
+             linear MRV              measured lazy MRV index
              simple FIFO queue       queue deduplication, if measured
              serial propagation      TaskPlan and OpenMP, if measured
              simple storage          optimized private storage
@@ -241,10 +241,11 @@ and reference baseline, then profiled allocation, initialization, propagation,
 MRV, trail, rollback, and verification costs. The validated Wang core was
 shared before the optimized entry point diverged in private mechanisms.
 
-Five isolated mechanisms are now retained: dynamic DFS storage,
+Six isolated mechanisms are now retained: dynamic DFS storage,
 initial-propagation trail removal, SAT result ownership transfer, byte-wise
-support aggregation, and optimized queue deduplication. Each has a dated report
-with direct-work evidence and corpus-wide controls.
+support aggregation, optimized queue deduplication, and a lazy private MRV
+index. Each has a dated report with direct-work evidence and corpus-wide
+controls.
 
 `TaskPlan` and OpenMP remain conditional on their own evidence gates. Streaming,
 cancellation, resource budgets, and speculative scheduling remain outside the
@@ -252,7 +253,7 @@ measured serial scope.
 
 ## Current implementation status
 
-After the first five isolated performance mechanisms:
+After the first six isolated performance mechanisms:
 
 - `wang_solve_serial()` and `wang_solve_optimized()` are implemented public
   entry points with the same contract;
@@ -302,14 +303,16 @@ After the first five isolated performance mechanisms:
 - the [queue and trail profile]({{ '/solver_queue_trail_profile_2026-08-20/' | relative_url }})
   records the direct pending queue,
   repeated trail-write, Callgrind, and Cachegrind evidence. It selects queue
-  deduplication as the next isolated mechanism, keeps MRV indexing as the distinct
-  weakly constrained candidate, and rejects trail compaction for now;
+  deduplication as its next isolated mechanism, identifies MRV indexing as a
+  distinct weakly constrained candidate, and rejects trail compaction for now;
 - the [queue-deduplication report]({{ '/solver_queue_dedup_2026-08-20/' | relative_url }})
   records the retained packed pending index,
   direct scheduling work, native timings, memory, and post-change profiler
   attribution;
-- MRV indexing, trail compaction, `TaskPlan`, and operational OpenMP are not
-  implemented yet.
+- the [MRV-index report]({{ '/solver_mrv_index_2026-08-28/' | relative_url }})
+  records the retained lazy packed buckets, row-major equivalence, direct scan
+  and storage work, corpus controls, memory, and profiler attribution;
+- trail compaction, `TaskPlan`, and operational OpenMP are not implemented.
 
 These facts distinguish the implemented serial mechanisms from the still
 unimplemented parallel architecture.
