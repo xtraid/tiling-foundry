@@ -32,6 +32,8 @@ static bool metrics_are_zero(const WangSolverMetrics *metrics)
         metrics->support_byte_lookups == 0 &&
         metrics->support_table_bytes == 0 &&
         metrics->mrv_cells_scanned == 0 &&
+        metrics->mrv_index_word_probes == 0 &&
+        metrics->mrv_index_bytes == 0 &&
         metrics->initial_trail_writes == 0 &&
         metrics->search_trail_writes == 0 &&
         metrics->enqueue_attempts == 0 &&

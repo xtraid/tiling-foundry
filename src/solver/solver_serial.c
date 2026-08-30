@@ -15,6 +15,15 @@
 #define WANG_OPTIMIZED_QUEUE_DEDUP 1
 #endif
 
+#ifndef WANG_OPTIMIZED_MRV_INDEX
+#define WANG_OPTIMIZED_MRV_INDEX 1
+#endif
+
+enum {
+    MRV_MIN_DOMAIN_SIZE = 2,
+    MRV_BUCKET_COUNT = TILE_COUNT - MRV_MIN_DOMAIN_SIZE + 1
+};
+
 typedef struct {
     uint32_t edge_mask[DIR_COUNT][COLOR_COUNT];
     uint32_t compat[DIR_COUNT][TILE_COUNT];
@@ -43,6 +52,7 @@ typedef struct {
     bool transfer_sat_domains;
     bool use_bytewise_support;
     bool deduplicate_queue;
+    bool index_mrv;
 } SolverMechanisms;
 
 typedef enum {
@@ -85,6 +95,13 @@ typedef struct {
     size_t queue_unique_count;
     bool has_neighbor_arcs;
     bool deduplicate_queue;
+
+    uint64_t *mrv_bucket_bits;
+    uint8_t *mrv_domain_sizes;
+    size_t mrv_word_count;
+    size_t mrv_bucket_counts[MRV_BUCKET_COUNT];
+    uint32_t mrv_nonempty_buckets;
+    bool index_mrv;
 
     uint32_t *best_snapshot;
     size_t best_resolved_count;
@@ -156,6 +173,8 @@ static bool metrics_are_zero(const WangSolverMetrics *metrics)
         metrics->support_byte_lookups == 0 &&
         metrics->support_table_bytes == 0 &&
         metrics->mrv_cells_scanned == 0 &&
+        metrics->mrv_index_word_probes == 0 &&
+        metrics->mrv_index_bytes == 0 &&
         metrics->initial_trail_writes == 0 &&
         metrics->search_trail_writes == 0 &&
         metrics->initial_trail_rewrites == 0 &&
@@ -241,6 +260,7 @@ static void solver_state_destroy(SolverState *state)
     free(state->queue);
     free(state->queue_pending_bits);
     free(state->queue_pending_counts);
+    free(state->mrv_bucket_bits);
     free(state->best_snapshot);
     memset(state, 0, sizeof(*state));
     state->writer.fd = -1;
@@ -356,6 +376,197 @@ static bool allocate_queue_dedup_index(SolverState *state)
     }
     if (state->collect_metrics) {
         state->metrics.queue_dedup_index_bytes = bytes;
+    }
+    return true;
+}
+
+static size_t first_set_bit_u64(uint64_t value)
+{
+    size_t bit = 0;
+    while ((value & UINT64_C(1)) == 0) {
+        value >>= 1;
+        ++bit;
+    }
+    return bit;
+}
+
+static size_t first_set_bit_u32(uint32_t value)
+{
+    size_t bit = 0;
+    while ((value & UINT32_C(1)) == 0) {
+        value >>= 1;
+        ++bit;
+    }
+    return bit;
+}
+
+static bool mrv_size_is_indexed(unsigned size)
+{
+    return size >= MRV_MIN_DOMAIN_SIZE && size <= TILE_COUNT;
+}
+
+static size_t mrv_bucket_for_size(unsigned size)
+{
+    return (size_t)(size - MRV_MIN_DOMAIN_SIZE);
+}
+
+static uint64_t *mrv_bucket_word(
+    SolverState *state,
+    size_t bucket,
+    size_t word
+)
+{
+    return &state->mrv_bucket_bits[
+        bucket * state->mrv_word_count + word
+    ];
+}
+
+static void mrv_index_add(
+    SolverState *state,
+    size_t cell_index,
+    unsigned size
+)
+{
+    const size_t bucket = mrv_bucket_for_size(size);
+    uint64_t *word = mrv_bucket_word(
+        state,
+        bucket,
+        cell_index / 64u
+    );
+    *word |= UINT64_C(1) << (cell_index % 64u);
+    ++state->mrv_bucket_counts[bucket];
+    state->mrv_nonempty_buckets |= UINT32_C(1) << bucket;
+}
+
+static bool mrv_index_move(
+    SolverState *state,
+    size_t cell_index,
+    uint32_t new_domain
+)
+{
+    if (state->mrv_bucket_bits == NULL) {
+        return true;
+    }
+
+    const uint32_t old_domain = state->domains[cell_index];
+    const unsigned old_size = state->mrv_domain_sizes[cell_index];
+    const uint32_t removed = old_domain & ~new_domain;
+    const uint32_t added = new_domain & ~old_domain;
+    unsigned new_size;
+    if (added == 0) {
+        const unsigned removed_count = domain_popcount(removed);
+        if (removed_count > old_size) {
+            return false;
+        }
+        new_size = old_size - removed_count;
+    } else if (removed == 0) {
+        const unsigned added_count = domain_popcount(added);
+        if (old_size > TILE_COUNT - added_count) {
+            return false;
+        }
+        new_size = old_size + added_count;
+    } else {
+        new_size = domain_popcount(new_domain);
+    }
+    if (old_size == new_size) {
+        return true;
+    }
+
+    if (mrv_size_is_indexed(old_size)) {
+        const size_t old_bucket = mrv_bucket_for_size(old_size);
+        uint64_t *old_word = mrv_bucket_word(
+            state,
+            old_bucket,
+            cell_index / 64u
+        );
+        const uint64_t bit = UINT64_C(1) << (cell_index % 64u);
+        if ((*old_word & bit) == 0 ||
+            state->mrv_bucket_counts[old_bucket] == 0) {
+            return false;
+        }
+    }
+    if (mrv_size_is_indexed(new_size)) {
+        const size_t new_bucket = mrv_bucket_for_size(new_size);
+        const uint64_t new_word = *mrv_bucket_word(
+            state,
+            new_bucket,
+            cell_index / 64u
+        );
+        if ((new_word & (UINT64_C(1) << (cell_index % 64u))) != 0) {
+            return false;
+        }
+    }
+
+    if (mrv_size_is_indexed(old_size)) {
+        const size_t old_bucket = mrv_bucket_for_size(old_size);
+        uint64_t *old_word = mrv_bucket_word(
+            state,
+            old_bucket,
+            cell_index / 64u
+        );
+        *old_word &= ~(UINT64_C(1) << (cell_index % 64u));
+        --state->mrv_bucket_counts[old_bucket];
+        if (state->mrv_bucket_counts[old_bucket] == 0) {
+            state->mrv_nonempty_buckets &=
+                ~(UINT32_C(1) << old_bucket);
+        }
+    }
+    if (mrv_size_is_indexed(new_size)) {
+        mrv_index_add(state, cell_index, new_size);
+    }
+    state->mrv_domain_sizes[cell_index] = (uint8_t)new_size;
+    return true;
+}
+
+static bool allocate_mrv_index(SolverState *state)
+{
+    if (!state->index_mrv ||
+        state->resolved_count == state->active_count) {
+        return true;
+    }
+
+    state->mrv_word_count = state->cell_count / 64u +
+        (state->cell_count % 64u != 0 ? 1u : 0u);
+    size_t bucket_word_count;
+    size_t bucket_bytes;
+    size_t size_bytes;
+    if (!checked_mul_size(
+            MRV_BUCKET_COUNT,
+            state->mrv_word_count,
+            &bucket_word_count
+        ) ||
+        !checked_mul_size(
+            bucket_word_count,
+            sizeof(*state->mrv_bucket_bits),
+            &bucket_bytes
+        ) ||
+        !checked_mul_size(
+            state->cell_count,
+            sizeof(*state->mrv_domain_sizes),
+            &size_bytes
+        ) ||
+        bucket_bytes > SIZE_MAX - size_bytes) {
+        return false;
+    }
+
+    const size_t total_bytes = bucket_bytes + size_bytes;
+    state->mrv_bucket_bits = calloc(1, total_bytes);
+    if (state->mrv_bucket_bits == NULL) {
+        return false;
+    }
+    state->mrv_domain_sizes =
+        (uint8_t *)state->mrv_bucket_bits + bucket_bytes;
+
+    for (size_t cell = 0; cell < state->cell_count; ++cell) {
+        const unsigned size = domain_popcount(state->domains[cell]);
+        state->mrv_domain_sizes[cell] = (uint8_t)size;
+        if (state->region->cells[cell].active &&
+            mrv_size_is_indexed(size)) {
+            mrv_index_add(state, cell, size);
+        }
+    }
+    if (state->collect_metrics) {
+        state->metrics.mrv_index_bytes = total_bytes;
     }
     return true;
 }
@@ -518,6 +729,10 @@ static bool restrict_domain(
         }
     }
 
+    if (!mrv_index_move(state, cell_index, new_domain)) {
+        return false;
+    }
+
     if (domain_is_singleton(old_domain) &&
         !domain_is_singleton(new_domain)) {
         --state->resolved_count;
@@ -561,11 +776,19 @@ static bool restrict_domain(
     return true;
 }
 
-static void rollback_to(SolverState *state, size_t mark)
+static bool rollback_to(SolverState *state, size_t mark)
 {
     while (state->trail_count > mark) {
         const TrailEntry entry = state->trail[--state->trail_count];
         const uint32_t current = state->domains[entry.cell_index];
+
+        if (!mrv_index_move(
+                state,
+                entry.cell_index,
+                entry.old_domain
+            )) {
+            return false;
+        }
 
         if (domain_is_singleton(current) &&
             !domain_is_singleton(entry.old_domain)) {
@@ -577,6 +800,7 @@ static void rollback_to(SolverState *state, size_t mark)
 
         state->domains[entry.cell_index] = entry.old_domain;
     }
+    return true;
 }
 
 static size_t neighbor_index(
@@ -777,6 +1001,38 @@ static bool record_failed_leaf(
 
 static size_t select_mrv_cell(SolverState *state)
 {
+    if (state->mrv_bucket_bits != NULL) {
+        if (state->mrv_nonempty_buckets == 0) {
+            return SIZE_MAX;
+        }
+
+        const size_t bucket = first_set_bit_u32(
+            state->mrv_nonempty_buckets
+        );
+        for (size_t word = 0; word < state->mrv_word_count; ++word) {
+            if (state->collect_metrics) {
+                ++state->metrics.mrv_index_word_probes;
+            }
+            const uint64_t candidates = *mrv_bucket_word(
+                state,
+                bucket,
+                word
+            );
+            if (candidates != 0) {
+                const size_t selected = word * 64u +
+                    first_set_bit_u64(candidates);
+                if (selected >= state->cell_count) {
+                    return SIZE_MAX;
+                }
+                if (state->collect_metrics) {
+                    ++state->metrics.mrv_cells_scanned;
+                }
+                return selected;
+            }
+        }
+        return SIZE_MAX;
+    }
+
     size_t selected = SIZE_MAX;
     unsigned best_size = TILE_COUNT + 1u;
 
@@ -945,7 +1201,9 @@ static WangSolveStatus search(
                 break;
             }
 
-            rollback_to(state, entry_mark);
+            if (!rollback_to(state, entry_mark)) {
+                break;
+            }
             if (state->trace_events) {
                 state->trace_change_mark =
                     state->trace_search_base + entry_mark;
@@ -1003,7 +1261,7 @@ static WangSolveStatus search(
                 WANG_TRACE_REASON_DECISION,
                 branch_depth
             )) {
-            rollback_to(state, mark);
+            (void)rollback_to(state, mark);
             break;
         }
 
@@ -1016,7 +1274,7 @@ static WangSolveStatus search(
         );
 
         if (propagated == PROPAGATE_ERROR) {
-            rollback_to(state, mark);
+            (void)rollback_to(state, mark);
             break;
         }
 
@@ -1056,7 +1314,7 @@ static WangSolveStatus search(
                     conflict_cell,
                     branch_depth
                 )) {
-                rollback_to(state, mark);
+                (void)rollback_to(state, mark);
                 break;
             }
         } else {
@@ -1068,6 +1326,12 @@ static WangSolveStatus search(
                 break;
             }
 
+            if (state->index_mrv &&
+                state->mrv_bucket_bits == NULL &&
+                !allocate_mrv_index(state)) {
+                (void)rollback_to(state, mark);
+                break;
+            }
             const size_t child_cell = select_mrv_cell(state);
             if (child_cell == SIZE_MAX ||
                 !search_stack_push(&stack, (SearchFrame) {
@@ -1075,14 +1339,16 @@ static WangSolveStatus search(
                     .candidates = state->domains[child_cell],
                     .entry_mark = mark,
                 })) {
-                rollback_to(state, mark);
+                (void)rollback_to(state, mark);
                 break;
             }
             note_search_stack_capacity(state, &stack);
             continue;
         }
 
-        rollback_to(state, mark);
+        if (!rollback_to(state, mark)) {
+            break;
+        }
         if (state->trace_events) {
             state->trace_change_mark = state->trace_search_base + mark;
             solver_event_trace_record(
@@ -1361,6 +1627,7 @@ static WangSolveStatus solve_wang_core(
         (options->flags & WANG_SOLVE_CAPTURE_UNSAT_SNAPSHOT) != 0;
     state.record_trail = mechanisms.record_initial_trail;
     state.deduplicate_queue = mechanisms.deduplicate_queue;
+    state.index_mrv = mechanisms.index_mrv;
     build_solver_tables(&state.tables);
     if (!solver_tables_are_valid(&state.tables)) {
         return WANG_SOLVE_ERROR;
@@ -1620,6 +1887,7 @@ WangSolveStatus wang_solve_serial(
             .transfer_sat_domains = false,
             .use_bytewise_support = false,
             .deduplicate_queue = false,
+            .index_mrv = false,
         },
         NULL,
         NULL
@@ -1642,6 +1910,7 @@ WangSolveStatus wang_solve_optimized(
             .transfer_sat_domains = true,
             .use_bytewise_support = true,
             .deduplicate_queue = WANG_OPTIMIZED_QUEUE_DEDUP != 0,
+            .index_mrv = WANG_OPTIMIZED_MRV_INDEX != 0,
         },
         NULL,
         NULL
@@ -1675,6 +1944,7 @@ WangSolveStatus wang_solve_serial_traced(
             .transfer_sat_domains = false,
             .use_bytewise_support = false,
             .deduplicate_queue = false,
+            .index_mrv = false,
         },
         trace_options,
         &out_result->trace
@@ -1701,6 +1971,7 @@ WangSolveStatus wang_solve_optimized_traced(
             .transfer_sat_domains = true,
             .use_bytewise_support = true,
             .deduplicate_queue = WANG_OPTIMIZED_QUEUE_DEDUP != 0,
+            .index_mrv = WANG_OPTIMIZED_MRV_INDEX != 0,
         },
         trace_options,
         &out_result->trace

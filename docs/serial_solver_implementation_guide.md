@@ -294,10 +294,19 @@ domain. Rollback walks entries in reverse to a saved marker and updates
 for the same cell are intentional because they reproduce every intermediate
 state exactly.
 
-MRV selection scans active cells in row-major order and chooses the smallest
-nonsingleton domain. Ties retain the lowest dense index, candidates are tried
-in ascending tile-ID order, and propagation visits neighbors in `N`, `E`, `S`,
-`W` order. These rules make each path deterministic for a fixed mechanism set.
+The reference MRV selection scans active cells in row-major order and chooses
+the smallest nonsingleton domain. The optimized path makes the same first
+selection linearly, then lazily creates packed membership buckets for domain
+sizes 2 through 23 only if search descends below the root. It selects the
+smallest nonempty bucket and its lowest dense cell index. Every restriction and
+rollback updates this private index while `domains` remains the source of
+truth. Root conflicts, complete regions, and searches exhausted at the root
+allocate no index.
+
+Both paths therefore retain the lowest dense index on ties. Candidates are
+tried in ascending tile-ID order, and propagation visits neighbors in `N`,
+`E`, `S`, `W` order. These rules make each path deterministic for a fixed
+mechanism set.
 
 DFS uses a heap-allocated stack rather than the process stack. A frame holds
 the chosen cell, remaining candidates, and the trail position before the
@@ -365,6 +374,7 @@ meanings:
 | --- | --- |
 | `dfs_nodes`, `decisions`, `backtracks`, `failed_leaves`, `max_depth` | Search states, attempted singleton branches, restored failed branches, observed conflicts, and deepest DFS level |
 | `domain_reductions`, `propagated_arcs`, `mrv_cells_scanned` | Effective narrowing operations, processed directed neighbor arcs, and active cells inspected by MRV |
+| `mrv_index_word_probes`, `mrv_index_bytes` | Packed bucket words inspected by optimized MRV selection and combined bucket/cache storage; zero for the reference path and optimized runs that never build the lazy index |
 | `support_tile_visits`, `support_byte_lookups`, `support_table_bytes` | Reference set-tile work, optimized nonzero-byte work, and optimized table storage |
 | `initial_trail_writes`, `search_trail_writes` | Undo entries appended in initial propagation and DFS |
 | `initial_trail_rewrites`, `search_trail_rewrites` | Repeated entries for a cell within the initial interval or current branch interval |
@@ -541,9 +551,9 @@ make cachegrind-check
 ```
 
 The benchmark and profiler paths keep metrics runs separate from timings and
-measure MRV scans, queue duplication, trail pressure, domain reductions,
-support aggregation, SAT-copy bytes, process peak RSS, and instruction/cache
-attribution. Dated reports in the
+measure MRV scans and packed-word probes, queue duplication, trail pressure,
+domain reductions, support aggregation, SAT-copy bytes, process peak RSS, and
+instruction/cache attribution. Dated reports in the
 [solver optimization section]({{ '/#solver-optimization' | relative_url }})
 record the evidence for each retained optimized mechanism.
 

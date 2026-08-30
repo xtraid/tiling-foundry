@@ -64,7 +64,7 @@ solving remains future work.
 | --- | --- |
 | Yang–Zhang formula-to-region construction | Implemented and tested |
 | Reference serial solver | Implemented |
-| Optimized serial path | Implemented with five isolated, measured mechanisms |
+| Optimized serial path | Implemented with six isolated, measured mechanisms |
 | Independent native verifier | Implemented and required before SAT publication |
 | Boolean Z3 oracle | Implemented over the copied immutable `Formula` |
 | Wang Z3 oracle | Implemented over copied `Region + TILESET` |
@@ -81,9 +81,10 @@ solving remains future work.
 | `TaskPlan` and native OpenMP solver | Not implemented; only the build scaffold exists |
 
 The optimized path preserves the reference path's Wang semantics and public
-contract. Its five retained mechanisms are dynamic DFS storage, omission of
+contract. Its six retained mechanisms are dynamic DFS storage, omission of
 non-consumable initial-propagation trail entries, SAT-domain ownership
-transfer, byte-wise support aggregation, and queue deduplication. The
+transfer, byte-wise support aggregation, queue deduplication, and a lazy
+private MRV index that preserves the reference path's row-major tie break. The
 [optimization methodology](docs/solver_performance_scope.md) defines their
 acceptance boundary. Dated reports preserve the measurements and their
 host-specific limitations.
@@ -155,10 +156,11 @@ diagram.
 
 ## Next milestones
 
-Planned work remains separated into independently reviewed changes. The new
-priority is explainability across the deterministic pipeline:
+Planned work remains separated into independently reviewed changes. The next
+serial-evidence packets are:
 
-1. resume serial MRV and hard-UNSAT evidence;
+1. extend the hard-UNSAT/scaling corpus and record the option matrix now that
+   the isolated MRV mechanism is measured;
 2. define `TaskPlan` only after the serial evidence, then implement and measure
    real OpenMP execution.
 

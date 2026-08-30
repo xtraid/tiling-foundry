@@ -61,6 +61,8 @@ class _WangSolverMetrics(Structure):
         ("support_byte_lookups", c_uint64),
         ("support_table_bytes", c_size_t),
         ("mrv_cells_scanned", c_uint64),
+        ("mrv_index_word_probes", c_uint64),
+        ("mrv_index_bytes", c_size_t),
         ("initial_trail_writes", c_uint64),
         ("search_trail_writes", c_uint64),
         ("initial_trail_rewrites", c_uint64),

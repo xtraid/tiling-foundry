@@ -488,6 +488,8 @@ static bool metrics_equal(
         left->support_byte_lookups == right->support_byte_lookups &&
         left->support_table_bytes == right->support_table_bytes &&
         left->mrv_cells_scanned == right->mrv_cells_scanned &&
+        left->mrv_index_word_probes == right->mrv_index_word_probes &&
+        left->mrv_index_bytes == right->mrv_index_bytes &&
         left->initial_trail_writes == right->initial_trail_writes &&
         left->search_trail_writes == right->search_trail_writes &&
         left->initial_trail_rewrites == right->initial_trail_rewrites &&
@@ -777,7 +779,7 @@ static bool run_benchmark(
     );
 
     printf(
-        "benchmark_version=8 case=%s solver=%s scope=%s expected=%s "
+        "benchmark_version=9 case=%s solver=%s scope=%s expected=%s "
         "iterations=%zu metrics=%u capture_unsat=%u "
         "elapsed_ns=%" PRIu64 " ns_per_iteration=%" PRIu64 " "
         "process_peak_rss_kib=%ld peak_rss_source=%s "
@@ -789,6 +791,8 @@ static bool run_benchmark(
         "support_byte_lookups=%" PRIu64 " "
         "support_table_bytes=%zu "
         "mrv_cells_scanned=%" PRIu64 " "
+        "mrv_index_word_probes=%" PRIu64 " "
+        "mrv_index_bytes=%zu "
         "initial_trail_writes=%" PRIu64 " "
         "search_trail_writes=%" PRIu64 " "
         "initial_trail_rewrites=%" PRIu64 " "
@@ -823,6 +827,8 @@ static bool run_benchmark(
         reference_metrics.support_byte_lookups,
         reference_metrics.support_table_bytes,
         reference_metrics.mrv_cells_scanned,
+        reference_metrics.mrv_index_word_probes,
+        reference_metrics.mrv_index_bytes,
         reference_metrics.initial_trail_writes,
         reference_metrics.search_trail_writes,
         reference_metrics.initial_trail_rewrites,
@@ -942,7 +948,7 @@ int main(int argc, char **argv)
             print_usage(argv[0]);
             return EXIT_FAILURE;
         }
-        printf("benchmark_version=8 ");
+        printf("benchmark_version=9 ");
 #if defined(__clang__)
         printf(
             "compiler=clang-%d.%d.%d ",
