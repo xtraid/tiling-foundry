@@ -22,7 +22,11 @@ RENDERER = ROOT / "renderer"
 TEMPLATE = ROOT / "templates/run-report.tex"
 sys.path.insert(0, str(ROOT / "python"))
 
-from formats.pipeline_snapshot import _encode_document, _write_atomic  # noqa: E402
+from formats.pipeline_snapshot import (  # noqa: E402
+    _encode_document,
+    _load_json_bytes,
+    _write_atomic,
+)
 from formats.run_dossier import (  # noqa: E402
     RunCase,
     build_run_dossier,
@@ -45,19 +49,19 @@ class DossierGenerationError(RuntimeError):
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "capture one versioned native run, reuse the offline renderers, and "
-            "compile a self-contained LaTeX/PDF dossier"
+            "dispatch one closed v1 or v2 case to its isolated self-contained "
+            "dossier implementation"
         )
     )
-    parser.add_argument("case", type=Path, help="wang-run-case-v1 JSON")
+    parser.add_argument("case", type=Path, help="wang-run-case-v1/v2 JSON")
     parser.add_argument("output_directory", type=Path)
     parser.add_argument(
         "--tex-engine",
         default="pdflatex",
-        help="pdfLaTeX executable (default: pdflatex)",
+        help="v1 pdfLaTeX executable (default: pdflatex)",
     )
-    parser.add_argument("--max-frames", type=int, default=12)
-    parser.add_argument("--duration-ms", type=int, default=500)
+    parser.add_argument("--max-frames", type=int, default=12, help="v1 only")
+    parser.add_argument("--duration-ms", type=int, default=500, help="v1 only")
     return parser
 
 
@@ -330,7 +334,7 @@ def _compile_pdf(dossier_root: Path, tex_engine: str, captured_at: datetime) -> 
     shutil.rmtree(tex_home)
 
 
-def generate_run_dossier(
+def _generate_run_dossier_v1(
     case_path: str | Path,
     output_directory: str | Path,
     *,
@@ -423,6 +427,53 @@ def generate_run_dossier(
     except Exception:
         shutil.rmtree(staging, ignore_errors=True)
         raise
+
+
+def _case_schema(case_path: str | Path) -> str:
+    path = Path(case_path)
+    try:
+        document = _load_json_bytes(path.read_bytes(), str(path))
+    except OSError as error:
+        raise DossierGenerationError(f"cannot read dossier case {path!s}: {error}") from error
+    schema = document.get("schema")
+    if type(schema) is not str:
+        raise DossierGenerationError("dossier case requires a string schema")
+    return schema
+
+
+def generate_run_dossier(
+    case_path: str | Path,
+    output_directory: str | Path,
+    *,
+    tex_engine: str,
+    max_frames: int = 12,
+    duration_ms: int = 500,
+) -> Path:
+    """Dispatch the sole public CLI without sharing v1/v2 implementations."""
+    schema = _case_schema(case_path)
+    if schema == "wang-run-case-v1":
+        return _generate_run_dossier_v1(
+            case_path,
+            output_directory,
+            tex_engine=tex_engine,
+            max_frames=max_frames,
+            duration_ms=duration_ms,
+        )
+    if schema == "wang-run-case-v2":
+        if tex_engine != "pdflatex" or max_frames != 12 or duration_ms != 500:
+            raise DossierGenerationError(
+                "renderer and TeX options are v1-only until the v2 asset/PDF passes"
+            )
+        from dossier.multi_engine import (
+            MultiEngineDossierError,
+            generate_multi_engine_dossier,
+        )
+
+        try:
+            return generate_multi_engine_dossier(case_path, output_directory)
+        except MultiEngineDossierError as error:
+            raise DossierGenerationError(str(error)) from error
+    raise DossierGenerationError(f"unsupported dossier case schema: {schema}")
 
 
 def main(arguments: list[str] | None = None) -> int:

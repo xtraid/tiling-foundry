@@ -2,20 +2,25 @@
 layout: page
 title: Observed-run dossiers and example index
 permalink: /run-dossiers/
-description: Opt-in LaTeX/PDF reports built from hash-bound solver traces, raw run metadata, and the existing square and hex render chain.
+description: Opt-in v1 diagnostic reports and v2 multi-engine captures built from hash-bound traces, summaries, witnesses, and raw run metadata.
 section: Architecture and correctness
 document_kind: Reproduction and report contract
 status: Current implementation
-updated: 2026-08-28
+updated: 2026-09-01
 nav_order: 35
 ---
 
 # Observed-run dossiers and example index
 
-The report generator turns one configured native run into a self-contained
-directory with `run.json`, `report.tex`, `report.pdf`, and `assets/`. It is
-explicitly opt-in and does not change parsing, reduction, ordinary solving,
-snapshot export, or the default Wang renderer.
+The sole public generator dispatches closed v1 and v2 case documents to
+separate implementations. Both are explicitly opt-in and leave parsing,
+reduction, ordinary solving, snapshot export, and the default Wang renderer
+unchanged.
+
+The v1 path turns one configured native run into a self-contained directory
+with `run.json`, `report.tex`, `report.pdf`, and `assets/`. Its four diagnostic
+cases, schemas, formatter, template, initial-domain behavior, and output shape
+remain unchanged.
 
 `run.json` is the authoritative report input. It records the source and Git
 identity, environment, solver options and result, complete trace counters,
@@ -94,3 +99,42 @@ Every example requires a complete trace. Selected frames remain a presentation
 subset of that trace. For UNSAT, `unsat_certificate` is always false: conflicts
 and trail history diagnose what the run observed but do not constitute a
 standalone mathematical proof of unsatisfiability.
+
+## Full-pipeline v2 capture
+
+`wang-run-case-v2` deliberately has no initial-domain override field. Its
+canonical case follows `tests/instances/pipeline_sat.cm13` through the four
+named engines and one shared native reduction:
+
+```sh
+make shared
+uv run --frozen python tools/generate_run_dossier.py \
+  examples/run-cases-v2/pipeline-sat.json \
+  build/run-dossiers/pipeline-sat-v2
+```
+
+The v2 implementation parses and reduces once, then runs the traced reference
+and optimized solvers exactly once while the same native formula and reduction
+are alive. It invokes the existing Boolean Z3 and Wang Z3 summary producers
+once each. SAT assignments and tilings are checked with the existing pure
+Python checkers; native tilings also retain the assignment extracted by the
+existing Yang--Zhang witness bridge.
+
+The raw v2 directory contains `run.json`, the copied CM1-in-3 input, two
+existing trace-v3 manifests, their content-addressed snapshots, and the two
+existing Z3 summary documents. Both native manifests bind the same formula,
+tileset, region, and construction-provenance hashes. Agreement means equal
+SAT/UNSAT status plus independently valid SAT witnesses; different valid
+witnesses are not required to be byte-equal. UNKNOWN, mismatch, a truncated
+trace, or a failed checker aborts the capture before installation.
+
+The raw-capture implementation intentionally produces no v2 PDF or narrative
+raster. The closed run contract names the square, generalized, and hex
+relationships and leaves their artifact references null for the shared-asset
+pass. A later PDF formatter will consume those validated static assets without
+solving, checking, replaying, or rendering again.
+
+All v2 durations use one monotonic nanosecond clock and are labelled
+`run-specific-observation-not-a-benchmark`. They are raw facts about that
+capture, never a performance comparison. SAT-only checker timings are null for
+UNSAT rather than fabricated as zero.

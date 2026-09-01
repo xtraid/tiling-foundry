@@ -1,0 +1,18 @@
+{
+  "schema": "wang-run-case-v2",
+  "id": "pipeline-sat-v2",
+  "title": "Canonical SAT full-pipeline multi-engine capture",
+  "purpose": "Capture the named Boolean Z3, native reduction, reference, optimized, Wang Z3, and independent verification results for the canonical pipeline_sat.cm13 instance without domain overrides.",
+  "source": "tests/instances/pipeline_sat.cm13",
+  "expected_status": "sat",
+  "reference_trace": {
+    "event_capacity": 8192,
+    "checkpoint_interval": 128,
+    "checkpoint_capacity": 64
+  },
+  "optimized_trace": {
+    "event_capacity": 8192,
+    "checkpoint_interval": 128,
+    "checkpoint_capacity": 64
+  }
+}

@@ -141,15 +141,15 @@ checks prove the old files are unreferenced before deletion.
 | `wang-run-case-v1` | `/run-dossiers/` | Preserve exact diagnostic case meaning and initial-domain override support |
 | `wang-run-dossier-v1` | `/run-dossiers/` | Preserve exact single-native-run report meaning and output shape |
 
-- [ ] Add separate closed v2 case and dossier contracts; do not extend or
+- [x] Add separate closed v2 case and dossier contracts; do not extend or
   loosen either v1 schema.
-- [ ] Name Boolean Z3, reduction, reference, optimized, Wang Z3, verification,
+- [x] Name Boolean Z3, reduction, reference, optimized, Wang Z3, verification,
   presentation, timings, and artifacts explicitly; do not use a generic stage
   array or plugin registry.
-- [ ] Require one formula/region/tileset/provenance identity across all named
+- [x] Require one formula/region/tileset/provenance identity across all named
   native and Z3 components.
-- [ ] Forbid initial-domain overrides in full-pipeline v2 cases.
-- [ ] Capture each engine once and reuse its result; do not solve during
+- [x] Forbid initial-domain overrides in full-pipeline v2 cases.
+- [x] Capture each engine once and reuse its result; do not solve during
   validation, rendering, Pages build, or PDF formatting.
 
 ## 7. Dossier v1 preservation checklist
@@ -173,7 +173,7 @@ checks prove the old files are unreferenced before deletion.
 
 1. [x] Freeze and test the exact generalized 14-to-23 mapping without changing
    the atomic tileset or standard square/hex output.
-2. [ ] Capture the explicit v2 multi-engine fields once per engine and bind all
+2. [x] Capture the explicit v2 multi-engine fields once per engine and bind all
    component identities by SHA-256.
 3. [ ] Produce shared assets through the existing validators, replay, and
    compositor, including static semantic milestones.
