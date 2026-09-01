@@ -977,7 +977,16 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--view",
-        choices=("solution", "formula", "tileset", "region", "reduction"),
+        choices=(
+            "solution",
+            "formula",
+            "tileset",
+            "region",
+            "reduction",
+            "generalized-sheet",
+            "atomic-legend",
+            "generalized-overlay",
+        ),
         default="solution",
         help="input stage to render (default: solution)",
     )
@@ -1002,16 +1011,32 @@ def main(argv: list[str] | None = None) -> None:
                 raise WangSquareRenderError(
                     "snapshot views are already explainable; omit --explain"
                 )
-            from wang_snapshot import render_pipeline_snapshot
+            if args.view in {
+                "generalized-sheet",
+                "atomic-legend",
+                "generalized-overlay",
+            }:
+                from wang_generalized_render import render_generalized_view
 
-            render_pipeline_snapshot(
-                args.input,
-                args.output,
-                view=args.view,
-                pixels_per_cell=args.pixels_per_cell,
-                margin=args.margin,
-                hex_mode=args.hex,
-            )
+                render_generalized_view(
+                    args.input,
+                    args.output,
+                    view=args.view,
+                    pixels_per_cell=args.pixels_per_cell,
+                    margin=args.margin,
+                    hex_mode=args.hex,
+                )
+            else:
+                from wang_snapshot import render_pipeline_snapshot
+
+                render_pipeline_snapshot(
+                    args.input,
+                    args.output,
+                    view=args.view,
+                    pixels_per_cell=args.pixels_per_cell,
+                    margin=args.margin,
+                    hex_mode=args.hex,
+                )
     except (FileNotFoundError, WangSquareRenderError) as error:
         parser.error(str(error))
 

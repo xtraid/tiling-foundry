@@ -171,7 +171,7 @@ checks prove the old files are unreferenced before deletion.
 
 ## 8. Shared-asset migration order
 
-1. [ ] Freeze and test the exact generalized 14-to-23 mapping without changing
+1. [x] Freeze and test the exact generalized 14-to-23 mapping without changing
    the atomic tileset or standard square/hex output.
 2. [ ] Capture the explicit v2 multi-engine fields once per engine and bind all
    component identities by SHA-256.
