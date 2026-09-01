@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xtraid.github.io/tiling-foundry/schemas/wang-run-case-v2.schema.json",
+  "title": "Tiling Foundry full-pipeline multi-engine case v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "id",
+    "title",
+    "purpose",
+    "source",
+    "expected_status",
+    "reference_trace",
+    "optimized_trace"
+  ],
+  "properties": {
+    "schema": {"const": "wang-run-case-v2"},
+    "id": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
+    "title": {"type": "string", "minLength": 1},
+    "purpose": {"type": "string", "minLength": 1},
+    "source": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.?/).+\\.cm13$"},
+    "expected_status": {"enum": ["sat", "unsat"]},
+    "reference_trace": {"$ref": "#/$defs/trace"},
+    "optimized_trace": {"$ref": "#/$defs/trace"}
+  },
+  "$defs": {
+    "trace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_capacity", "checkpoint_interval", "checkpoint_capacity"],
+      "properties": {
+        "event_capacity": {"type": "integer", "minimum": 2, "maximum": 100000},
+        "checkpoint_interval": {"type": "integer", "minimum": 0},
+        "checkpoint_capacity": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

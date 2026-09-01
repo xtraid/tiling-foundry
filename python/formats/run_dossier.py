@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 import re
 from typing import Final
 
@@ -17,7 +17,12 @@ from formats.pipeline_snapshot import (
     _require_literal,
     _require_object,
     _require_sha256,
-    _require_string,
+)
+from formats.run_contract import (
+    _boolean,
+    _nonempty_string,
+    _nullable_integer,
+    _relative_path,
 )
 from model.region import Region
 from model.solver_trace import DOMAIN_ALL, SolverTrace
@@ -67,41 +72,6 @@ class RunCase:
     checkpoint_interval: int
     checkpoint_capacity: int
     initial_domain_overrides: tuple[InitialDomainOverride, ...]
-
-
-def _nonempty_string(value: object, path: str) -> str:
-    text = _require_string(value, path)
-    if not text or text != text.strip():
-        raise PipelineSnapshotError(f"{path}: must be nonempty without edge space")
-    return text
-
-
-def _boolean(value: object, path: str) -> bool:
-    if type(value) is not bool:
-        raise PipelineSnapshotError(f"{path}: must be a boolean")
-    return value
-
-
-def _nullable_integer(value: object, path: str) -> int | None:
-    if value is None:
-        return None
-    return _require_integer(value, path, nonnegative=True)
-
-
-def _relative_path(value: object, path: str, *, prefix: str | None = None) -> str:
-    text = _nonempty_string(value, path)
-    if "\\" in text or re.fullmatch(r"[A-Za-z0-9._/-]+", text) is None:
-        raise PipelineSnapshotError(
-            f"{path}: must use only portable POSIX path characters"
-        )
-    parsed = PurePosixPath(text)
-    if parsed.is_absolute() or parsed.as_posix() != text or any(
-        part in ("", ".", "..") for part in parsed.parts
-    ):
-        raise PipelineSnapshotError(f"{path}: must be a normalized relative path")
-    if prefix is not None and (not parsed.parts or parsed.parts[0] != prefix):
-        raise PipelineSnapshotError(f"{path}: must remain below {prefix}/")
-    return text
 
 
 def _validate_case_override_shape(

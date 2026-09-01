@@ -78,6 +78,7 @@ solving remains future work.
 | Native solver event trace | Implemented as separate opt-in reference/optimized entry points with bounded observed events, full initial state, checkpoints, manifest v3, independent offline replay, and deterministic PNG/GIF views |
 | Reproducible Z3 summaries | Implemented for fixed seed/thread settings and explicit Boolean/Wang encoding order, result/model, and stable project-owned counts; no internal Z3 trace claim |
 | Observed-run dossier | Implemented as one opt-in generator of closed raw run metadata, fixed LaTeX, PDF, and reused trace/square/hex assets; four versioned SAT/UNSAT case definitions cover distinct execution shapes |
+| Full-pipeline multi-engine capture | Implemented as separate closed v2 case/run contracts and one atomic raw capture over Boolean Z3, one native reduction, reference, optimized, Wang Z3, and existing independent checkers; narrative assets and PDF v2 remain downstream work |
 | Native C JSON layer | Not implemented; `src/io/json.c` is a placeholder |
 | `TaskPlan` and native OpenMP solver | Not implemented; only the build scaffold exists |
 

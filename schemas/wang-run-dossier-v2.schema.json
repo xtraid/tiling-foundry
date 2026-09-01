@@ -1,0 +1,430 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xtraid.github.io/tiling-foundry/schemas/wang-run-dossier-v2.schema.json",
+  "title": "Tiling Foundry full-pipeline multi-engine dossier v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "case",
+    "source",
+    "environment",
+    "boolean_z3",
+    "reduction",
+    "reference",
+    "optimized",
+    "wang_z3",
+    "verification",
+    "agreement",
+    "presentation",
+    "timings",
+    "artifacts"
+  ],
+  "properties": {
+    "schema": {"const": "wang-run-dossier-v2"},
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "purpose", "expected_status"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
+        "title": {"type": "string", "minLength": 1},
+        "purpose": {"type": "string", "minLength": 1},
+        "expected_status": {"enum": ["sat", "unsat"]}
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["captured_at_utc", "platform", "python", "git_commit"],
+      "properties": {
+        "captured_at_utc": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
+        "platform": {"type": "string", "minLength": 1},
+        "python": {"type": "string", "minLength": 1},
+        "git_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+      }
+    },
+    "boolean_z3": {"$ref": "#/$defs/boolean_z3"},
+    "reduction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "formula_sha256",
+        "tileset_sha256",
+        "region_sha256",
+        "provenance_sha256"
+      ],
+      "properties": {
+        "formula_sha256": {"$ref": "#/$defs/sha256"},
+        "tileset_sha256": {"$ref": "#/$defs/sha256"},
+        "region_sha256": {"$ref": "#/$defs/sha256"},
+        "provenance_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "reference": {"$ref": "#/$defs/native_engine"},
+    "optimized": {"$ref": "#/$defs/native_engine"},
+    "wang_z3": {"$ref": "#/$defs/wang_z3"},
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "boolean_z3_assignment",
+        "reference_tiling",
+        "reference_assignment",
+        "optimized_tiling",
+        "optimized_assignment",
+        "wang_z3_tiling"
+      ],
+      "properties": {
+        "boolean_z3_assignment": {"$ref": "#/$defs/check"},
+        "reference_tiling": {"$ref": "#/$defs/check"},
+        "reference_assignment": {"$ref": "#/$defs/check"},
+        "optimized_tiling": {"$ref": "#/$defs/check"},
+        "optimized_assignment": {"$ref": "#/$defs/check"},
+        "wang_z3_tiling": {"$ref": "#/$defs/check"}
+      }
+    },
+    "agreement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expected_status",
+        "boolean_z3_status",
+        "reference_status",
+        "optimized_status",
+        "wang_z3_status",
+        "all_status_equal",
+        "sat_witnesses_valid",
+        "passed"
+      ],
+      "properties": {
+        "expected_status": {"enum": ["sat", "unsat"]},
+        "boolean_z3_status": {"enum": ["sat", "unsat"]},
+        "reference_status": {"enum": ["sat", "unsat"]},
+        "optimized_status": {"enum": ["sat", "unsat"]},
+        "wang_z3_status": {"enum": ["sat", "unsat"]},
+        "all_status_equal": {"const": true},
+        "sat_witnesses_valid": {"type": ["boolean", "null"]},
+        "passed": {"const": true}
+      }
+    },
+    "presentation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["square", "generalized", "hex"],
+      "properties": {
+        "square": {
+          "$ref": "#/$defs/presentation",
+          "properties": {
+            "relationship": {"const": "verified-wang-solution"},
+            "artifact": {"enum": ["square_presentation", null]}
+          }
+        },
+        "generalized": {
+          "$ref": "#/$defs/presentation",
+          "properties": {
+            "relationship": {"const": "exact-14-to-23-presentation"},
+            "artifact": {"enum": ["generalized_presentation", null]}
+          }
+        },
+        "hex": {
+          "$ref": "#/$defs/presentation",
+          "properties": {
+            "relationship": {"const": "checked-square-to-hex-transformation"},
+            "artifact": {"enum": ["hex_presentation", null]}
+          }
+        }
+      }
+    },
+    "timings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "clock",
+        "identity",
+        "parse_ns",
+        "reduction_ns",
+        "boolean_z3_ns",
+        "boolean_z3_verify_ns",
+        "reference_solve_ns",
+        "reference_verify_ns",
+        "optimized_solve_ns",
+        "optimized_verify_ns",
+        "wang_z3_ns",
+        "wang_z3_verify_ns",
+        "export_ns"
+      ],
+      "properties": {
+        "clock": {"const": "monotonic-perf-counter-ns"},
+        "identity": {"const": "run-specific-observation-not-a-benchmark"},
+        "parse_ns": {"$ref": "#/$defs/duration"},
+        "reduction_ns": {"$ref": "#/$defs/duration"},
+        "boolean_z3_ns": {"$ref": "#/$defs/duration"},
+        "boolean_z3_verify_ns": {"$ref": "#/$defs/nullable_duration"},
+        "reference_solve_ns": {"$ref": "#/$defs/duration"},
+        "reference_verify_ns": {"$ref": "#/$defs/nullable_duration"},
+        "optimized_solve_ns": {"$ref": "#/$defs/duration"},
+        "optimized_verify_ns": {"$ref": "#/$defs/nullable_duration"},
+        "wang_z3_ns": {"$ref": "#/$defs/duration"},
+        "wang_z3_verify_ns": {"$ref": "#/$defs/nullable_duration"},
+        "export_ns": {"$ref": "#/$defs/duration"}
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_input",
+        "formula_snapshot",
+        "tileset_snapshot",
+        "region_snapshot",
+        "provenance_snapshot",
+        "boolean_z3_summary",
+        "reference_trace_manifest",
+        "reference_trace",
+        "reference_solution",
+        "optimized_trace_manifest",
+        "optimized_trace",
+        "optimized_solution",
+        "wang_z3_summary",
+        "square_presentation",
+        "generalized_presentation",
+        "hex_presentation"
+      ],
+      "properties": {
+        "source_input": {"$ref": "#/$defs/artifact"},
+        "formula_snapshot": {"$ref": "#/$defs/artifact"},
+        "tileset_snapshot": {"$ref": "#/$defs/artifact"},
+        "region_snapshot": {"$ref": "#/$defs/artifact"},
+        "provenance_snapshot": {"$ref": "#/$defs/artifact"},
+        "boolean_z3_summary": {"$ref": "#/$defs/artifact"},
+        "reference_trace_manifest": {"$ref": "#/$defs/artifact"},
+        "reference_trace": {"$ref": "#/$defs/artifact"},
+        "reference_solution": {"$ref": "#/$defs/nullable_artifact"},
+        "optimized_trace_manifest": {"$ref": "#/$defs/artifact"},
+        "optimized_trace": {"$ref": "#/$defs/artifact"},
+        "optimized_solution": {"$ref": "#/$defs/nullable_artifact"},
+        "wang_z3_summary": {"$ref": "#/$defs/artifact"},
+        "square_presentation": {"$ref": "#/$defs/nullable_artifact"},
+        "generalized_presentation": {"$ref": "#/$defs/nullable_artifact"},
+        "hex_presentation": {"$ref": "#/$defs/nullable_artifact"}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nullable_sha256": {
+      "oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]
+    },
+    "duration": {"type": "integer", "minimum": 0},
+    "nullable_duration": {
+      "oneOf": [{"$ref": "#/$defs/duration"}, {"type": "null"}]
+    },
+    "z3_configuration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["random_seed", "threads"],
+      "properties": {
+        "random_seed": {"const": 0},
+        "threads": {"const": 1}
+      }
+    },
+    "trace_configuration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_capacity", "checkpoint_interval", "checkpoint_capacity"],
+      "properties": {
+        "event_capacity": {"type": "integer", "minimum": 2, "maximum": 100000},
+        "checkpoint_interval": {"type": "integer", "minimum": 0},
+        "checkpoint_capacity": {"type": "integer", "minimum": 0}
+      }
+    },
+    "trace_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "solver",
+        "manifest_sha256",
+        "trace_sha256",
+        "complete",
+        "truncated",
+        "event_capacity",
+        "observed_event_count",
+        "checkpoint_interval",
+        "checkpoint_capacity",
+        "checkpoint_count",
+        "selection"
+      ],
+      "properties": {
+        "solver": {"enum": ["reference", "optimized"]},
+        "manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "trace_sha256": {"$ref": "#/$defs/sha256"},
+        "complete": {"const": true},
+        "truncated": {"const": false},
+        "event_capacity": {"type": "integer", "minimum": 2},
+        "observed_event_count": {"type": "integer", "minimum": 2},
+        "checkpoint_interval": {"type": "integer", "minimum": 0},
+        "checkpoint_capacity": {"type": "integer", "minimum": 0},
+        "checkpoint_count": {"type": "integer", "minimum": 0},
+        "selection": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["performed", "selected_event_count"],
+          "properties": {
+            "performed": {"type": "boolean"},
+            "selected_event_count": {
+              "oneOf": [
+                {"type": "integer", "minimum": 0},
+                {"type": "null"}
+              ]
+            }
+          }
+        }
+      }
+    },
+    "boolean_z3": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "configuration",
+        "encoding_summary_sha256",
+        "assignment",
+        "witness_sha256"
+      ],
+      "properties": {
+        "status": {"enum": ["sat", "unsat"]},
+        "configuration": {"$ref": "#/$defs/z3_configuration"},
+        "encoding_summary_sha256": {"$ref": "#/$defs/sha256"},
+        "assignment": {
+          "oneOf": [
+            {"type": "array", "items": {"type": "boolean"}},
+            {"type": "null"}
+          ]
+        },
+        "witness_sha256": {"$ref": "#/$defs/nullable_sha256"}
+      }
+    },
+    "wang_z3": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "configuration",
+        "encoding_summary_sha256",
+        "cells",
+        "witness_sha256"
+      ],
+      "properties": {
+        "status": {"enum": ["sat", "unsat"]},
+        "configuration": {"$ref": "#/$defs/z3_configuration"},
+        "encoding_summary_sha256": {"$ref": "#/$defs/sha256"},
+        "cells": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {"type": ["integer", "null"], "minimum": 0, "maximum": 22}
+            },
+            {"type": "null"}
+          ]
+        },
+        "witness_sha256": {"$ref": "#/$defs/nullable_sha256"}
+      }
+    },
+    "native_engine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "configuration",
+        "trace",
+        "solution_sha256",
+        "witness_sha256",
+        "extracted_assignment"
+      ],
+      "properties": {
+        "status": {"enum": ["sat", "unsat"]},
+        "configuration": {"$ref": "#/$defs/trace_configuration"},
+        "trace": {"$ref": "#/$defs/trace_result"},
+        "solution_sha256": {"$ref": "#/$defs/nullable_sha256"},
+        "witness_sha256": {"$ref": "#/$defs/nullable_sha256"},
+        "extracted_assignment": {
+          "oneOf": [
+            {"type": "array", "items": {"type": "boolean"}},
+            {"type": "null"}
+          ]
+        }
+      }
+    },
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checker", "performed", "passed", "witness_sha256"],
+      "properties": {
+        "checker": {"type": "string", "minLength": 1},
+        "performed": {"type": "boolean"},
+        "passed": {"type": ["boolean", "null"]},
+        "witness_sha256": {"$ref": "#/$defs/nullable_sha256"}
+      }
+    },
+    "presentation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relationship", "applicable", "artifact"],
+      "properties": {
+        "relationship": {"type": "string", "minLength": 1},
+        "applicable": {"type": "boolean"},
+        "artifact": {"type": ["string", "null"]}
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "media_type",
+        "schema",
+        "role",
+        "semantics",
+        "form",
+        "source_sha256"
+      ],
+      "properties": {
+        "path": {"type": "string", "pattern": "^assets/(?!.*(?:^|/)\\.\\.?/).+"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "media_type": {
+          "enum": ["application/json", "text/plain", "image/png", "image/gif"]
+        },
+        "schema": {"type": ["string", "null"]},
+        "role": {"type": "string", "minLength": 1},
+        "semantics": {
+          "enum": [
+            "observed",
+            "canonical-construction",
+            "encoding-order",
+            "verified-transformation",
+            "didactic"
+          ]
+        },
+        "form": {"enum": ["data", "static", "animated"]},
+        "source_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "nullable_artifact": {
+      "oneOf": [{"$ref": "#/$defs/artifact"}, {"type": "null"}]
+    }
+  }
+}
