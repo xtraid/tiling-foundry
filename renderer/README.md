@@ -134,6 +134,69 @@ Reduction spans describe the square construction itself, so this view rejects
 the signal permutation, and gadget bounds without importing native code or
 reconstructing builder geometry.
 
+### Generalized Yang--Zhang presentation
+
+Three explicit square-only views interpret the fixed 23 positional atomic IDs
+as the 14 generalized tiles from the Yang--Zhang construction. The semantic
+module `wang_generalized.py` contains the exact table and performs no raster,
+solver, native, or root-project import. It first guards every canonical
+`(N,E,S,W)` tuple, then recognizes only complete, correctly oriented,
+adjacent, and non-overlapping compositions.
+
+Render the 14-tile sheet and the separately labelled 23-tile atomic legend
+from an existing hash-bound tileset snapshot:
+
+```bash
+uv run --locked python wang_square.py \
+  ../tests/fixtures/pipeline_sat_explain/manifest.json \
+  output/generalized-sheet.png \
+  --view generalized-sheet
+
+uv run --locked python wang_square.py \
+  ../tests/fixtures/pipeline_sat_explain/manifest.json \
+  output/atomic-legend.png \
+  --view atomic-legend
+```
+
+Render an exact generalized overlay on the canonical verified square witness:
+
+```bash
+uv run --locked python wang_square.py \
+  ../tests/fixtures/pipeline_sat_solver_trace/solution-2273f58cda026dca73c0dfa25c960e01296ac1e34ae6accbddf5be29034d156a.json \
+  output/generalized-overlay.png \
+  --view generalized-overlay
+```
+
+The fixed decomposition is:
+
+| Generalized tile | Atomic IDs and orientation |
+|---|---|
+| `V0` | `0` above `1` above `2` |
+| `V1` | one copy of `3` |
+| `C0` | `4` |
+| `C1` | `5` above `6` |
+| `F0`, `F1` | `7`, `8` |
+| `L0`, `L1` | `9`, `10` |
+| `R0`, `R1` | `11|12`, `13|14` from left to right |
+| `X00`, `X01`, `X10`, `X11` | `15/16`, `17/18`, `19/20`, `21/22` from top to bottom |
+
+The symbolic palette keeps the paper colors `b`, `v`, `0`, `1`, `0′`
+(rendered as the font-safe label `0-prime`), `l`, and `r` separate from
+internal glues `V0:a`, `V0:b`, `C1`, `R0`, `R1`,
+`X00`, `X01`, `X10`, and `X11`; numeric color IDs remain visible as secondary
+transport labels. Multi-cell shapes receive one outer contour and a muted
+internal seam. Every atomic tile keeps its numeric ID. In particular, three
+adjacent cells carrying atomic tile `3` are three `V1` occurrences, never one
+three-cell `V1`.
+
+All three generalized views reject `--hex`: the checked Basire/Culik port is a
+one-to-one presentation of atomic tiles and does not invent generalized hex
+semantics. Generalized recognition checks only the exact atomic composition;
+Wang adjacency, boundary, and SAT verification remain explicit upstream
+preconditions, just as for the other renderer views. Without one of the new
+`--view` values, default square, `--hex`, and `--explain` output remain
+byte-for-byte unchanged.
+
 ### Offline trace and algorithm animations
 
 The animation modules keep state interpretation separate from image encoding.
@@ -339,6 +402,8 @@ Raises `RenderingException` on pipeline errors.
 ├── wang_trace.py          # Strict observed-trace loader and offline replay
 ├── wang_trace_render.py   # Trace frame selection and composition CLI
 ├── wang_z3_summary.py     # Encoding-order summary consumer and compositor
+├── wang_generalized.py    # Pure exact 14-to-23 mapping and recognizer
+├── wang_generalized_render.py # Sheet, atomic legend, and square overlay
 ├── wang_animation.py      # Deterministic PNG/contact-sheet/GIF encoder
 ├── wang_algorithm_animation.py # Canonical and didactic algorithm views
 ├── test_wang_square.py    # Square loader, raster, isolation, CLI, and failures
@@ -346,6 +411,7 @@ Raises `RenderingException` on pipeline errors.
 ├── test_wang_snapshot.py  # Snapshot contracts, views, isolation, and goldens
 ├── test_wang_trace.py     # Hash-bound replay, isolation, and byte stability
 ├── test_wang_z3_summary.py # Fixed encoding summaries and byte stability
+├── test_wang_generalized.py # Exact mapping, rejection, isolation, and goldens
 ├── test_wang_algorithm_animation.py # Source checks and animation goldens
 ├── input/                # Example input files (palette, scene, tiles, sprites)
 ├── output/               # Rendered PNG output goes here
@@ -353,6 +419,9 @@ Raises `RenderingException` on pipeline errors.
 │   ├── wang_solution_v1_square_sat.png # Square golden for the Wang fixture
 │   ├── wang_solution_v1_hex_sat.png    # Pointy-top hex golden for the same fixture
 │   ├── pipeline_sat_reduction.png      # Native reduction-provenance golden
+│   ├── pipeline_sat_generalized_sheet.png # Fixed 14-tile semantic sheet
+│   ├── pipeline_sat_atomic_semantic_legend.png # Labelled 23-tile legend
+│   ├── pipeline_sat_generalized_overlay.png # Canonical witness grouping
 │   ├── palette_ok.json             # Valid 16-color palette
 │   ├── palette_wrong_count.json    # Only 3 colors (invalid)
 │   ├── palette_wrong_value.json    # Component > 255 (invalid)
@@ -368,9 +437,10 @@ Raises `RenderingException` on pipeline errors.
 uv run --locked pytest -q
 ```
 
-The complete isolated suite has 262 tests: the 144 preserved legacy tests
+The complete isolated suite has 283 tests: the 144 preserved legacy tests
 below, 45 Wang square tests, 24 square-to-hex/hex-raster tests, 29 static
-snapshot/explainability tests, and 20 trace/Z3/algorithm-animation tests.
+snapshot/explainability tests, 21 generalized-presentation tests, and 20
+trace/Z3/algorithm-animation tests.
 To run only the original upstream suite:
 
 ```bash
