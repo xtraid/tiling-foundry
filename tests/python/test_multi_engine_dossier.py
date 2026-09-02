@@ -4,6 +4,7 @@ import copy
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -12,7 +13,9 @@ import unittest
 from unittest.mock import patch
 
 from dossier import multi_engine
+from dossier import narrative_assets as narrative_generator
 from formats.pipeline_snapshot import PipelineSnapshotError
+from formats.narrative_assets import load_narrative_assets
 from formats.run_case_v2 import (
     CASE_SCHEMA,
     load_run_case_v2,
@@ -33,27 +36,7 @@ from tools import generate_run_dossier as public_generator
 
 ROOT = Path(__file__).resolve().parents[2]
 SAT_CASE = ROOT / "examples/run-cases-v2/pipeline-sat.json"
-
-
-def _unsat_case() -> dict[str, object]:
-    return {
-        "schema": CASE_SCHEMA,
-        "id": "pipeline-unsat-v2",
-        "title": "Full-pipeline UNSAT capture test",
-        "purpose": "Exercise the closed v2 UNSAT and not-applicable fields.",
-        "source": "tests/instances/pipeline_unsat_search.cm13",
-        "expected_status": "unsat",
-        "reference_trace": {
-            "event_capacity": 8192,
-            "checkpoint_interval": 128,
-            "checkpoint_capacity": 64,
-        },
-        "optimized_trace": {
-            "event_capacity": 8192,
-            "checkpoint_interval": 128,
-            "checkpoint_capacity": 64,
-        },
-    }
+UNSAT_CASE = ROOT / "examples/run-cases-v2/pipeline-unsat-search.json"
 
 
 class MultiEngineDossierTests(unittest.TestCase):
@@ -65,14 +48,9 @@ class MultiEngineDossierTests(unittest.TestCase):
         multi_engine.generate_multi_engine_dossier(SAT_CASE, cls.sat_directory)
         cls.sat_document = load_run_dossier_v2(cls.sat_directory / "run.json")
 
-        cls.unsat_case_path = cls.root / "unsat-case.json"
-        cls.unsat_case_path.write_text(
-            json.dumps(_unsat_case(), ensure_ascii=False) + "\n",
-            encoding="utf-8",
-        )
         cls.unsat_directory = cls.root / "unsat"
         multi_engine.generate_multi_engine_dossier(
-            cls.unsat_case_path,
+            UNSAT_CASE,
             cls.unsat_directory,
         )
         cls.unsat_document = load_run_dossier_v2(
@@ -161,7 +139,27 @@ class MultiEngineDossierTests(unittest.TestCase):
             document["reduction"]["region_sha256"],
             document["artifacts"]["region_snapshot"]["sha256"],
         )
-        self.assertIsNone(document["presentation"]["square"]["artifact"])
+        self.assertEqual(
+            document["presentation"]["square"]["artifact"],
+            "square_presentation",
+        )
+        self.assertEqual(document["reference"]["trace"]["selection"], {
+            "performed": True,
+            "selected_event_count": 10,
+        })
+        self.assertEqual(document["optimized"]["trace"]["selection"], {
+            "performed": True,
+            "selected_event_count": 10,
+        })
+        narrative = load_narrative_assets(
+            self.sat_directory / "assets/narrative/manifest.json",
+            document,
+        )
+        self.assertEqual(narrative["product"], "run-specific")
+        self.assertEqual(
+            narrative["animations"]["optimized_mechanisms"]["semantic_label"],
+            "didactic",
+        )
         self.assertFalse((self.sat_directory / "report.tex").exists())
         self.assertFalse((self.sat_directory / "report.pdf").exists())
 
@@ -188,6 +186,36 @@ class MultiEngineDossierTests(unittest.TestCase):
         for presentation in document["presentation"].values():
             self.assertFalse(presentation["applicable"])
             self.assertIsNone(presentation["artifact"])
+        narrative = load_narrative_assets(
+            self.unsat_directory / "assets/narrative/manifest.json",
+            document,
+        )
+        self.assertIsNone(narrative["animations"]["witness_presentation"])
+        self.assertIsNotNone(narrative["statics"]["presentation_status"])
+        self.assertIsNone(narrative["statics"]["home_preview"])
+        for solver, animation_name in (
+            ("reference", "reference_trace"),
+            ("optimized", "optimized_trace"),
+        ):
+            trace_path = self.unsat_directory / document["artifacts"][
+                f"{solver}_trace"
+            ]["path"]
+            trace = json.loads(trace_path.read_text(encoding="utf-8"))
+            all_kinds = {event["kind"] for event in trace["events"]}
+            self.assertTrue({"decision", "conflict", "backtrack"} <= all_kinds)
+            selected_sequences = {
+                int(Path(frame["path"]).stem.removeprefix("frame-"))
+                for frame in narrative["animations"][animation_name]["frames"]
+            }
+            selected_kinds = {
+                event["kind"]
+                for event in trace["events"]
+                if event["sequence"] in selected_sequences
+            }
+            self.assertTrue(
+                {"conflict", "backtrack", "result"} <= selected_kinds,
+                (solver, selected_kinds),
+            )
 
     def test_case_contract_forbids_initial_domain_overrides(self) -> None:
         invalid = json.loads(SAT_CASE.read_text(encoding="utf-8"))
@@ -309,6 +337,187 @@ class MultiEngineDossierTests(unittest.TestCase):
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
 
+    def test_same_compositor_bytes_serve_run_and_canonical_pages(self) -> None:
+        destination = self.root / "canonical-pages-assets"
+        manifest_path = narrative_generator.generate_narrative_assets(
+            self.sat_directory / "run.json",
+            destination,
+            product="canonical-pages",
+        )
+        manifest = load_narrative_assets(manifest_path, self.sat_document)
+        self.assertEqual(manifest["product"], "canonical-pages")
+
+        run_root = self.sat_directory / "assets/narrative"
+        run_files = {
+            path.relative_to(run_root): path.read_bytes()
+            for path in run_root.rglob("*")
+            if path.is_file() and path.name != "manifest.json"
+        }
+        pages_files = {
+            path.relative_to(destination): path.read_bytes()
+            for path in destination.rglob("*")
+            if path.is_file() and path.name != "manifest.json"
+        }
+        self.assertEqual(run_files, pages_files)
+
+    def test_narrative_manifest_rejects_metadata_and_asset_tampering(self) -> None:
+        copied = self.root / "narrative-tampered"
+        shutil.copytree(self.sat_directory, copied)
+        run = load_run_dossier_v2(copied / "run.json")
+        manifest_path = copied / "assets/narrative/manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["animations"]["reference_trace"]["semantic_label"] = "didactic"
+        manifest_path.write_text(json.dumps(manifest) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(PipelineSnapshotError, "semantic_label"):
+            load_narrative_assets(manifest_path, run)
+
+        copied = self.root / "narrative-source-tampered"
+        shutil.copytree(self.sat_directory, copied)
+        run = load_run_dossier_v2(copied / "run.json")
+        manifest_path = copied / "assets/narrative/manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["statics"]["square_presentation"]["source_sha256"] = "0" * 64
+        manifest_path.write_text(json.dumps(manifest) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(PipelineSnapshotError, "static source"):
+            load_narrative_assets(manifest_path, run)
+
+        copied = self.root / "narrative-scope-tampered"
+        shutil.copytree(self.sat_directory, copied)
+        run = load_run_dossier_v2(copied / "run.json")
+        manifest_path = copied / "assets/narrative/manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["animations"]["reference_trace"]["scope"]["selected"] = False
+        manifest_path.write_text(json.dumps(manifest) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(PipelineSnapshotError, "selected.*policy"):
+            load_narrative_assets(manifest_path, run)
+
+        copied = self.root / "narrative-bytes-tampered"
+        shutil.copytree(self.sat_directory, copied)
+        manifest_path = copied / "assets/narrative/manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        frame = copied / "assets/narrative" / manifest["animations"][
+            "boolean_z3"
+        ]["frames"][0]["path"]
+        frame.write_bytes(frame.read_bytes() + b"tampered")
+        with self.assertRaisesRegex(PipelineSnapshotError, "does not match file"):
+            load_run_dossier_v2(copied / "run.json")
+
+        copied = self.root / "narrative-symlinked"
+        shutil.copytree(self.sat_directory, copied)
+        manifest_path = copied / "assets/narrative/manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        frame = copied / "assets/narrative" / manifest["animations"][
+            "boolean_z3"
+        ]["frames"][0]["path"]
+        alias = frame.with_name("internal-alias.png")
+        alias.write_bytes(frame.read_bytes())
+        frame.unlink()
+        frame.symlink_to(alias.name)
+        with self.assertRaisesRegex(PipelineSnapshotError, "symlinks are forbidden"):
+            load_run_dossier_v2(copied / "run.json")
+
+        copied = self.root / "narrative-parent-symlinked"
+        shutil.copytree(self.sat_directory, copied)
+        narrative_directory = copied / "assets/narrative"
+        relocated = copied / "relocated-narrative"
+        narrative_directory.rename(relocated)
+        narrative_directory.symlink_to("../relocated-narrative", target_is_directory=True)
+        with self.assertRaisesRegex(PipelineSnapshotError, "may not contain symlinks"):
+            load_run_dossier_v2(copied / "run.json")
+
+    def test_narrative_manifest_rejects_toolchain_and_milestone_drift(self) -> None:
+        copied = self.root / "narrative-toolchain-tampered"
+        shutil.copytree(self.sat_directory, copied)
+        run = load_run_dossier_v2(copied / "run.json")
+        manifest_path = copied / "assets/narrative/manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["animations"]["witness_presentation"]["validator"] = "fake.validator"
+        manifest_path.write_text(json.dumps(manifest) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(PipelineSnapshotError, "validator"):
+            load_narrative_assets(manifest_path, run)
+
+        copied = self.root / "narrative-milestones-tampered"
+        shutil.copytree(self.sat_directory, copied)
+        run = load_run_dossier_v2(copied / "run.json")
+        manifest_path = copied / "assets/narrative/manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["pdf_milestones"]["reference_trace"].reverse()
+        manifest_path.write_text(json.dumps(manifest) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(PipelineSnapshotError, "shared frame order"):
+            load_narrative_assets(manifest_path, run)
+
+    def test_run_loader_rejects_an_unattached_narrative_manifest(self) -> None:
+        copied = self.root / "narrative-unattached"
+        shutil.copytree(self.sat_directory, copied)
+        run_path = copied / "run.json"
+        run = json.loads(run_path.read_text(encoding="utf-8"))
+        for solver in ("reference", "optimized"):
+            run[solver]["trace"]["selection"] = {
+                "performed": False,
+                "selected_event_count": None,
+            }
+        run_path.write_text(json.dumps(run) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(PipelineSnapshotError, "performed selection"):
+            load_run_dossier_v2(run_path)
+
+    def test_narrative_generation_preserves_existing_destination_and_cleans_failure(self) -> None:
+        destination = self.root / "existing-narrative"
+        destination.mkdir()
+        sentinel = destination / "sentinel"
+        sentinel.write_text("keep\n", encoding="utf-8")
+        with self.assertRaisesRegex(
+            narrative_generator.NarrativeAssetError,
+            "already exists",
+        ):
+            narrative_generator.generate_narrative_assets(
+                self.sat_directory / "run.json", destination
+            )
+        self.assertEqual(sentinel.read_text(encoding="utf-8"), "keep\n")
+
+        failed = self.root / "failed-narrative"
+        before = set(self.root.glob(".failed-narrative.*"))
+        with patch.object(
+            narrative_generator,
+            "_run_renderer",
+            side_effect=narrative_generator.NarrativeAssetError("forced render failure"),
+        ):
+            with self.assertRaisesRegex(
+                narrative_generator.NarrativeAssetError,
+                "forced render failure",
+            ):
+                narrative_generator.generate_narrative_assets(
+                    self.sat_directory / "run.json", failed
+                )
+        self.assertFalse(failed.exists())
+        self.assertEqual(set(self.root.glob(".failed-narrative.*")), before)
+
+        with patch.object(
+            narrative_generator.shutil,
+            "which",
+            return_value="/usr/bin/uv",
+        ), patch.object(
+            narrative_generator.subprocess,
+            "run",
+            return_value=subprocess.CompletedProcess([], 0, stdout="", stderr=""),
+        ):
+            with self.assertRaisesRegex(
+                narrative_generator.NarrativeAssetError,
+                "omitted required output keys: fallback",
+            ):
+                narrative_generator._run_renderer(
+                    ["renderer.py"], required_outputs=("fallback",)
+                )
+
+        with self.assertRaisesRegex(
+            narrative_generator.NarrativeAssetError,
+            "canonical pipeline SAT",
+        ):
+            narrative_generator.generate_narrative_assets(
+                self.unsat_directory / "run.json",
+                self.root / "invalid-canonical-pages",
+                product="canonical-pages",
+            )
+
     def test_failure_cleanup_and_existing_destination_are_safe(self) -> None:
         destination = self.root / "existing"
         destination.mkdir()
@@ -354,6 +563,27 @@ class MultiEngineDossierTests(unittest.TestCase):
         self.assertFalse(mismatch.exists())
         self.assertEqual(set(self.root.glob(".mismatch.*")), before)
 
+        narrative_failure = self.root / "narrative-failure"
+        before = set(self.root.glob(".narrative-failure.*"))
+        with patch.object(
+            narrative_generator,
+            "generate_narrative_assets",
+            side_effect=narrative_generator.NarrativeAssetError(
+                "forced narrative failure"
+            ),
+        ):
+            with self.assertRaisesRegex(
+                multi_engine.MultiEngineDossierError,
+                "shared narrative asset pass failed",
+            ):
+                multi_engine.generate_multi_engine_dossier(
+                    SAT_CASE, narrative_failure
+                )
+        self.assertFalse(narrative_failure.exists())
+        self.assertEqual(
+            set(self.root.glob(".narrative-failure.*")), before
+        )
+
     def test_final_replace_failure_leaves_no_partial_destination(self) -> None:
         destination = self.root / "replace-failed"
         before = set(self.root.glob(".replace-failed.*"))
@@ -383,6 +613,7 @@ class MultiEngineDossierTests(unittest.TestCase):
         for name, expected in (
             ("wang-run-case-v2.schema.json", CASE_SCHEMA),
             ("wang-run-dossier-v2.schema.json", RUN_SCHEMA),
+            ("wang-narrative-assets-v1.schema.json", "wang-narrative-assets-v1"),
         ):
             with self.subTest(schema=name):
                 schema = json.loads((ROOT / "schemas" / name).read_text(encoding="utf-8"))
@@ -392,6 +623,29 @@ class MultiEngineDossierTests(unittest.TestCase):
                 )
                 self.assertEqual(schema["properties"]["schema"]["const"], expected)
                 self.assertFalse(schema["additionalProperties"])
+                if name == "wang-narrative-assets-v1.schema.json":
+                    owner = re.compile(
+                        schema["$defs"]["metadata"]["properties"]["owner"][
+                            "pattern"
+                        ]
+                    )
+                    self.assertIsNotNone(owner.fullmatch("/"))
+                    self.assertIsNotNone(owner.fullmatch("/components/verification/"))
+                    self.assertIsNone(owner.fullmatch("components/verification/"))
+                    relative_path = re.compile(schema["$defs"]["path"]["pattern"])
+                    self.assertIsNotNone(relative_path.fullmatch("frames/frame-00.png"))
+                    for invalid in (
+                        "/etc/passwd",
+                        "../frame.png",
+                        "frames/../frame.png",
+                        "frames//frame.png",
+                    ):
+                        self.assertIsNone(relative_path.fullmatch(invalid))
+                    png_path_rules = schema["$defs"]["png_paths"]["items"]["allOf"]
+                    self.assertEqual(png_path_rules[0]["$ref"], "#/$defs/path")
+                    png_suffix = re.compile(png_path_rules[1]["pattern"])
+                    self.assertIsNotNone(png_suffix.search("frames/frame-00.png"))
+                    self.assertIsNone(png_suffix.search("frames/frame-00.gif"))
 
 
 if __name__ == "__main__":

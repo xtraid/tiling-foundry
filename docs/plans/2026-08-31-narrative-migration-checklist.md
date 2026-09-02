@@ -140,6 +140,7 @@ checks prove the old files are unreferenced before deletion.
 | `wang-explain-manifest-v3` | `/wang-solver-trace/` | Retain trace-stage meaning |
 | `wang-run-case-v1` | `/run-dossiers/` | Preserve exact diagnostic case meaning and initial-domain override support |
 | `wang-run-dossier-v1` | `/run-dossiers/` | Preserve exact single-native-run report meaning and output shape |
+| `wang-narrative-assets-v1` | `/run-dossiers/` and `renderer/README.md` | Closed downstream record for fixed component assets, accessibility metadata, source identities, semantic milestones, and static PDF inputs |
 
 - [x] Add separate closed v2 case and dossier contracts; do not extend or
   loosen either v1 schema.
@@ -175,11 +176,11 @@ checks prove the old files are unreferenced before deletion.
    the atomic tileset or standard square/hex output.
 2. [x] Capture the explicit v2 multi-engine fields once per engine and bind all
    component identities by SHA-256.
-3. [ ] Produce shared assets through the existing validators, replay, and
+3. [x] Produce shared assets through the existing validators, replay, and
    compositor, including static semantic milestones.
-4. [ ] Update the optimized didactic asset to all six accepted mechanisms,
+4. [x] Update the optimized didactic asset to all six accepted mechanisms,
    keeping it secondary to observed trace output.
-5. [ ] Generate reduced-motion fallback, contact sheet, caption, alt text, and
+5. [x] Generate reduced-motion fallback, contact sheet, caption, alt text, and
    semantic record for every GIF.
 6. [ ] Move public ownership to component pages without duplicating files or
    explanations; update old pages to links in the same change.

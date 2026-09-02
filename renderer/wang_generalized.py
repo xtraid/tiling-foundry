@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+import hashlib
+import json
 from typing import Final
 
 
@@ -173,6 +175,41 @@ def _validate_fixed_specification() -> None:
 
 
 _validate_fixed_specification()
+
+
+def generalized_specification_sha256() -> str:
+    """Hash the fixed semantic mapping independently of its raster layout."""
+    document = {
+        "schema": "wang-generalized-tiles-v1",
+        "color_names": COLOR_NAMES,
+        "atomic_tile_edges": CANONICAL_ATOMIC_TILE_EDGES,
+        "generalized_tiles": [
+            {
+                "name": tile.name,
+                "parts": [
+                    {
+                        "tile_id": part.tile_id,
+                        "dx": part.dx,
+                        "dy": part.dy,
+                        "label": part.label,
+                    }
+                    for part in tile.parts
+                ],
+            }
+            for tile in GENERALIZED_TILES
+        ],
+    }
+    encoded = (
+        json.dumps(
+            document,
+            ensure_ascii=False,
+            allow_nan=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def color_label(color_id: int) -> str:

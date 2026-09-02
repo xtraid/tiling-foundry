@@ -8,7 +8,11 @@ from PIL import Image
 import pytest
 
 from wang_hex_port import WangSquareRenderError
-from wang_z3_summary import load_z3_encoding_summary, render_wang_z3_assets
+from wang_z3_summary import (
+    load_z3_encoding_summary,
+    render_boolean_z3_assets,
+    render_wang_z3_assets,
+)
 
 
 RENDERER = Path(__file__).resolve().parent
@@ -51,6 +55,18 @@ def test_encoding_order_animation_is_byte_stable_and_matches_goldens(tmp_path):
     with Image.open(first.animation) as animation:
         assert animation.format == "GIF"
         assert animation.n_frames == 5
+
+
+def test_boolean_encoding_order_animation_is_byte_stable(tmp_path):
+    source = FIXTURES / "boolean-z3.json"
+    first = render_boolean_z3_assets(source, tmp_path / "first")
+    render_boolean_z3_assets(source, tmp_path / "second")
+
+    assert _tree_bytes(tmp_path / "first") == _tree_bytes(tmp_path / "second")
+    assert first.fallback.name == "frame-02.png"
+    with Image.open(first.animation) as animation:
+        assert animation.format == "GIF"
+        assert animation.n_frames == 4
 
 
 def test_rejects_unknown_fields_and_cross_engine_region_identity(tmp_path):

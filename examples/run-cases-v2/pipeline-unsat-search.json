@@ -1,0 +1,18 @@
+{
+  "schema": "wang-run-case-v2",
+  "id": "pipeline-unsat-search-v2",
+  "title": "Separate UNSAT full-pipeline search capture",
+  "purpose": "Capture the named engines and observed native search for pipeline_unsat_search.cm13 without presenting it as part of the canonical SAT worked example.",
+  "source": "tests/instances/pipeline_unsat_search.cm13",
+  "expected_status": "unsat",
+  "reference_trace": {
+    "event_capacity": 8192,
+    "checkpoint_interval": 128,
+    "checkpoint_capacity": 64
+  },
+  "optimized_trace": {
+    "event_capacity": 8192,
+    "checkpoint_interval": 128,
+    "checkpoint_capacity": 64
+  }
+}

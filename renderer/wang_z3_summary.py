@@ -384,6 +384,123 @@ def _compose_wang_frame(summary: Z3EncodingSummary, stage: int) -> Image.Image:
     return image
 
 
+def _compose_boolean_frame(summary: Z3EncodingSummary, stage: int) -> Image.Image:
+    width, height = 940, 430
+    image = Image.new("RGB", (width, height), EXPLAIN_PANEL_RGB)
+    draw = ImageDraw.Draw(image)
+    labels = (
+        "configuration",
+        "Boolean variables",
+        "source-order clauses",
+        "result, assignment, and encoding statistics",
+    )
+    draw_explain_heading(
+        draw,
+        (18, 16),
+        title="Boolean Z3 encoding order",
+        subtitle=(
+            f"encoding-order stage {stage + 1}/4 | {labels[stage]} | "
+            "not a Z3 internal execution trace"
+        ),
+    )
+    draw.text(
+        (18, 78),
+        f"Z3 {summary.version} | random_seed={summary.random_seed} | "
+        f"threads={summary.threads}",
+        font=explain_font(12),
+        fill=EXPLAIN_TEXT_RGB,
+    )
+    steps = (
+        "1. create one Boolean term per variable in ascending ID order",
+        "2. visit clauses in source order",
+        "3. visit each clause left-to-right and assert exactly one true",
+        "4. check once; copy assignment and project-owned statistics",
+    )
+    for index, label in enumerate(steps):
+        y = 112 + index * 48
+        active = index <= stage
+        draw.rounded_rectangle(
+            (18, y, 520, y + 34),
+            radius=5,
+            fill=(213, 235, 246) if active else (239, 241, 245),
+            outline=(54, 127, 169) if index == stage else (184, 190, 201),
+            width=2 if index == stage else 1,
+        )
+        draw.text(
+            (29, y + 9),
+            label,
+            font=explain_font(10),
+            fill=EXPLAIN_TEXT_RGB if active else EXPLAIN_MUTED_RGB,
+        )
+
+    draw.rounded_rectangle(
+        (548, 106, 922, 378),
+        radius=6,
+        fill=EXPLAIN_ACTIVE_RGB,
+        outline=(180, 187, 198),
+    )
+    if stage == 0:
+        lines = (
+            f"formula variables: {summary.variable_count}",
+            "fixed seed and one solver thread",
+            "project order is public; Z3 search order is not",
+        )
+    elif stage == 1:
+        lines = (
+            f"Boolean terms: {summary.variable_count}",
+            "term IDs follow the formula variable IDs",
+            "no native-solver state is imported",
+        )
+    elif stage == 2:
+        lines = (
+            f"assertions: {summary.assertion_count}",
+            "clause order follows the parsed source",
+            "literal positions remain left-to-right",
+        )
+    else:
+        assignment = summary.assignment or ()
+        assignment_text = ", ".join(
+            f"x{index + 1}={'1' if value else '0'}"
+            for index, value in enumerate(assignment)
+        )
+        lines = (
+            f"result: {summary.status.upper()}",
+            f"assignment: {assignment_text or 'not applicable'}",
+            f"encoding statistics: {len(summary.statistics)}",
+            "independent assignment checking is downstream",
+        )
+    y = 128
+    for line in lines:
+        draw.text((566, y), line, font=explain_font(11), fill=EXPLAIN_TEXT_RGB)
+        y += 31
+    draw.text(
+        (18, 408),
+        "Rendering explains declared construction order; it does not expose Z3 decisions.",
+        font=explain_font(9),
+        fill=EXPLAIN_MUTED_RGB,
+    )
+    return image
+
+
+def render_boolean_z3_assets(
+    summary_path: str | Path,
+    output_directory: str | Path,
+    *,
+    duration_ms: int = 800,
+) -> AnimationOutputs:
+    summary = load_z3_encoding_summary(summary_path)
+    if summary.engine != BOOLEAN_ENGINE:
+        raise WangSquareRenderError("encoding animation requires a Boolean Z3 summary")
+    frames = tuple(_compose_boolean_frame(summary, stage) for stage in range(4))
+    return write_animation_assets(
+        frames,
+        tuple(f"frame-{stage:02d}.png" for stage in range(4)),
+        output_directory,
+        fallback_index=2,
+        duration_ms=duration_ms,
+    )
+
+
 def render_wang_z3_assets(
     summary_path: str | Path,
     output_directory: str | Path,
@@ -405,7 +522,7 @@ def render_wang_z3_assets(
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="render the declared Wang Z3 encoding order without Z3"
+        description="render a declared Boolean or Wang Z3 encoding order without Z3"
     )
     parser.add_argument("summary", type=Path)
     parser.add_argument("output_directory", type=Path)
@@ -417,10 +534,14 @@ def main(arguments: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(arguments)
     try:
-        outputs = render_wang_z3_assets(
-            args.summary,
-            args.output_directory,
-            duration_ms=args.duration_ms,
+        summary = load_z3_encoding_summary(args.summary)
+        renderer = (
+            render_boolean_z3_assets
+            if summary.engine == BOOLEAN_ENGINE
+            else render_wang_z3_assets
+        )
+        outputs = renderer(
+            args.summary, args.output_directory, duration_ms=args.duration_ms
         )
     except (FileNotFoundError, WangSquareRenderError) as error:
         parser.error(str(error))

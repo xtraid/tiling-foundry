@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 from PIL import Image, ImageDraw
@@ -28,13 +29,52 @@ _GADGET_COLORS = {
     "right_forward": (169, 112, 191),
     "clause": (214, 91, 91),
 }
-_OPTIMIZATIONS = (
-    ("Dynamic DFS stack", "grow from 16 frames instead of reserving all active cells"),
-    ("Initial trail omission", "do not store undo entries that search cannot consume"),
-    ("SAT ownership transfer", "publish the verified domain buffer without a result copy"),
-    ("Byte support table", "aggregate compatible tiles through three byte lookups"),
-    ("Queue deduplication", "suppress an enqueue while the cell is already pending"),
-)
+_OPTIMIZATION_SOURCE = Path(__file__).resolve().parent / "data/optimized-mechanisms-v1.json"
+
+
+def _load_optimizations() -> tuple[tuple[str, str], ...]:
+    try:
+        document = json.loads(_OPTIMIZATION_SOURCE.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise WangSquareRenderError(
+            f"cannot load optimized mechanism source: {error}"
+        ) from error
+    if type(document) is not dict or set(document) != {"schema", "mechanisms"}:
+        raise WangSquareRenderError("optimized mechanism source must be closed")
+    if document["schema"] != "wang-optimized-mechanisms-v1":
+        raise WangSquareRenderError("optimized mechanism source schema is unsupported")
+    mechanisms = document["mechanisms"]
+    if type(mechanisms) is not list or len(mechanisms) != 6:
+        raise WangSquareRenderError("optimized mechanism source must contain six entries")
+    result: list[tuple[str, str]] = []
+    identifiers: list[str] = []
+    for index, item in enumerate(mechanisms):
+        if type(item) is not dict or set(item) != {
+            "id",
+            "title",
+            "description",
+            "evidence_route",
+        }:
+            raise WangSquareRenderError(
+                f"optimized mechanism entry {index} must be closed"
+            )
+        values = tuple(item.values())
+        if any(type(value) is not str or not value for value in values):
+            raise WangSquareRenderError(
+                f"optimized mechanism entry {index} requires nonempty strings"
+            )
+        if not item["evidence_route"].startswith("/"):
+            raise WangSquareRenderError(
+                f"optimized mechanism entry {index} has an invalid evidence route"
+            )
+        identifiers.append(item["id"])
+        result.append((item["title"], item["description"]))
+    if len(set(identifiers)) != len(identifiers) or identifiers[-1] != "lazy-mrv-index":
+        raise WangSquareRenderError("optimized mechanism IDs are invalid or incomplete")
+    return tuple(result)
+
+
+_OPTIMIZATIONS = _load_optimizations()
 
 
 def _base_frame(title: str, subtitle: str, size: tuple[int, int]) -> tuple[Image.Image, ImageDraw.ImageDraw]:
@@ -49,7 +89,7 @@ def _builder_frame(bundle: object, stage: int) -> Image.Image:
     assert reduction is not None
     image, draw = _base_frame(
         "Yang-Zhang construction provenance",
-        f"canonical-example stage {stage + 1}/6 | actual gadget spans, not a timed builder trace",
+        f"canonical-construction stage {stage + 1}/6 | actual gadget spans, not a timed builder trace",
         (980, 390),
     )
     origin_x, origin_y, cell = 18, 92, 15
@@ -130,8 +170,8 @@ def render_builder_assets(
 def _optimized_frame(stage: int) -> Image.Image:
     image, draw = _base_frame(
         "Optimized serial mechanisms",
-        f"didactic stage {stage + 1}/6 | storage/work changes only; search semantics stay shared",
-        (960, 430),
+        f"didactic stage {stage + 1}/7 | storage/work changes only; search semantics stay shared",
+        (960, 500),
     )
     draw.text(
         (18, 82),
@@ -140,7 +180,7 @@ def _optimized_frame(stage: int) -> Image.Image:
         fill=EXPLAIN_TEXT_RGB,
     )
     draw.rounded_rectangle(
-        (18, 106, 245, 392),
+        (18, 106, 245, 462),
         radius=7,
         fill=(239, 241, 245),
         outline=(170, 177, 190),
@@ -151,11 +191,12 @@ def _optimized_frame(stage: int) -> Image.Image:
         "initial trail entries",
         "full DFS frame reserve",
         "verified SAT result copy",
+        "linear MRV scan after the root",
     )
     y = 130
     for line in baseline:
         draw.text((34, y), line, font=explain_font(10), fill=EXPLAIN_MUTED_RGB)
-        y += 46
+        y += 48
 
     draw.text((276, 82), "Retained optimized path", font=explain_font(14), fill=EXPLAIN_TEXT_RGB)
     for index, (name, description) in enumerate(_OPTIMIZATIONS):
@@ -182,7 +223,7 @@ def _optimized_frame(stage: int) -> Image.Image:
             fill=EXPLAIN_TEXT_RGB if active else EXPLAIN_MUTED_RGB,
         )
     draw.text(
-        (276, 400),
+        (276, 468),
         "Measured reports establish benefit separately; this animation claims no speedup.",
         font=explain_font(9),
         fill=EXPLAIN_MUTED_RGB,
@@ -195,12 +236,12 @@ def render_optimized_assets(
     *,
     duration_ms: int = 750,
 ) -> AnimationOutputs:
-    frames = tuple(_optimized_frame(stage) for stage in range(6))
+    frames = tuple(_optimized_frame(stage) for stage in range(7))
     return write_animation_assets(
         frames,
-        tuple(f"frame-{stage:02d}.png" for stage in range(6)),
+        tuple(f"frame-{stage:02d}.png" for stage in range(7)),
         output_directory,
-        fallback_index=5,
+        fallback_index=6,
         duration_ms=duration_ms,
     )
 
@@ -232,7 +273,7 @@ def _draw_hex_tile(draw: ImageDraw.ImageDraw, origin: tuple[int, int], edges: tu
 def _hex_frame(square: object, port: object, stage: int) -> Image.Image:
     image, draw = _base_frame(
         "Square-to-hex presentation port",
-        f"canonical-example stage {stage + 1}/4 | pure Basire/Culik witness mapping",
+        f"verified-transformation stage {stage + 1}/4 | pure Basire/Culik witness mapping",
         (920, 430),
     )
     source_edges = square.tile_edges[0]

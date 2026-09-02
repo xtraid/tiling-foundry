@@ -462,7 +462,7 @@ def generate_run_dossier(
     if schema == "wang-run-case-v2":
         if tex_engine != "pdflatex" or max_frames != 12 or duration_ms != 500:
             raise DossierGenerationError(
-                "renderer and TeX options are v1-only until the v2 asset/PDF passes"
+                "v2 uses fixed asset parameters; configurable renderer and TeX options remain v1-only"
             )
         from dossier.multi_engine import (
             MultiEngineDossierError,

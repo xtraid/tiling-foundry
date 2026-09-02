@@ -37,9 +37,9 @@ construction. They are not attributed to either source's diagram notation.
 <figure class="algorithm-animation">
   <picture>
     <source media="(prefers-reduced-motion: reduce)" srcset="{{ '/assets/images/square-to-hex/frame-02.png' | relative_url }}">
-    <img src="{{ '/assets/images/square-to-hex/trace.gif' | relative_url }}" alt="Canonical square Wang tile mapped to a pointy-top hex tile while preserving four source edges and adding the fresh kappa color.">
+    <img src="{{ '/assets/images/square-to-hex/trace.gif' | relative_url }}" alt="Verified square-to-hex transformation preserving four source edges and adding the fresh kappa color.">
   </picture>
-  <figcaption><strong>Canonical example.</strong> The pure renderer-side port and its raster-independent checker produce this mapping; the animation itself is not a proof. The <a href="{{ '/assets/images/square-to-hex/contact-sheet.png' | relative_url }}">static contact sheet</a> shows all four stages.</figcaption>
+  <figcaption><strong>Verified transformation.</strong> The pure renderer-side port and its raster-independent checker produce this mapping; the animation itself is not a proof. The <a href="{{ '/assets/images/square-to-hex/contact-sheet.png' | relative_url }}">static contact sheet</a> shows all four stages.</figcaption>
 </figure>
 
 ## Project convention
