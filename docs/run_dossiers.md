@@ -120,7 +120,7 @@ once each. SAT assignments and tilings are checked with the existing pure
 Python checkers; native tilings also retain the assignment extracted by the
 existing Yang--Zhang witness bridge.
 
-The raw v2 directory contains `run.json`, the copied CM1-in-3 input, two
+The v2 directory contains `run.json`, the copied CM1-in-3 input, two
 existing trace-v3 manifests, their content-addressed snapshots, and the two
 existing Z3 summary documents. Both native manifests bind the same formula,
 tileset, region, and construction-provenance hashes. Agreement means equal
@@ -128,11 +128,28 @@ SAT/UNSAT status plus independently valid SAT witnesses; different valid
 witnesses are not required to be byte-equal. UNKNOWN, mismatch, a truncated
 trace, or a failed checker aborts the capture before installation.
 
-The raw-capture implementation intentionally produces no v2 PDF or narrative
-raster. The closed run contract names the square, generalized, and hex
-relationships and leaves their artifact references null for the shared-asset
-pass. A later PDF formatter will consume those validated static assets without
-solving, checking, replaying, or rendering again.
+The downstream shared-asset pass then consumes only that validated capture.
+Its closed `wang-narrative-assets-v1` manifest names fixed component assets,
+not generic stages: Boolean and Wang Z3 encoding order, canonical region
+construction, observed reference and optimized traces, the six checker
+records, the checked square/generalized/hex witness sequence, the six retained
+optimized mechanisms, and the complete pipeline overview. Every GIF record
+contains one reduced-motion PNG, contact sheet, caption, alt text, semantic
+label, source identity, completeness/selection scope, and all static frame
+hashes.
+
+Trace frames use `semantic-milestones-v1`, which selects event and phase
+transitions before deterministic gap filling; it is distinct from uniform
+sampling and reuses the same single replay as PNG, contact-sheet, and GIF
+encoding. For SAT, `run.json` binds the three reserved static presentation
+artifacts and their hashes. For UNSAT they remain null, while the asset bundle
+records an explicit not-applicable panel and never fabricates a witness or
+certificate. The separate example is versioned at
+`examples/run-cases-v2/pipeline-unsat-search.json`.
+
+No v2 PDF is produced yet. Its later formatter will consume only the validated
+static milestone PNGs already named by the asset manifest, without solving,
+checking, replaying, or rendering again.
 
 All v2 durations use one monotonic nanosecond clock and are labelled
 `run-specific-observation-not-a-benchmark`. They are raw facts about that

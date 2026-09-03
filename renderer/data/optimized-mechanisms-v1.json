@@ -1,0 +1,41 @@
+{
+  "schema": "wang-optimized-mechanisms-v1",
+  "mechanisms": [
+    {
+      "id": "dynamic-dfs-stack",
+      "title": "Dynamic DFS stack",
+      "description": "grow from 16 frames instead of reserving all active cells",
+      "evidence_route": "/solver_dynamic_stack_2026-08-17/"
+    },
+    {
+      "id": "initial-trail-omission",
+      "title": "Initial trail omission",
+      "description": "do not store undo entries that search cannot consume",
+      "evidence_route": "/solver_initial_trail_2026-08-17/"
+    },
+    {
+      "id": "sat-ownership-transfer",
+      "title": "SAT ownership transfer",
+      "description": "publish the verified domain buffer without a result copy",
+      "evidence_route": "/solver_sat_ownership_2026-08-20/"
+    },
+    {
+      "id": "byte-support-table",
+      "title": "Byte support table",
+      "description": "aggregate compatible tiles through three byte lookups",
+      "evidence_route": "/solver_byte_support_2026-08-20/"
+    },
+    {
+      "id": "queue-deduplication",
+      "title": "Queue deduplication",
+      "description": "suppress an enqueue while the cell is already pending",
+      "evidence_route": "/solver_queue_dedup_2026-08-20/"
+    },
+    {
+      "id": "lazy-mrv-index",
+      "title": "Lazy MRV index",
+      "description": "select after the root from private packed domain-size buckets",
+      "evidence_route": "/solver_mrv_index_2026-08-28/"
+    }
+  ]
+}

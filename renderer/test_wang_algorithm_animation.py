@@ -63,13 +63,13 @@ def test_optimized_didactic_animation_is_byte_stable(tmp_path):
     first = render_optimized_assets(tmp_path / "first")
     render_optimized_assets(tmp_path / "second")
 
-    assert first.fallback.name == "frame-05.png"
+    assert first.fallback.name == "frame-06.png"
     _assert_stable_assets(
         tmp_path / "first",
         tmp_path / "second",
         GOLDENS / "optimized-mechanisms",
-        frame_count=6,
-        fallback_name="frame-05.png",
+        frame_count=7,
+        fallback_name="frame-06.png",
     )
 
 
@@ -91,5 +91,5 @@ def test_cli_reports_animation_and_fallback(tmp_path, capsys):
     assert main(["optimized", str(tmp_path)]) == 0
     assert capsys.readouterr().out.splitlines() == [
         f"animation={tmp_path / 'trace.gif'}",
-        f"fallback={tmp_path / 'frame-05.png'}",
+        f"fallback={tmp_path / 'frame-06.png'}",
     ]

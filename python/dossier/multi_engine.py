@@ -271,7 +271,7 @@ def generate_multi_engine_dossier(
     case_path: str | Path,
     output_directory: str | Path,
 ) -> Path:
-    """Capture all named engines once and atomically install the raw v2 dossier."""
+    """Capture all named engines once and atomically install the complete v2 dossier."""
     case: MultiEngineRunCase = load_run_case_v2(case_path, ROOT)
     destination = Path(output_directory).resolve()
     if destination.exists():
@@ -410,8 +410,32 @@ def generate_multi_engine_dossier(
             timings_ns=timings_ns,
             artifacts=artifacts,
         )
-        _write_atomic(staging / "run.json", _encode_document(run_document))
-        load_run_dossier_v2(staging / "run.json")
+        run_path = staging / "run.json"
+        _write_atomic(run_path, _encode_document(run_document))
+        load_run_dossier_v2(run_path)
+        from dossier.narrative_assets import (
+            NarrativeAssetError,
+            attach_narrative_assets,
+            generate_narrative_assets,
+        )
+
+        try:
+            narrative_manifest = generate_narrative_assets(
+                run_path,
+                staging / "assets/narrative",
+                product="run-specific",
+            )
+            run_document = attach_narrative_assets(
+                run_document,
+                staging,
+                narrative_manifest,
+            )
+        except NarrativeAssetError as error:
+            raise MultiEngineDossierError(
+                f"shared narrative asset pass failed: {error}"
+            ) from error
+        _write_atomic(run_path, _encode_document(run_document))
+        load_run_dossier_v2(run_path)
         _install_directory(staging, destination)
         return destination
     except Exception:

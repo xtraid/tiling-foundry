@@ -1,0 +1,303 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://xtraid.github.io/tiling-foundry/schemas/wang-narrative-assets-v1.schema.json",
+  "title": "Tiling Foundry shared narrative assets v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "product",
+    "case",
+    "identities",
+    "animations",
+    "statics",
+    "pdf_milestones"
+  ],
+  "properties": {
+    "schema": {"const": "wang-narrative-assets-v1"},
+    "product": {"enum": ["run-specific", "canonical-pages"]},
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "expected_status", "source_sha256"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "expected_status": {"enum": ["sat", "unsat"]},
+        "source_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "identities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_formula",
+        "formula_snapshot",
+        "tileset",
+        "region",
+        "provenance",
+        "boolean_z3_summary",
+        "reference_trace_manifest",
+        "reference_trace",
+        "reference_solution",
+        "optimized_trace_manifest",
+        "optimized_trace",
+        "optimized_solution",
+        "wang_z3_summary"
+      ],
+      "properties": {
+        "source_formula": {"$ref": "#/$defs/sha256"},
+        "formula_snapshot": {"$ref": "#/$defs/sha256"},
+        "tileset": {"$ref": "#/$defs/sha256"},
+        "region": {"$ref": "#/$defs/sha256"},
+        "provenance": {"$ref": "#/$defs/sha256"},
+        "boolean_z3_summary": {"$ref": "#/$defs/sha256"},
+        "reference_trace_manifest": {"$ref": "#/$defs/sha256"},
+        "reference_trace": {"$ref": "#/$defs/sha256"},
+        "reference_solution": {"$ref": "#/$defs/nullable_sha256"},
+        "optimized_trace_manifest": {"$ref": "#/$defs/sha256"},
+        "optimized_trace": {"$ref": "#/$defs/sha256"},
+        "optimized_solution": {"$ref": "#/$defs/nullable_sha256"},
+        "wang_z3_summary": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "animations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pipeline_overview",
+        "boolean_z3",
+        "region_construction",
+        "reference_trace",
+        "optimized_trace",
+        "wang_z3",
+        "verification",
+        "witness_presentation",
+        "optimized_mechanisms"
+      ],
+      "properties": {
+        "pipeline_overview": {"$ref": "#/$defs/animation"},
+        "boolean_z3": {"$ref": "#/$defs/animation"},
+        "region_construction": {"$ref": "#/$defs/animation"},
+        "reference_trace": {"$ref": "#/$defs/animation"},
+        "optimized_trace": {"$ref": "#/$defs/animation"},
+        "wang_z3": {"$ref": "#/$defs/animation"},
+        "verification": {"$ref": "#/$defs/animation"},
+        "witness_presentation": {
+          "oneOf": [
+            {"$ref": "#/$defs/animation"},
+            {"type": "null"}
+          ]
+        },
+        "optimized_mechanisms": {"$ref": "#/$defs/animation"}
+      }
+    },
+    "statics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "home_preview",
+        "worked_example",
+        "formula",
+        "generalized_sheet",
+        "atomic_legend",
+        "square_presentation",
+        "generalized_presentation",
+        "hex_presentation",
+        "presentation_status"
+      ],
+      "properties": {
+        "home_preview": {"$ref": "#/$defs/nullable_static"},
+        "worked_example": {"$ref": "#/$defs/nullable_static"},
+        "formula": {"$ref": "#/$defs/static"},
+        "generalized_sheet": {"$ref": "#/$defs/static"},
+        "atomic_legend": {"$ref": "#/$defs/static"},
+        "square_presentation": {"$ref": "#/$defs/nullable_static"},
+        "generalized_presentation": {"$ref": "#/$defs/nullable_static"},
+        "hex_presentation": {"$ref": "#/$defs/nullable_static"},
+        "presentation_status": {"$ref": "#/$defs/nullable_static"}
+      }
+    },
+    "pdf_milestones": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selector",
+        "region_construction",
+        "reference_trace",
+        "optimized_trace",
+        "end_to_end"
+      ],
+      "properties": {
+        "selector": {"const": "semantic-milestones-v1"},
+        "region_construction": {"$ref": "#/$defs/png_paths"},
+        "reference_trace": {"$ref": "#/$defs/png_paths"},
+        "optimized_trace": {"$ref": "#/$defs/png_paths"},
+        "end_to_end": {"$ref": "#/$defs/png_paths"}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nullable_sha256": {
+      "oneOf": [
+        {"$ref": "#/$defs/sha256"},
+        {"type": "null"}
+      ]
+    },
+    "path": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.?(?:/|$))[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$",
+      "minLength": 1
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "media_type"],
+      "properties": {
+        "path": {"$ref": "#/$defs/path"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "media_type": {"enum": ["image/png", "image/gif"]}
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["complete", "selected", "truncated"],
+      "properties": {
+        "complete": {"type": "boolean"},
+        "selected": {"type": "boolean"},
+        "truncated": {"const": false}
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "required": [
+        "owner",
+        "semantic_label",
+        "caption",
+        "alt_text",
+        "source_contract",
+        "source_sha256",
+        "producer",
+        "validator",
+        "compositor"
+      ],
+      "properties": {
+        "owner": {
+          "type": "string",
+          "pattern": "^/(?:[A-Za-z0-9._-]+/)*$"
+        },
+        "semantic_label": {
+          "enum": [
+            "observed",
+            "canonical-construction",
+            "encoding-order",
+            "verified-transformation",
+            "didactic"
+          ]
+        },
+        "caption": {"type": "string", "minLength": 1},
+        "alt_text": {"type": "string", "minLength": 1},
+        "source_contract": {"type": "string", "minLength": 1},
+        "source_sha256": {"$ref": "#/$defs/sha256"},
+        "producer": {"type": "string", "minLength": 1},
+        "validator": {"type": "string", "minLength": 1},
+        "compositor": {"type": "string", "minLength": 1}
+      }
+    },
+    "animation": {
+      "allOf": [
+        {"$ref": "#/$defs/metadata"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "owner",
+            "semantic_label",
+            "caption",
+            "alt_text",
+            "source_contract",
+            "source_sha256",
+            "producer",
+            "validator",
+            "compositor",
+            "scope",
+            "animation",
+            "fallback",
+            "contact_sheet",
+            "frames"
+          ],
+          "properties": {
+            "owner": true,
+            "semantic_label": true,
+            "caption": true,
+            "alt_text": true,
+            "source_contract": true,
+            "source_sha256": true,
+            "producer": true,
+            "validator": true,
+            "compositor": true,
+            "scope": {"$ref": "#/$defs/scope"},
+            "animation": {"$ref": "#/$defs/artifact"},
+            "fallback": {"$ref": "#/$defs/artifact"},
+            "contact_sheet": {"$ref": "#/$defs/artifact"},
+            "frames": {
+              "type": "array",
+              "minItems": 1,
+              "items": {"$ref": "#/$defs/artifact"}
+            }
+          }
+        }
+      ]
+    },
+    "static": {
+      "allOf": [
+        {"$ref": "#/$defs/metadata"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "owner",
+            "semantic_label",
+            "caption",
+            "alt_text",
+            "source_contract",
+            "source_sha256",
+            "producer",
+            "validator",
+            "compositor",
+            "artifact"
+          ],
+          "properties": {
+            "owner": true,
+            "semantic_label": true,
+            "caption": true,
+            "alt_text": true,
+            "source_contract": true,
+            "source_sha256": true,
+            "producer": true,
+            "validator": true,
+            "compositor": true,
+            "artifact": {"$ref": "#/$defs/artifact"}
+          }
+        }
+      ]
+    },
+    "nullable_static": {
+      "oneOf": [
+        {"$ref": "#/$defs/static"},
+        {"type": "null"}
+      ]
+    },
+    "png_paths": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "allOf": [
+          {"$ref": "#/$defs/path"},
+          {"pattern": "\\.png$"}
+        ]
+      }
+    }
+  }
+}

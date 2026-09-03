@@ -220,20 +220,24 @@ dossier generator reuse one trace bundle without synthesizing a second v1/v2
 manifest. The renderer still imports neither native code nor Z3, and it does
 not own LaTeX or report metadata.
 
-Z3 uses a separate `encoding-order` summary. The renderer shows the explicit
-project-owned row-major constraint construction and returned model, never an
-internal Z3 search or debug trace:
+Z3 uses separate `encoding-order` summaries. The same offline consumer renders
+the explicit project-owned Boolean source-order construction or Wang row-major
+construction and returned model, never an internal Z3 search or debug trace:
 
 ```bash
+uv run --locked python wang_z3_summary.py \
+  ../tests/fixtures/pipeline_sat_z3/boolean-z3.json \
+  output/boolean-z3-encoding
 uv run --locked python wang_z3_summary.py \
   ../tests/fixtures/pipeline_sat_z3/wang-z3.json \
   output/z3-encoding
 ```
 
-Three additional commands make their source semantics explicit: builder and
-hex are `canonical-example` views over versioned data and pure checked
-transformation respectively; optimized is a `didactic` overview whose dated
-reports, not the animation, establish performance.
+Three additional commands make their source semantics explicit: builder is a
+`canonical-construction`, hex is a `verified-transformation`, and optimized is
+a `didactic` overview whose dated reports, not the animation, establish
+performance. The optimized source is the closed six-entry
+`data/optimized-mechanisms-v1.json`, including the lazy MRV index.
 
 ```bash
 uv run --locked python wang_algorithm_animation.py builder \
@@ -245,6 +249,20 @@ uv run --locked python wang_algorithm_animation.py hex \
   ../tests/fixtures/wang_solution_v1_square_sat.json \
   output/square-to-hex
 ```
+
+`wang_narrative.py` adds only fixed downstream compositions for verification,
+the square/generalized/hex witness sequence, the generalized sheet and legend,
+and the eight-component overview. The root shared-asset generator invokes
+these commands after validating `run.json`; no renderer imports native code,
+Z3, Pages, or LaTeX. SAT and UNSAT records use the same pipeline order, while
+UNSAT emits an explicit not-applicable presentation instead of a witness.
+
+The trace frame selector is `semantic-milestones-v1`: it retains phase
+transitions, propagation, decisions, conflicts, backtracks, terminal state,
+and decision/backtrack reductions before filling the widest remaining replay
+gaps. It is deterministic and deliberately not uniform time sampling. The
+selected states are still composed from the same single validated replay used
+for PNG frames, the reduced-motion fallback, contact sheet, and GIF.
 
 All loaders reject unknown fields and identity drift before rasterization. No
 animation module imports native code; trace rendering and algorithm rendering
@@ -406,6 +424,8 @@ Raises `RenderingException` on pipeline errors.
 ├── wang_generalized_render.py # Sheet, atomic legend, and square overlay
 ├── wang_animation.py      # Deterministic PNG/contact-sheet/GIF encoder
 ├── wang_algorithm_animation.py # Canonical and didactic algorithm views
+├── wang_narrative.py      # Verification, witness, overview, and PDF-milestone compositions
+├── data/optimized-mechanisms-v1.json # Closed six-mechanism didactic source
 ├── test_wang_square.py    # Square loader, raster, isolation, CLI, and failures
 ├── test_wang_hex.py       # Port proof obligations, hex raster, golden, and CLI
 ├── test_wang_snapshot.py  # Snapshot contracts, views, isolation, and goldens
@@ -413,6 +433,7 @@ Raises `RenderingException` on pipeline errors.
 ├── test_wang_z3_summary.py # Fixed encoding summaries and byte stability
 ├── test_wang_generalized.py # Exact mapping, rejection, isolation, and goldens
 ├── test_wang_algorithm_animation.py # Source checks and animation goldens
+├── test_wang_narrative.py # Shared narrative compositions and accessibility fallbacks
 ├── input/                # Example input files (palette, scene, tiles, sprites)
 ├── output/               # Rendered PNG output goes here
 ├── test_data/
@@ -437,10 +458,10 @@ Raises `RenderingException` on pipeline errors.
 uv run --locked pytest -q
 ```
 
-The complete isolated suite has 283 tests: the 144 preserved legacy tests
+The complete isolated suite has 290 tests: the 144 preserved legacy tests
 below, 45 Wang square tests, 24 square-to-hex/hex-raster tests, 29 static
 snapshot/explainability tests, 21 generalized-presentation tests, and 20
-trace/Z3/algorithm-animation tests.
+trace/Z3/algorithm-animation tests plus 7 narrative/semantic-selection tests.
 To run only the original upstream suite:
 
 ```bash

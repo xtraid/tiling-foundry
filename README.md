@@ -78,7 +78,7 @@ solving remains future work.
 | Native solver event trace | Implemented as separate opt-in reference/optimized entry points with bounded observed events, full initial state, checkpoints, manifest v3, independent offline replay, and deterministic PNG/GIF views |
 | Reproducible Z3 summaries | Implemented for fixed seed/thread settings and explicit Boolean/Wang encoding order, result/model, and stable project-owned counts; no internal Z3 trace claim |
 | Observed-run dossier | Implemented as one opt-in generator of closed raw run metadata, fixed LaTeX, PDF, and reused trace/square/hex assets; four versioned SAT/UNSAT case definitions cover distinct execution shapes |
-| Full-pipeline multi-engine capture | Implemented as separate closed v2 case/run contracts and one atomic raw capture over Boolean Z3, one native reduction, reference, optimized, Wang Z3, and existing independent checkers; narrative assets and PDF v2 remain downstream work |
+| Full-pipeline multi-engine capture | Implemented as separate closed v2 case/run contracts and one atomic capture over Boolean Z3, one native reduction, reference, optimized, Wang Z3, and existing independent checkers; a closed shared-asset pass now binds semantic milestones and static square/generalized/hex presentations, while PDF v2 remains downstream work |
 | Native C JSON layer | Not implemented; `src/io/json.c` is a placeholder |
 | `TaskPlan` and native OpenMP solver | Not implemented; only the build scaffold exists |
 
@@ -233,6 +233,16 @@ presentation-only animation boundary.
 The [observed-run dossier contract](docs/run_dossiers.md) defines the four
 versioned case classes, authoritative raw metadata, fixed TeX scaffolding,
 asset reuse, atomic output, and UNSAT evidence boundary.
+
+The v2 shared-asset pass is also opt-in through the same dossier command. It
+validates the raw multi-engine capture, renders Boolean/Wang encoding order,
+Yang--Zhang construction, both observed traces, verification receipts, the
+checked witness presentation, and the six-mechanism didactic overview, then
+records every GIF, reduced-motion fallback, contact sheet, frame, caption, alt
+text, semantic label, owner, and source hash in
+`wang-narrative-assets-v1`. The same generator can target a temporary
+`canonical-pages` bundle; tests require all compositor-produced bytes to match
+the run-specific bundle for identical inputs and parameters.
 
 To export one observed reference run and render selected replay states:
 

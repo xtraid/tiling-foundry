@@ -33,27 +33,57 @@ _SINGLETON_RGB: Final = (83, 166, 116)
 _CHANGED_RGB: Final = (245, 178, 60)
 
 
-def _selected_indices(events: tuple[TraceEvent, ...], maximum: int) -> tuple[int, ...]:
+def select_semantic_milestones(
+    events: tuple[TraceEvent, ...], maximum: int
+) -> tuple[int, ...]:
+    """Select semantic transitions first, then fill the widest replay gaps.
+
+    This is intentionally different from uniform frame sampling.  The selected
+    states still come from the single validated replay performed by the caller.
+    """
     if type(maximum) is not int or not 2 <= maximum <= 32:
         raise WangSquareRenderError("max_frames must be in [2, 32]")
     count = len(events)
     if count <= maximum:
         return tuple(range(count))
+
     priority = [0, count - 1]
-    for kind in ("propagation", "decision", "conflict", "backtrack"):
-        match = next(
-            (index for index, event in enumerate(events) if event.kind == kind),
-            None,
-        )
-        if match is not None:
-            priority.append(match)
+    for index in range(1, count):
+        if events[index].phase != events[index - 1].phase:
+            priority.extend((index - 1, index))
+    for kind in (
+        "propagation",
+        "decision",
+        "conflict",
+        "backtrack",
+        "domain_reduction",
+    ):
+        matches = [
+            index for index, event in enumerate(events) if event.kind == kind
+        ]
+        if matches:
+            priority.extend((matches[0], matches[-1]))
+    priority.extend(
+        index
+        for index, event in enumerate(events)
+        if event.kind == "domain_reduction"
+        and event.reason in {"decision", "backtrack"}
+    )
+    deepest_decisions = [
+        (event.depth, index)
+        for index, event in enumerate(events)
+        if event.kind == "decision"
+    ]
+    if deepest_decisions:
+        priority.append(max(deepest_decisions)[1])
+
     selected = list(dict.fromkeys(priority))[:maximum]
-    for slot in range(maximum):
-        index = slot * (count - 1) // (maximum - 1)
-        if index not in selected:
-            selected.append(index)
-        if len(selected) == maximum:
-            break
+    while len(selected) < maximum:
+        candidate = max(
+            (index for index in range(count) if index not in selected),
+            key=lambda index: (min(abs(index - item) for item in selected), -index),
+        )
+        selected.append(candidate)
     return tuple(sorted(selected))
 
 
@@ -187,7 +217,7 @@ def render_trace_assets(
     """Replay once, compose each selected frame once, then encode assets."""
     bundle = load_trace_bundle(manifest_path)
     states = replay_trace(bundle.trace)
-    selected = _selected_indices(bundle.trace.events, max_frames)
+    selected = select_semantic_milestones(bundle.trace.events, max_frames)
     frames = tuple(
         _compose_frame(bundle, bundle.trace.events[index], states[index])
         for index in selected

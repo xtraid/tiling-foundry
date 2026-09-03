@@ -13,7 +13,7 @@ import pytest
 
 from wang_hex_port import WangSquareRenderError
 from wang_trace import TraceEvent, TraceSnapshot, load_trace_bundle, replay_trace
-from wang_trace_render import render_trace_assets
+from wang_trace_render import render_trace_assets, select_semantic_milestones
 
 
 RENDERER = Path(__file__).resolve().parent
@@ -114,6 +114,16 @@ def test_one_composition_chain_is_byte_stable_for_png_sheet_and_gif(tmp_path):
     with Image.open(first.animation) as animation:
         assert animation.format == "GIF"
         assert animation.n_frames == 8
+
+
+def test_semantic_milestones_precede_gap_filling():
+    bundle = load_trace_bundle(MANIFEST)
+    selected = select_semantic_milestones(bundle.trace.events, 8)
+
+    assert selected == (0, 1, 2516, 2517, 2518, 2893, 2894, 2895)
+    assert selected != tuple(
+        slot * (len(bundle.trace.events) - 1) // 7 for slot in range(8)
+    )
 
 
 def test_rejects_hash_tampering_before_parsing_trace(tmp_path):

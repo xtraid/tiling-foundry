@@ -201,4 +201,60 @@ def load_run_dossier_v2(path: str | Path) -> dict[str, object]:
             raise PipelineSnapshotError("Boolean Z3 witness digest mismatch")
         if document["wang_z3"]["witness_sha256"] != witness_sha256(wang_cells):
             raise PipelineSnapshotError("Wang Z3 witness digest mismatch")
+    narrative_path = run_path.parent / "assets/narrative/manifest.json"
+    narrative_expected = any(
+        document[solver]["trace"]["selection"]["performed"]
+        for solver in ("reference", "optimized")
+    ) or any(
+        document["artifacts"][f"{name}_presentation"] is not None
+        for name in ("square", "generalized", "hex")
+    )
+    if narrative_expected and not narrative_path.is_file():
+        raise PipelineSnapshotError(
+            "selected narrative assets require assets/narrative/manifest.json"
+        )
+    if narrative_path.is_file():
+        cursor = run_path.parent
+        for component in Path("assets/narrative/manifest.json").parts:
+            cursor /= component
+            if cursor.is_symlink():
+                raise PipelineSnapshotError(
+                    "assets/narrative and its manifest may not contain symlinks"
+                )
+        try:
+            resolved_narrative = narrative_path.resolve(strict=True)
+        except OSError as error:
+            raise PipelineSnapshotError(
+                f"cannot resolve narrative manifest: {error}"
+            ) from error
+        if not resolved_narrative.is_relative_to(root):
+            raise PipelineSnapshotError("narrative manifest escapes dossier")
+        from formats.narrative_assets import load_narrative_assets
+
+        narrative = load_narrative_assets(resolved_narrative, document)
+        if narrative["product"] != "run-specific":
+            raise PipelineSnapshotError(
+                "a dossier may contain only a run-specific narrative manifest"
+            )
+        for solver, animation_name in (
+            ("reference", "reference_trace"),
+            ("optimized", "optimized_trace"),
+        ):
+            selection = document[solver]["trace"]["selection"]
+            selected = len(narrative["animations"][animation_name]["frames"])
+            if not selection["performed"]:
+                raise PipelineSnapshotError(
+                    f"{solver} narrative manifest requires a performed selection"
+                )
+            if selection["selected_event_count"] != selected:
+                raise PipelineSnapshotError(
+                    f"{solver} selected event count disagrees with narrative manifest"
+                )
+        if document["case"]["expected_status"] == "sat" and any(
+            document["artifacts"][f"{name}_presentation"] is None
+            for name in ("square", "generalized", "hex")
+        ):
+            raise PipelineSnapshotError(
+                "SAT narrative manifest requires all presentation artifacts"
+            )
     return document
