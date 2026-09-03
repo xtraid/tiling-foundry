@@ -2,6 +2,7 @@
 layout: page
 title: Native solver event trace and offline replay
 permalink: /wang-solver-trace/
+page_class: reference
 description: Bounded semantic events, full-state checkpoints, hash-bound transport, and presentation-only replay for native Wang solves.
 section: Architecture and correctness
 document_kind: Data and rendering contract
@@ -18,13 +19,9 @@ actually observed; it is not a reconstructed lesson, a profiler sample, or a
 claim about a different engine. Ordinary solve calls retain their original ABI
 and allocate no provenance storage.
 
-<figure class="algorithm-animation">
-  <picture>
-    <source media="(prefers-reduced-motion: reduce)" srcset="{{ '/assets/images/solver-trace/frame-002517.png' | relative_url }}">
-    <img src="{{ '/assets/images/solver-trace/trace.gif' | relative_url }}" alt="Observed reference solver domains narrowing from the initial state through propagation and decisions to a verified SAT result.">
-  </picture>
-  <figcaption><strong>Observed state.</strong> These frames are selected from one complete 2,896-event reference trace. The renderer replays the versioned deltas once; frame selection does not change their order. The <a href="{{ '/assets/images/solver-trace/contact-sheet.png' | relative_url }}">static contact sheet</a> shows all selected states.</figcaption>
-</figure>
+The [reference solver component]({{ '/components/reference-solver/' | relative_url }})
+owns and explains the observed reference animation. This contract remains the
+authority for events, checkpoints, completeness, identity, and replay.
 
 ## Native boundary and ownership
 

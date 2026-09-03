@@ -2,6 +2,7 @@
 layout: page
 title: Observed-run dossiers and example index
 permalink: /run-dossiers/
+page_class: reference
 description: Opt-in v1 diagnostic reports and v2 multi-engine captures built from hash-bound traces, summaries, witnesses, and raw run metadata.
 section: Architecture and correctness
 document_kind: Reproduction and report contract
@@ -49,8 +50,9 @@ separate cubic monotone input whose unconstrained optimized run reaches depth
 two before exhausting all branches.
 
 This page is only an index. The [solver trace contract]({{ '/wang-solver-trace/' | relative_url }})
-remains the canonical explanation of event semantics, truncation, replay, and
-the existing animation assets. The [static snapshot contract]({{ '/wang-explainability-snapshots/' | relative_url }})
+remains the canonical explanation of event semantics, truncation, and replay.
+The [reference solver component]({{ '/components/reference-solver/' | relative_url }})
+owns the public reference animation. The [static snapshot contract]({{ '/wang-explainability-snapshots/' | relative_url }})
 defines formula and region views, while the [square-to-hex reference]({{ '/wang-square-to-hex/' | relative_url }})
 defines the presentation-only port. No animation, explanation, or generated
 run narrative is copied here.

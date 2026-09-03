@@ -2,6 +2,7 @@
 layout: page
 title: "Yang–Zhang reduction explanation contract"
 permalink: /wang-reduction-explanation/
+page_class: reference
 description: Native-produced signal, permutation, and gadget provenance for one formula-to-region construction.
 section: Yang–Zhang reduction
 document_kind: Data and rendering contract

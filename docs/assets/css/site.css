@@ -329,6 +329,62 @@ figure {
   color: var(--ink-strong);
 }
 
+.story-context {
+  max-width: var(--reading-width);
+  margin: 0 auto 2rem;
+  padding-bottom: 1.15rem;
+  border-bottom: 1px solid var(--rule);
+  color: var(--muted);
+  font: 0.68rem/1.5 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.story-context a {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.story-actions,
+.pipeline-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem 1.4rem;
+  padding-left: 0;
+  list-style: none;
+  font: 0.76rem/1.5 var(--mono);
+}
+
+.narrative-asset {
+  width: min(100%, 70rem);
+  margin: 2rem auto;
+  overflow: hidden;
+  border: 1px solid var(--rule-strong);
+  background: var(--black-raised);
+}
+
+.narrative-asset picture,
+.narrative-asset img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.narrative-asset figcaption {
+  margin: 0;
+  padding: 1rem 1.15rem;
+  border-top: 1px solid var(--rule);
+  color: var(--muted);
+  font: 0.74rem/1.55 var(--mono);
+}
+
+.narrative-asset .asset-source {
+  display: block;
+  margin-top: 0.55rem;
+  color: var(--faint);
+  font-size: 0.68rem;
+}
+
 .article-abstract {
   max-width: 40rem;
   margin: 0;

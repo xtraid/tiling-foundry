@@ -359,6 +359,17 @@ class MultiEngineDossierTests(unittest.TestCase):
             if path.is_file() and path.name != "manifest.json"
         }
         self.assertEqual(run_files, pages_files)
+        public_root = ROOT / "docs/assets/narrative"
+        public_manifest = load_narrative_assets(
+            public_root / "manifest.json", self.sat_document
+        )
+        self.assertEqual(public_manifest["product"], "canonical-pages")
+        public_files = {
+            path.relative_to(public_root): path.read_bytes()
+            for path in public_root.rglob("*")
+            if path.is_file() and path.name != "manifest.json"
+        }
+        self.assertEqual(pages_files, public_files)
 
     def test_narrative_manifest_rejects_metadata_and_asset_tampering(self) -> None:
         copied = self.root / "narrative-tampered"

@@ -1,0 +1,33 @@
+---
+layout: default
+---
+<article class="article article--story" data-wang-sections>
+  <header class="story-context" data-content-column data-wang-landmark>
+    <nav class="document-breadcrumb" aria-label="Breadcrumb">
+      <a href="{{ '/' | relative_url }}">Tiling Foundry</a>
+      {% if page.component_id %}
+        <span aria-hidden="true">/</span>
+        <a href="{{ '/pipeline/' | relative_url }}">Pipeline</a>
+        <span aria-hidden="true">/</span>
+        <span>{{ page.title | escape }}</span>
+      {% else %}
+        <span aria-hidden="true">/</span>
+        <span>{{ page.title | escape }}</span>
+      {% endif %}
+    </nav>
+    <p class="document-description">{{ page.description | escape }}</p>
+  </header>
+
+  <div class="article__body story-body" data-content-column>
+    {{ content }}
+  </div>
+
+  <nav class="document-return" aria-label="Story navigation">
+    {% if page.component_id %}
+      <a href="{{ '/pipeline/' | relative_url }}">Back to the complete pipeline</a>
+    {% else %}
+      <a href="{{ '/' | relative_url }}">Back to the project overview</a>
+    {% endif %}
+  </nav>
+</article>
+<script type="module" src="{{ '/assets/js/document-toc.js' | relative_url }}"></script>

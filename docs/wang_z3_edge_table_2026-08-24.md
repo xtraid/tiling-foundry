@@ -2,6 +2,7 @@
 layout: page
 title: Wang Z3 edge-table model
 permalink: /wang_z3_edge_table_2026-08-24/
+page_class: reference
 description: Constraint model, correctness evidence, and before/after smoke measurement for the Wang Z3 edge-table oracle.
 section: Cross-engine benchmarks
 document_kind: Oracle model report
@@ -25,13 +26,9 @@ public `solve_tiling()` result contract. `SAT`, `UNSAT`, `UNKNOWN`, dense
 row-major witnesses, inactive cells, boundary colors, and generic tilesets are
 preserved.
 
-<figure class="algorithm-animation">
-  <picture>
-    <source media="(prefers-reduced-motion: reduce)" srcset="{{ '/assets/images/z3-encoding/frame-03.png' | relative_url }}">
-    <img src="{{ '/assets/images/z3-encoding/trace.gif' | relative_url }}" alt="Canonical Wang Z3 example progressing through the project-defined row-major encoding order to the returned model.">
-  </picture>
-  <figcaption><strong>Encoding order.</strong> The frames replay the project-owned constraint construction and returned result; they do not claim to expose Z3's internal search or debug order. The <a href="{{ '/assets/images/z3-encoding/contact-sheet.png' | relative_url }}">static contact sheet</a> shows all five stages.</figcaption>
-</figure>
+The [Wang Z3 component]({{ '/components/wang-z3/' | relative_url }}) owns the
+encoding-order animation. It depicts project-owned construction and the
+returned model, never Z3's internal search or debug order.
 
 ## Reproducible summary boundary
 

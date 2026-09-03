@@ -2,6 +2,7 @@
 layout: page
 title: Static pipeline snapshots and explainable Wang views
 permalink: /wang-explainability-snapshots/
+page_class: reference
 description: Versioned formula, tileset, and unassigned-region snapshots consumed by the isolated Wang renderer.
 section: Architecture and correctness
 document_kind: Data and rendering contract

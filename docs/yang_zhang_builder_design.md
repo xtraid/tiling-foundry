@@ -2,6 +2,7 @@
 layout: page
 title: "Yang–Zhang formula-to-region builder"
 permalink: /yang_zhang_builder_design/
+page_class: reference
 description: Data flow, geometry, ownership, and tested invariants of the implemented formula-to-region builder.
 section: Yang–Zhang reduction
 document_kind: Implementation contract
@@ -44,13 +45,9 @@ Primary source:
 Text parsing, solving, independent verification, scheduling, oracles, solution
 transport, and rendering have separate contracts.
 
-<figure class="algorithm-animation">
-  <picture>
-    <source media="(prefers-reduced-motion: reduce)" srcset="{{ '/assets/images/builder-routing/frame-04.png' | relative_url }}">
-    <img src="{{ '/assets/images/builder-routing/trace.gif' | relative_url }}" alt="Canonical Yang–Zhang construction with native variable, forwarder, crossover, and clause gadget spans appearing in source order.">
-  </picture>
-  <figcaption><strong>Canonical construction.</strong> The frames reveal spans from the versioned native construction sidecar; they are not timestamps from an instrumented builder. The <a href="{{ '/assets/images/builder-routing/contact-sheet.png' | relative_url }}">static contact sheet</a> shows all six stages.</figcaption>
-</figure>
+The [Yang–Zhang component]({{ '/components/yang-zhang/' | relative_url }}) owns
+the canonical construction animation. This page remains the detailed builder
+contract for geometry, provenance, lifetimes, and black-box obligations.
 
 ## 1. Module boundary
 

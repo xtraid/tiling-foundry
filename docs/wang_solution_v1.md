@@ -2,6 +2,7 @@
 layout: page
 title: Wang solution v1 data contract
 permalink: /wang-solution-v1/
+page_class: reference
 description: Versioned JSON contract and independent semantic checks for square Wang SAT witnesses.
 section: Architecture and correctness
 document_kind: Data contract

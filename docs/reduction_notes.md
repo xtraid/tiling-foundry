@@ -2,6 +2,7 @@
 layout: page
 title: "Yang–Zhang reduction: geometry and witness correspondence"
 permalink: /reduction_notes/
+page_class: reference
 description: Mathematical conventions, project-specific geometry, and witness-level evidence for the implemented reduction.
 section: Yang–Zhang reduction
 document_kind: Technical note

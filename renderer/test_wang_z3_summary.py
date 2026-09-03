@@ -18,7 +18,7 @@ from wang_z3_summary import (
 RENDERER = Path(__file__).resolve().parent
 ROOT = RENDERER.parent
 FIXTURES = ROOT / "tests/fixtures/pipeline_sat_z3"
-GOLDENS = ROOT / "docs/assets/images/z3-encoding"
+GOLDENS = ROOT / "docs/assets/narrative"
 
 
 def _tree_bytes(directory: Path) -> dict[str, bytes]:
@@ -50,7 +50,7 @@ def test_encoding_order_animation_is_byte_stable_and_matches_goldens(tmp_path):
     render_wang_z3_assets(source, tmp_path / "second")
 
     assert _tree_bytes(tmp_path / "first") == _tree_bytes(tmp_path / "second")
-    assert _tree_bytes(tmp_path / "first") == _tree_bytes(GOLDENS)
+    assert _tree_bytes(tmp_path / "first") == _tree_bytes(GOLDENS / "wang-z3")
     assert first.fallback.name == "frame-03.png"
     with Image.open(first.animation) as animation:
         assert animation.format == "GIF"
@@ -63,6 +63,7 @@ def test_boolean_encoding_order_animation_is_byte_stable(tmp_path):
     render_boolean_z3_assets(source, tmp_path / "second")
 
     assert _tree_bytes(tmp_path / "first") == _tree_bytes(tmp_path / "second")
+    assert _tree_bytes(tmp_path / "first") == _tree_bytes(GOLDENS / "boolean-z3")
     assert first.fallback.name == "frame-02.png"
     with Image.open(first.animation) as animation:
         assert animation.format == "GIF"

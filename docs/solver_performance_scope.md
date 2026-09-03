@@ -2,6 +2,7 @@
 layout: page
 title: Solver optimization methodology and execution paths
 permalink: /solver_performance_scope/
+page_class: reference
 description: Stable correctness boundaries, measurement rules, and current mechanisms for the reference and optimized Wang solver paths.
 section: Solver optimization
 document_kind: Methodology

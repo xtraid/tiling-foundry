@@ -2,6 +2,7 @@
 layout: page
 title: CM13 parser fuzz smoke
 permalink: /parser_fuzz_smoke_2026-08-22/
+page_class: evidence
 description: Reproducible libFuzzer smoke coverage for the canonical CM13 parser.
 section: Architecture and correctness
 document_kind: Test report

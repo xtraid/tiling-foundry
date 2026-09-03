@@ -2,6 +2,7 @@
 layout: page
 title: Serial solver reference profile
 permalink: /solver_reference_profile_2026-08-17/
+page_class: evidence
 description: Reproducible reference measurements for the serial Wang solver.
 section: Solver optimization
 document_kind: Benchmark report

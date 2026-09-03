@@ -2,6 +2,7 @@
 layout: page
 title: Optimized solver MRV index
 permalink: /solver_mrv_index_2026-08-28/
+page_class: evidence
 description: Evidence for the optimized solver's private row-major MRV bucket index.
 section: Solver optimization
 document_kind: Benchmark report

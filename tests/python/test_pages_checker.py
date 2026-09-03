@@ -1,0 +1,139 @@
+from copy import deepcopy
+import hashlib
+from pathlib import Path
+import sys
+import tempfile
+import unittest
+from unittest import mock
+
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tools"))
+
+import check_pages  # noqa: E402
+
+
+def _documents() -> dict[str, check_pages.Document]:
+    errors: list[str] = []
+    documents = check_pages.check_catalog(errors)
+    if errors:
+        raise AssertionError("\n".join(errors))
+    return documents
+
+
+class PagesCheckerTests(unittest.TestCase):
+    def test_repository_source_and_manifest_pass(self) -> None:
+        errors: list[str] = []
+        documents = check_pages.check_catalog(errors)
+        check_pages.check_liquid_links(documents, errors)
+        animations, statics = check_pages.check_narrative_assets(documents, errors)
+        check_pages.check_site_structure(documents, errors)
+        self.assertEqual(errors, [])
+        self.assertEqual((animations, statics), (9, 8))
+
+    def test_artifact_rejects_unknown_extension_and_wrong_hash(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            payload = root / "asset.png"
+            payload.write_bytes(b"not the declared bytes")
+            errors: list[str] = []
+            with (
+                mock.patch.object(check_pages, "NARRATIVE_ROOT", root),
+                mock.patch.object(check_pages, "NARRATIVE_MANIFEST", root / "manifest.json"),
+            ):
+                check_pages._artifact(
+                    {
+                        "path": "asset.webp",
+                        "sha256": hashlib.sha256(b"asset").hexdigest(),
+                        "media_type": "image/png",
+                    },
+                    "test.extension",
+                    errors,
+                )
+                check_pages._artifact(
+                    {
+                        "path": "asset.png",
+                        "sha256": hashlib.sha256(b"different").hexdigest(),
+                        "media_type": "image/png",
+                    },
+                    "test.hash",
+                    errors,
+                )
+        joined = "\n".join(errors)
+        self.assertIn("must end in .png or .gif", joined)
+        self.assertIn("disagrees with manifest", joined)
+
+    def test_manifest_closes_identity_and_pdf_milestone_structure(self) -> None:
+        documents = _documents()
+        manifest = check_pages._load_manifest([])
+        self.assertIsNotNone(manifest)
+
+        invalid_identity = deepcopy(manifest)
+        invalid_identity["identities"]["tileset"] = "not-a-digest"
+        errors: list[str] = []
+        with mock.patch.object(check_pages, "_load_manifest", return_value=invalid_identity):
+            check_pages.check_narrative_assets(documents, errors)
+        self.assertIn("identities.tileset is not a SHA-256", "\n".join(errors))
+
+        invalid_milestone = deepcopy(manifest)
+        invalid_milestone["pdf_milestones"]["reference_trace"] = ["../escape.png"]
+        errors = []
+        with mock.patch.object(check_pages, "_load_manifest", return_value=invalid_milestone):
+            check_pages.check_narrative_assets(documents, errors)
+        self.assertIn("pdf_milestones.reference_trace has invalid paths", "\n".join(errors))
+
+    def test_incomplete_asset_records_report_controlled_diagnostics(self) -> None:
+        documents = _documents()
+        manifest = check_pages._load_manifest([])
+        self.assertIsNotNone(manifest)
+
+        for collection, name in (
+            ("animations", "boolean_z3"),
+            ("statics", "home_preview"),
+        ):
+            with self.subTest(collection=collection, name=name):
+                invalid = deepcopy(manifest)
+                del invalid[collection][name]["owner"]
+                errors: list[str] = []
+                with mock.patch.object(check_pages, "_load_manifest", return_value=invalid):
+                    check_pages.check_narrative_assets(documents, errors)
+                self.assertIn(
+                    f"{collection}.{name} is not closed",
+                    "\n".join(errors),
+                )
+
+    def test_public_image_inventory_rejects_an_unowned_file(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            images = Path(directory)
+            (images / "tile-mark.svg").write_text("<svg/>\n", encoding="utf-8")
+            (images / "orphan.svg").write_text("<svg/>\n", encoding="utf-8")
+            errors: list[str] = []
+
+            check_pages.check_public_image_inventory(images, errors)
+
+        self.assertIn(
+            "unexpected public image assets: orphan.svg",
+            "\n".join(errors),
+        )
+
+    def test_primary_asset_must_be_in_primary_animation_section(self) -> None:
+        original = check_pages.split_front_matter
+        target = check_pages.DOCS / "components/boolean-z3.md"
+
+        def without_primary(path: Path, errors: list[str]) -> tuple[dict[str, str], str]:
+            metadata, body = original(path, errors)
+            if path == target:
+                body = body.replace("boolean_z3", "other")
+            return metadata, body
+
+        errors: list[str] = []
+        with mock.patch.object(check_pages, "split_front_matter", side_effect=without_primary):
+            check_pages.check_catalog(errors)
+        self.assertIn(
+            "primary asset 'boolean_z3' must appear in the Primary animation section",
+            "\n".join(errors),
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

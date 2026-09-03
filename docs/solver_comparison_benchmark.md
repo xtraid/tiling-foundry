@@ -2,6 +2,7 @@
 layout: page
 title: Native and Z3 solver comparison benchmark
 permalink: /solver_comparison_benchmark/
+page_class: reference
 description: Reproducible protocol for comparing the native and Python Z3 decision paths.
 section: Cross-engine benchmarks
 document_kind: Benchmark protocol

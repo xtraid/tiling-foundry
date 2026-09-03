@@ -2,6 +2,7 @@
 layout: page
 title: Project references
 permalink: /references/
+page_class: reference
 description: Primary papers and authoritative references used by Tiling Foundry.
 section: Yang–Zhang reduction
 document_kind: Reference bibliography

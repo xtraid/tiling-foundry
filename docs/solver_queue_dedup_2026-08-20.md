@@ -2,6 +2,7 @@
 layout: page
 title: Optimized solver queue deduplication
 permalink: /solver_queue_dedup_2026-08-20/
+page_class: evidence
 description: Evidence for the optimized solver's packed pending-cell index.
 section: Solver optimization
 document_kind: Benchmark report
@@ -12,13 +13,9 @@ nav_order: 80
 
 # Optimized solver queue deduplication — 20 August 2026
 
-<figure class="algorithm-animation">
-  <picture>
-    <source media="(prefers-reduced-motion: reduce)" srcset="{{ '/assets/images/optimized-mechanisms/frame-06.png' | relative_url }}">
-    <img src="{{ '/assets/images/optimized-mechanisms/trace.gif' | relative_url }}" alt="Didactic comparison of the reference solver baseline and the six retained optimized serial mechanisms.">
-  </picture>
-  <figcaption><strong>Didactic.</strong> This shared animation locates queue deduplication among the six isolated mechanisms, including the later lazy MRV index; the measurements below, not the animation, establish its effect. The <a href="{{ '/assets/images/optimized-mechanisms/contact-sheet.png' | relative_url }}">static contact sheet</a> shows all stages.</figcaption>
-</figure>
+The [optimized solver component]({{ '/components/optimized-solver/' | relative_url }})
+owns the six-mechanism overview. The measurements below, not that didactic
+asset, establish the effect of queue deduplication.
 
 This accepted mechanism changes only the optimized propagation queue. An
 enqueue request for a cell that already has an unconsumed FIFO occurrence is

@@ -20,7 +20,7 @@ RENDERER = Path(__file__).resolve().parent
 ROOT = RENDERER.parent
 FIXTURE_DIRECTORY = ROOT / "tests/fixtures/pipeline_sat_solver_trace"
 MANIFEST = FIXTURE_DIRECTORY / "manifest.json"
-GOLDENS = ROOT / "docs/assets/images/solver-trace"
+GOLDENS = ROOT / "docs/assets/narrative/reference-trace"
 
 
 def _tree_bytes(directory: Path) -> dict[str, bytes]:
@@ -99,12 +99,12 @@ def test_loads_and_replays_hash_bound_trace_without_solver_imports():
 
 
 def test_one_composition_chain_is_byte_stable_for_png_sheet_and_gif(tmp_path):
-    first = render_trace_assets(MANIFEST, tmp_path / "first", max_frames=8)
-    second = render_trace_assets(MANIFEST, tmp_path / "second", max_frames=8)
+    first = render_trace_assets(MANIFEST, tmp_path / "first", max_frames=10)
+    second = render_trace_assets(MANIFEST, tmp_path / "second", max_frames=10)
 
     assert _tree_bytes(tmp_path / "first") == _tree_bytes(tmp_path / "second")
     assert _tree_bytes(tmp_path / "first") == _tree_bytes(GOLDENS)
-    assert len(first.frames) == 8
+    assert len(first.frames) == 10
     assert first.fallback.name == "frame-002517.png"
     assert first.animation.name == "trace.gif"
     assert first.contact_sheet.name == "contact-sheet.png"
@@ -113,16 +113,16 @@ def test_one_composition_chain_is_byte_stable_for_png_sheet_and_gif(tmp_path):
         assert frame.size == (988, 414)
     with Image.open(first.animation) as animation:
         assert animation.format == "GIF"
-        assert animation.n_frames == 8
+        assert animation.n_frames == 10
 
 
 def test_semantic_milestones_precede_gap_filling():
     bundle = load_trace_bundle(MANIFEST)
-    selected = select_semantic_milestones(bundle.trace.events, 8)
+    selected = select_semantic_milestones(bundle.trace.events, 10)
 
-    assert selected == (0, 1, 2516, 2517, 2518, 2893, 2894, 2895)
+    assert selected == (0, 1, 1258, 1887, 2516, 2517, 2518, 2893, 2894, 2895)
     assert selected != tuple(
-        slot * (len(bundle.trace.events) - 1) // 7 for slot in range(8)
+        slot * (len(bundle.trace.events) - 1) // 9 for slot in range(10)
     )
 
 

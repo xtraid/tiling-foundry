@@ -2,6 +2,7 @@
 layout: page
 title: Square-to-hex presentation port
 permalink: /wang-square-to-hex/
+page_class: reference
 description: Algebra, coordinate convention, inverse proof, and raster boundary for the verified presentation-only square-to-hex port.
 section: Architecture and correctness
 document_kind: Technical reference
@@ -34,13 +35,9 @@ The exact edge tuple, coordinate convention, deterministic fresh-color rule,
 and finite-region bijection below are Tiling Foundry's formalization of that
 construction. They are not attributed to either source's diagram notation.
 
-<figure class="algorithm-animation">
-  <picture>
-    <source media="(prefers-reduced-motion: reduce)" srcset="{{ '/assets/images/square-to-hex/frame-02.png' | relative_url }}">
-    <img src="{{ '/assets/images/square-to-hex/trace.gif' | relative_url }}" alt="Verified square-to-hex transformation preserving four source edges and adding the fresh kappa color.">
-  </picture>
-  <figcaption><strong>Verified transformation.</strong> The pure renderer-side port and its raster-independent checker produce this mapping; the animation itself is not a proof. The <a href="{{ '/assets/images/square-to-hex/contact-sheet.png' | relative_url }}">static contact sheet</a> shows all four stages.</figcaption>
-</figure>
+The [visualization component]({{ '/components/visualization/' | relative_url }})
+owns the checked transformation animation. The algebra, inverse, and
+raster-independent checker documented below remain the correctness boundary.
 
 ## Project convention
 

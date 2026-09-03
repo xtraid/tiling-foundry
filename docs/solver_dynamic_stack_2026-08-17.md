@@ -2,6 +2,7 @@
 layout: page
 title: Optimized solver dynamic DFS stack
 permalink: /solver_dynamic_stack_2026-08-17/
+page_class: evidence
 description: Evidence for the optimized solver's geometrically growing DFS stack.
 section: Solver optimization
 document_kind: Benchmark report
@@ -12,13 +13,9 @@ nav_order: 30
 
 # Optimized solver dynamic DFS stack — 17 August 2026
 
-<figure class="algorithm-animation">
-  <picture>
-    <source media="(prefers-reduced-motion: reduce)" srcset="{{ '/assets/images/optimized-mechanisms/frame-06.png' | relative_url }}">
-    <img src="{{ '/assets/images/optimized-mechanisms/trace.gif' | relative_url }}" alt="Didactic comparison of the reference solver baseline and the six retained optimized serial mechanisms.">
-  </picture>
-  <figcaption><strong>Didactic.</strong> This shared animation locates the dynamic stack among the six isolated mechanisms, including the later lazy MRV index; the measurements below, not the animation, establish its effect. The <a href="{{ '/assets/images/optimized-mechanisms/contact-sheet.png' | relative_url }}">static contact sheet</a> shows all stages.</figcaption>
-</figure>
+The [optimized solver component]({{ '/components/optimized-solver/' | relative_url }})
+owns the six-mechanism overview. The measurements below, not that didactic
+asset, establish the effect of the dynamic DFS stack.
 
 This report evaluates only DFS stack storage. The reference path still
 allocates one `SearchFrame` per active cell. The optimized path starts with at
