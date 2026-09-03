@@ -184,7 +184,7 @@ checks prove the old files are unreferenced before deletion.
    semantic record for every GIF.
 6. [x] Move public ownership to component pages without duplicating files or
    explanations; update old pages to links in the same change.
-7. [ ] Prove every remaining public asset has exactly one embedding owner and
+7. [x] Prove every remaining public asset has exactly one embedding owner and
    every internal link resolves in generated HTML.
 
 ## 9. Pages implementation gates
@@ -198,13 +198,13 @@ checks prove the old files are unreferenced before deletion.
   `canonical-example`.
 - [x] Enforce GIF owner, nonempty alt text, reduced-motion PNG, caption,
   contact sheet, source, and scope.
-- [ ] Preserve all current permalinks and validate all literal and generated
+- [x] Preserve all current permalinks and validate all literal and generated
   links/anchors.
 - [x] Distinguish the general pipeline from the named SAT worked example in
   visible copy.
 - [x] Keep technical references and dated evidence available without
   duplicating their prose in story pages.
-- [ ] Build and check the site with no native build, renderer environment,
+- [x] Build and check the site with no native build, renderer environment,
   dossier generation, or LaTeX installation.
 
 ## 10. V2 PDF implementation gates
