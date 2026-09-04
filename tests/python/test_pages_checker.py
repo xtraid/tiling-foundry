@@ -130,7 +130,31 @@ class PagesCheckerTests(unittest.TestCase):
         with mock.patch.object(check_pages, "split_front_matter", side_effect=without_primary):
             check_pages.check_catalog(errors)
         self.assertIn(
-            "primary asset 'boolean_z3' must appear in the Primary animation section",
+            "primary asset 'boolean_z3' must use a narrative include in the Primary animation section",
+            "\n".join(errors),
+        )
+
+    def test_primary_asset_include_must_be_in_primary_animation_section(self) -> None:
+        original = check_pages.split_front_matter
+        target = check_pages.DOCS / "components/boolean-z3.md"
+
+        def moved_include(path: Path, errors: list[str]) -> tuple[dict[str, str], str]:
+            metadata, body = original(path, errors)
+            if path == target:
+                include = next(check_pages.NARRATIVE_INCLUDE.finditer(body)).group(0)
+                body = body.replace(include, "", 1)
+                body = body.replace(
+                    "## Mechanism\n",
+                    f"## Mechanism\n\n{include}\n",
+                    1,
+                )
+            return metadata, body
+
+        errors: list[str] = []
+        with mock.patch.object(check_pages, "split_front_matter", side_effect=moved_include):
+            check_pages.check_catalog(errors)
+        self.assertIn(
+            "primary asset 'boolean_z3' must use a narrative include in the Primary animation section",
             "\n".join(errors),
         )
 
@@ -183,6 +207,23 @@ class PagesCheckerTests(unittest.TestCase):
             check_pages.check_narrative_assets(documents, errors)
 
         self.assertIn("include argument 'label'", "\n".join(errors))
+
+    def test_frozen_cross_links_must_use_relative_url(self) -> None:
+        documents = _documents()
+        worked = documents["/worked-example/"]
+        documents["/worked-example/"] = check_pages.Document(
+            worked.path,
+            worked.metadata,
+            worked.body.replace("'/components/boolean-z3/' | relative_url", "'/missing/' | relative_url"),
+        )
+        errors: list[str] = []
+
+        check_pages.check_site_structure(documents, errors)
+
+        self.assertIn(
+            "/worked-example/ does not link frozen route /components/boolean-z3/",
+            "\n".join(errors),
+        )
 
 
 if __name__ == "__main__":

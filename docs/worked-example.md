@@ -40,6 +40,16 @@ tiling. Only after those checks does the presentation layer render the square
 witness, recognize exact generalized contours, and apply the independently
 checked square-to-hex mapping.
 
+The milestone sequence links to the owned explanations for the
+[tileset]({{ '/components/tileset/' | relative_url }}),
+[Boolean Z3]({{ '/components/boolean-z3/' | relative_url }}),
+[Yang–Zhang reduction]({{ '/components/yang-zhang/' | relative_url }}),
+[reference solver]({{ '/components/reference-solver/' | relative_url }}),
+[optimized solver]({{ '/components/optimized-solver/' | relative_url }}),
+[Wang Z3]({{ '/components/wang-z3/' | relative_url }}),
+[verification]({{ '/components/verification/' | relative_url }}), and
+[visualization]({{ '/components/visualization/' | relative_url }}).
+
 Raw durations belong to this capture and environment. They are not a benchmark
 or a performance ranking. The [run dossier index]({{ '/run-dossiers/' | relative_url }})
 documents the immutable capture boundary, while the

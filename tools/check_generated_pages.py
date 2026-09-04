@@ -12,7 +12,13 @@ from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import unquote, urljoin, urlsplit
 
-from check_pages import COMPONENT_HEADINGS, COMPONENTS, EXPECTED_BY_CLASS
+from check_pages import (
+    ANIMATION_POLICY,
+    COMPONENT_HEADINGS,
+    COMPONENTS,
+    EXPECTED_BY_CLASS,
+    STATIC_POLICY,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,10 +42,20 @@ REFERENCE_ATTRIBUTES = {
     "script": "src",
     "source": "srcset",
 }
+NARRATIVE_ASSET_POLICY = {
+    **{name: (route, "animation") for name, (route, _) in ANIMATION_POLICY.items()},
+    **{
+        name: (route, "static")
+        for name, (route, _) in STATIC_POLICY.items()
+        if name != "presentation_status"
+    },
+}
 
 
 @dataclass
 class Figure:
+    asset_id: str = ""
+    narrative_kind: str = ""
     narrative_animation: bool = False
     gif_images: list[tuple[str, str]] = field(default_factory=list)
     reduced_sources: list[str] = field(default_factory=list)
@@ -102,9 +118,18 @@ class Parser(HTMLParser):
             if component:
                 self.page.component_ids.append(component)
         if tag == "figure":
+            classes = set(values.get("class", "").split())
+            kinds = classes & {"narrative-animation", "narrative-static"}
             self.figure = Figure(
-                narrative_animation="narrative-animation"
-                in values.get("class", "").split()
+                asset_id=values.get("data-asset-id", ""),
+                narrative_kind=(
+                    "animation"
+                    if kinds == {"narrative-animation"}
+                    else "static"
+                    if kinds == {"narrative-static"}
+                    else ""
+                ),
+                narrative_animation="narrative-animation" in kinds,
             )
             self.page.figures.append(self.figure)
         if tag == "img":
@@ -183,6 +208,47 @@ def _load_pages(root: Path, errors: list[str]) -> dict[str, Page]:
 
 def _error(errors: list[str], root: Path, page: Page, message: str) -> None:
     errors.append(f"{page.path.relative_to(root).as_posix()}: {message}")
+
+
+def _check_narrative_asset_topology(
+    root: Path, pages: dict[str, Page], errors: list[str]
+) -> None:
+    rendered: dict[str, list[tuple[Page, int, Figure]]] = {}
+    for page in pages.values():
+        for index, figure in enumerate(page.figures, start=1):
+            if figure.asset_id:
+                rendered.setdefault(figure.asset_id, []).append((page, index, figure))
+            elif figure.narrative_kind:
+                _error(errors, root, page, f"figure {index} lacks data-asset-id")
+
+    for asset_id, (owner, expected_kind) in NARRATIVE_ASSET_POLICY.items():
+        occurrences = rendered.pop(asset_id, [])
+        if not occurrences:
+            errors.append(f"missing narrative {expected_kind} asset {asset_id!r}")
+            continue
+        if len(occurrences) != 1:
+            errors.append(
+                f"narrative asset {asset_id!r} occurs {len(occurrences)} times; expected exactly once"
+            )
+            continue
+        page, index, figure = occurrences[0]
+        if page.route != owner:
+            _error(
+                errors,
+                root,
+                page,
+                f"narrative asset {asset_id!r} is rendered on {page.route!r}, expected owner {owner!r}",
+            )
+        if figure.narrative_kind != expected_kind:
+            _error(
+                errors,
+                root,
+                page,
+                f"narrative asset {asset_id!r} must be an {expected_kind} figure",
+            )
+    for asset_id, occurrences in sorted(rendered.items()):
+        for page, index, _ in occurrences:
+            _error(errors, root, page, f"figure {index} has unexpected data-asset-id {asset_id!r}")
 
 
 def _check_semantics(
@@ -269,6 +335,8 @@ def _check_semantics(
                 _error(errors, root, page, f"figure {index} requires one contact-sheet link")
             if len(figure.captions) != 1 or not figure.captions[0]:
                 _error(errors, root, page, f"figure {index} requires one non-empty caption")
+
+    _check_narrative_asset_topology(root, pages, errors)
 
     home = pages.get("/")
     if not home:

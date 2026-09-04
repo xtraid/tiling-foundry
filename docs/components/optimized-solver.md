@@ -56,7 +56,8 @@ verification; neither trace nor metrics are used as solver input.
 ## Observed example
 
 The `pipeline_sat.cm13` optimized run returns a checked SAT witness with a
-complete trace. The separately named search-UNSAT capture exercises conflict,
+complete trace. The separately named search-UNSAT capture in the
+[dossier index]({{ '/run-dossiers/' | relative_url }}) exercises conflict,
 backtrack, and exhaustion without becoming a second canonical story.
 
 ## Trust boundary

@@ -19,7 +19,8 @@ row-major scan. The optimized path derives 22 private buckets for domain sizes
 2 through 23, stores bucket membership in packed cell-index bitsets, and keeps
 one cached domain-size byte per dense cell. Selecting the first nonempty size
 bucket and then its lowest set cell bit preserves the existing minimum-domain,
-row-major tie break.
+row-major tie break. The [optimized solver component]({{ '/components/optimized-solver/' | relative_url }}) owns the narrative trace
+and the six-mechanism overview; this report remains dated evidence.
 
 The index is created lazily only after a root branch propagates successfully
 and search must descend to a child. Root conflicts, fully resolved regions,

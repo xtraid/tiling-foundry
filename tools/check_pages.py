@@ -161,6 +161,11 @@ STATIC_POLICY = {
     ),
     "presentation_status": ("/run-dossiers/", "observed"),
 }
+FROZEN_CROSS_LINKS = {
+    "/worked-example/": tuple(COMPONENTS),
+    "/components/optimized-solver/": ("/run-dossiers/",),
+    "/solver_mrv_index_2026-08-28/": ("/components/optimized-solver/",),
+}
 SELECTED_ANIMATIONS = {
     "pipeline_overview",
     "region_construction",
@@ -212,6 +217,19 @@ class NarrativeInclude:
     path: Path
     template: str
     arguments: dict[str, str]
+
+
+def _section_has_narrative_include(section: str, asset_id: str) -> bool:
+    for match in NARRATIVE_INCLUDE.finditer(section):
+        try:
+            tokens = shlex.split(match.group("arguments"), comments=False, posix=True)
+        except ValueError:
+            continue
+        for token in tokens:
+            field, separator, value = token.partition("=")
+            if separator and field == "asset_id" and value == asset_id:
+                return True
+    return False
 
 
 def fail(errors: list[str], path: Path, message: str) -> None:
@@ -354,11 +372,13 @@ def check_catalog(errors: list[str]) -> dict[str, Document]:
                 body,
                 flags=re.MULTILINE | re.DOTALL,
             )
-            if not primary_section or primary not in primary_section.group("body"):
+            if not primary_section or not _section_has_narrative_include(
+                primary_section.group("body"), primary
+            ):
                 fail(
                     errors,
                     path,
-                    f"primary asset {primary!r} must appear in the Primary animation section",
+                    f"primary asset {primary!r} must use a narrative include in the Primary animation section",
                 )
         elif any(name in metadata for name in ("component_id", "pipeline_order", "primary_asset")):
             fail(errors, path, "component-only front matter appears on a non-component route")
@@ -909,6 +929,16 @@ def check_site_structure(documents: dict[str, Document], errors: list[str]) -> N
                     errors,
                     DOCS,
                     f"{route} does not link complete component route {component_route}",
+                )
+    for route, targets in FROZEN_CROSS_LINKS.items():
+        source = documents.get(route).body if route in documents else ""
+        for target in targets:
+            literal = f"'{target}' | relative_url"
+            if literal not in source:
+                fail(
+                    errors,
+                    DOCS,
+                    f"{route} does not link frozen route {target}",
                 )
 
 
