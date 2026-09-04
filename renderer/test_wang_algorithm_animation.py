@@ -19,6 +19,7 @@ BUILDER_MANIFEST = (
 )
 SQUARE_SOLUTION = ROOT / "tests/fixtures/wang_solution_v1_square_sat.json"
 GOLDENS = ROOT / "docs/assets/narrative"
+PRIVATE_GOLDENS = RENDERER / "test_data"
 
 
 def _tree_bytes(directory: Path) -> dict[str, bytes]:
@@ -32,14 +33,13 @@ def _tree_bytes(directory: Path) -> dict[str, bytes]:
 def _assert_stable_assets(
     first_directory: Path,
     second_directory: Path,
-    golden_directory: Path | None,
+    golden_directory: Path,
     *,
     frame_count: int,
     fallback_name: str,
 ) -> None:
     assert _tree_bytes(first_directory) == _tree_bytes(second_directory)
-    if golden_directory is not None:
-        assert _tree_bytes(first_directory) == _tree_bytes(golden_directory)
+    assert _tree_bytes(first_directory) == _tree_bytes(golden_directory)
     with Image.open(first_directory / "trace.gif") as animation:
         assert animation.format == "GIF"
         assert animation.n_frames == frame_count
@@ -82,7 +82,7 @@ def test_hex_animation_checks_the_pure_port_and_is_byte_stable(tmp_path):
     _assert_stable_assets(
         tmp_path / "first",
         tmp_path / "second",
-        None,
+        PRIVATE_GOLDENS / "square-to-hex-animation",
         frame_count=4,
         fallback_name="frame-02.png",
     )

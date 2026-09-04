@@ -40,6 +40,7 @@ REFERENCE_ATTRIBUTES = {
 
 @dataclass
 class Figure:
+    narrative_animation: bool = False
     gif_images: list[tuple[str, str]] = field(default_factory=list)
     reduced_sources: list[str] = field(default_factory=list)
     contact_sheets: list[str] = field(default_factory=list)
@@ -101,7 +102,10 @@ class Parser(HTMLParser):
             if component:
                 self.page.component_ids.append(component)
         if tag == "figure":
-            self.figure = Figure()
+            self.figure = Figure(
+                narrative_animation="narrative-animation"
+                in values.get("class", "").split()
+            )
             self.page.figures.append(self.figure)
         if tag == "img":
             source = values.get("src", "")
@@ -255,7 +259,7 @@ def _check_semantics(
                 f"GIFs outside figures: {page.gifs_outside_figures!r}",
             )
         for index, figure in enumerate(page.figures, start=1):
-            if not figure.gif_images:
+            if not figure.narrative_animation and not figure.gif_images:
                 continue
             if len(figure.gif_images) != 1:
                 _error(errors, root, page, f"figure {index} must contain exactly one GIF")

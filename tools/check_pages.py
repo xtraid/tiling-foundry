@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import shlex
 import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass
@@ -111,6 +112,11 @@ FORBIDDEN_PUBLIC_PATTERNS = {
 RELATIVE_URL = re.compile(
     r"\{\{\s*['\"](?P<path>/[^'\"]+)['\"]\s*\|\s*relative_url\s*\}\}"
 )
+NARRATIVE_INCLUDE = re.compile(
+    r"\{%\s*include\s+(?P<template>narrative-(?:animation|static)\.html)"
+    r"(?P<arguments>.*?)%\}",
+    re.DOTALL,
+)
 MARKDOWN_SOURCE_LINK = re.compile(r"\]\([^)]*\.md(?:[#?][^)]*)?\)")
 HISTORICAL_PDF = "Wang23_C_OpenMP_Architecture_Spec_Merged.pdf"
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -169,6 +175,28 @@ LEGACY_ASSET_DIRECTORIES = {
     "z3-encoding",
 }
 ALLOWED_PUBLIC_IMAGES = {"tile-mark.svg"}
+ANIMATION_INCLUDE_FIELDS = {
+    "asset_id",
+    "animation",
+    "fallback",
+    "contact_sheet",
+    "alt",
+    "width",
+    "height",
+    "label",
+    "caption",
+    "source",
+}
+STATIC_INCLUDE_FIELDS = {
+    "asset_id",
+    "image",
+    "alt",
+    "width",
+    "height",
+    "label",
+    "caption",
+    "source",
+}
 
 
 @dataclass(frozen=True)
@@ -176,6 +204,14 @@ class Document:
     path: Path
     metadata: dict[str, str]
     body: str
+
+
+@dataclass(frozen=True)
+class NarrativeInclude:
+    route: str
+    path: Path
+    template: str
+    arguments: dict[str, str]
 
 
 def fail(errors: list[str], path: Path, message: str) -> None:
@@ -462,17 +498,48 @@ def _metadata(
 def _require_owner_copy(
     name: str,
     record: dict[str, object],
-    public_paths: tuple[str, ...],
+    template: str,
+    roles: dict[str, str],
     documents: dict[str, Document],
+    includes: dict[str, NarrativeInclude],
     errors: list[str],
 ) -> None:
     owner = str(record["owner"])
     if owner not in documents:
         fail(errors, NARRATIVE_MANIFEST, f"{name} names missing owner route {owner!r}")
         return
-    owner_body = documents[owner].body
-    for relative in public_paths:
-        public = f"/assets/narrative/{relative}"
+    include = includes.get(name)
+    if include is None:
+        fail(errors, documents[owner].path, f"owned asset {name!r} has no include")
+        return
+    if include.route != owner:
+        fail(
+            errors,
+            include.path,
+            f"asset include {name!r} must occur in owner {owner!r}",
+        )
+    if include.template != template:
+        fail(
+            errors,
+            include.path,
+            f"asset include {name!r} must use {template!r}",
+        )
+    expected = {
+        "asset_id": name,
+        "alt": str(record["alt_text"]),
+        "label": str(record["semantic_label"]),
+        "caption": str(record["caption"]),
+        "source": str(record["source_contract"]),
+        **roles,
+    }
+    for field, value in expected.items():
+        if include.arguments.get(field) != value:
+            fail(
+                errors,
+                include.path,
+                f"asset {name!r} include argument {field!r} must be {value!r}",
+            )
+    for public in roles.values():
         locations = [
             route for route, document in documents.items() if public in document.body
         ]
@@ -482,14 +549,74 @@ def _require_owner_copy(
                 NARRATIVE_MANIFEST,
                 f"{name} public path {public!r} must occur only in {owner!r}, found {locations!r}",
             )
-    for field in ("caption", "alt_text", "semantic_label", "source_contract"):
-        if str(record[field]) not in owner_body:
-            fail(errors, documents[owner].path, f"owned asset {name!r} omits manifest {field}")
+
+
+def _parse_narrative_includes(
+    documents: dict[str, Document], errors: list[str]
+) -> dict[str, NarrativeInclude]:
+    includes: dict[str, NarrativeInclude] = {}
+    for route, document in documents.items():
+        for match in NARRATIVE_INCLUDE.finditer(document.body):
+            template = match.group("template")
+            try:
+                tokens = shlex.split(match.group("arguments"), comments=False, posix=True)
+            except ValueError as error:
+                fail(errors, document.path, f"cannot parse narrative include: {error}")
+                continue
+            arguments: dict[str, str] = {}
+            malformed = False
+            for token in tokens:
+                if "=" not in token:
+                    fail(errors, document.path, f"malformed narrative include argument {token!r}")
+                    malformed = True
+                    continue
+                field, value = token.split("=", 1)
+                if not field or field in arguments:
+                    fail(errors, document.path, f"duplicate narrative include argument {field!r}")
+                    malformed = True
+                    continue
+                arguments[field] = value
+            expected_fields = (
+                ANIMATION_INCLUDE_FIELDS
+                if template == "narrative-animation.html"
+                else STATIC_INCLUDE_FIELDS
+            )
+            if set(arguments) != expected_fields:
+                fail(
+                    errors,
+                    document.path,
+                    "narrative include argument fields are not closed",
+                )
+                malformed = True
+            for dimension in ("width", "height"):
+                if not re.fullmatch(r"[1-9][0-9]*", arguments.get(dimension, "")):
+                    fail(
+                        errors,
+                        document.path,
+                        f"narrative include {dimension} must be a positive integer",
+                    )
+                    malformed = True
+            asset_id = arguments.get("asset_id", "")
+            if not asset_id:
+                fail(errors, document.path, "narrative include asset_id must be nonempty")
+                continue
+            if asset_id in includes:
+                fail(errors, document.path, f"duplicate narrative include asset_id {asset_id!r}")
+                continue
+            if not malformed:
+                includes[asset_id] = NarrativeInclude(
+                    route=route,
+                    path=document.path,
+                    template=template,
+                    arguments=arguments,
+                )
+    return includes
 
 
 def check_narrative_assets(
     documents: dict[str, Document], errors: list[str]
 ) -> tuple[int, int]:
+    includes = _parse_narrative_includes(documents, errors)
     manifest = _load_manifest(errors)
     if manifest is None:
         return 0, 0
@@ -607,8 +734,14 @@ def check_narrative_assets(
             _require_owner_copy(
                 name,
                 record,
-                (animation[0], fallback[0], contact[0]),
+                "narrative-animation.html",
+                {
+                    "animation": f"/assets/narrative/{animation[0]}",
+                    "fallback": f"/assets/narrative/{fallback[0]}",
+                    "contact_sheet": f"/assets/narrative/{contact[0]}",
+                },
                 documents,
+                includes,
                 errors,
             )
         assets_by_owner[str(record["owner"])].add(name)
@@ -677,8 +810,26 @@ def check_narrative_assets(
                 )
             owned_files.add(relative)
             owned_digests[digest] = relative
-            _require_owner_copy(name, record, (relative,), documents, errors)
+            _require_owner_copy(
+                name,
+                record,
+                "narrative-static.html",
+                {"image": f"/assets/narrative/{relative}"},
+                documents,
+                includes,
+                errors,
+            )
         assets_by_owner[str(record["owner"])].add(name)
+
+    expected_include_ids = set(ANIMATION_POLICY) | (
+        set(STATIC_POLICY) - {"presentation_status"}
+    )
+    if set(includes) != expected_include_ids:
+        fail(
+            errors,
+            DOCS,
+            "narrative include asset_id set disagrees with Pages policy",
+        )
 
     actual_files = {
         path.relative_to(NARRATIVE_ROOT).as_posix()

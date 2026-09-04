@@ -163,6 +163,34 @@ alt="A complete explanation." width="940" height="430">
         self.assertIn("lacks positive intrinsic dimensions", errors)
         self.assertIn("requires one contact-sheet link", errors)
 
+    def test_rejects_narrative_animation_with_swapped_asset_roles(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _valid_site(root)
+            route = "/components/boolean-z3/"
+            page = root / route.strip("/") / "index.html"
+            html = page.read_text(encoding="utf-8")
+            figure = f"""<figure class="narrative-asset narrative-animation"
+data-asset-id="boolean_z3"><picture>
+<source media="(prefers-reduced-motion: reduce)"
+srcset="{BASEURL}/assets/narrative/boolean-z3/fallback.png">
+<img src="{BASEURL}/assets/narrative/boolean-z3/contact-sheet.png"
+alt="A complete explanation." width="940" height="430">
+</picture><figcaption>Caption.
+<a href="{BASEURL}/assets/narrative/boolean-z3/animation.gif">Animation</a>
+</figcaption></figure>"""
+            page.write_text(html.replace("</main>", f"{figure}</main>"), encoding="utf-8")
+            narrative = root / "assets/narrative/boolean-z3"
+            narrative.mkdir(parents=True)
+            for name in ("fallback.png", "animation.gif", "contact-sheet.png"):
+                (narrative / name).write_bytes(b"asset")
+
+            result = check_site(root, site_url=SITE_URL, baseurl=BASEURL)
+
+        errors = "\n".join(result.errors)
+        self.assertIn("must contain exactly one GIF", errors)
+        self.assertIn("requires one contact-sheet link", errors)
+
     def test_rejects_missing_component_heading_and_body_identity(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

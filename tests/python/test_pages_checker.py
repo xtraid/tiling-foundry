@@ -134,6 +134,56 @@ class PagesCheckerTests(unittest.TestCase):
             "\n".join(errors),
         )
 
+    def test_animation_include_roles_are_bound_to_the_manifest_record(self) -> None:
+        original = check_pages.split_front_matter
+        target = check_pages.DOCS / "components/boolean-z3.md"
+
+        def swapped_roles(path: Path, errors: list[str]) -> tuple[dict[str, str], str]:
+            metadata, body = original(path, errors)
+            if path == target:
+                body = body.replace(
+                    'animation="/assets/narrative/boolean-z3/trace.gif" '
+                    'fallback="/assets/narrative/boolean-z3/frame-02.png" '
+                    'contact_sheet="/assets/narrative/boolean-z3/contact-sheet.png"',
+                    'animation="/assets/narrative/boolean-z3/contact-sheet.png" '
+                    'fallback="/assets/narrative/boolean-z3/frame-02.png" '
+                    'contact_sheet="/assets/narrative/boolean-z3/trace.gif"',
+                )
+            return metadata, body
+
+        errors: list[str] = []
+        with mock.patch.object(
+            check_pages, "split_front_matter", side_effect=swapped_roles
+        ):
+            documents = check_pages.check_catalog(errors)
+            check_pages.check_narrative_assets(documents, errors)
+
+        joined = "\n".join(errors)
+        self.assertIn("include argument 'animation'", joined)
+        self.assertIn("include argument 'contact_sheet'", joined)
+
+    def test_animation_include_metadata_is_bound_to_the_manifest_record(self) -> None:
+        original = check_pages.split_front_matter
+        target = check_pages.DOCS / "components/reference-solver.md"
+
+        def wrong_label(path: Path, errors: list[str]) -> tuple[dict[str, str], str]:
+            metadata, body = original(path, errors)
+            if path == target:
+                body = body.replace(
+                    'label="observed" caption=',
+                    'label="didactic" caption=',
+                )
+            return metadata, body
+
+        errors: list[str] = []
+        with mock.patch.object(
+            check_pages, "split_front_matter", side_effect=wrong_label
+        ):
+            documents = check_pages.check_catalog(errors)
+            check_pages.check_narrative_assets(documents, errors)
+
+        self.assertIn("include argument 'label'", "\n".join(errors))
+
 
 if __name__ == "__main__":
     unittest.main()
