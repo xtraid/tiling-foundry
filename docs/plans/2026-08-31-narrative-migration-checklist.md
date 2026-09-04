@@ -70,18 +70,18 @@ Classification totals are one `story`, 15 `reference`, 11 `evidence`, and one
 
 ## 3. New story-page checklist
 
-- [ ] Add `/pipeline/` only after its shared composition and source manifest
+- [x] Add `/pipeline/` only after its shared composition and source manifest
   are validated.
-- [ ] Add `/worked-example/` using only `pipeline_sat.cm13`; do not splice in
+- [x] Add `/worked-example/` using only `pipeline_sat.cm13`; do not splice in
   `unsat-search` frames or timings.
-- [ ] Add all eight component routes with the exact frozen section order.
-- [ ] Add `/reference/` and `/evidence/` as authored indexes, not generated
+- [x] Add all eight component routes with the exact frozen section order.
+- [x] Add `/reference/` and `/evidence/` as authored indexes, not generated
   prose.
-- [ ] Keep history visually distinct inside `/reference/`.
-- [ ] Keep `/run-dossiers/` an index; do not render `run.json` as Markdown.
-- [ ] Add taxonomy, component-section, primary-owner, semantic-label,
+- [x] Keep history visually distinct inside `/reference/`.
+- [x] Keep `/run-dossiers/` an index; do not render `run.json` as Markdown.
+- [x] Add taxonomy, component-section, primary-owner, semantic-label,
   fallback, caption, alt-text, permalink, and generated-output checks.
-- [ ] Build Pages without generating any dossier or invoking LaTeX.
+- [x] Build Pages without generating any dossier or invoking LaTeX.
 
 ## 4. Public asset inventory
 
@@ -120,7 +120,7 @@ checks prove the old files are unreferenced before deletion.
 - [x] Record `tests/fixtures/pipeline_sat_explain/`,
   `pipeline_sat_reduction_explain/`, `pipeline_sat_solver_trace/`, and
   `pipeline_sat_z3/` as versioned semantic sources for later shared assets.
-- [ ] Do not promote a renderer golden to Pages merely because it is
+- [x] Do not promote a renderer golden to Pages merely because it is
   deterministic; it must have the canonical instance, semantic label, owner,
   validator chain, caption, alt text, and fallback required by the contract.
 
@@ -182,29 +182,29 @@ checks prove the old files are unreferenced before deletion.
    keeping it secondary to observed trace output.
 5. [x] Generate reduced-motion fallback, contact sheet, caption, alt text, and
    semantic record for every GIF.
-6. [ ] Move public ownership to component pages without duplicating files or
+6. [x] Move public ownership to component pages without duplicating files or
    explanations; update old pages to links in the same change.
-7. [ ] Prove every remaining public asset has exactly one embedding owner and
+7. [x] Prove every remaining public asset has exactly one embedding owner and
    every internal link resolves in generated HTML.
 
 ## 9. Pages implementation gates
 
-- [ ] Add exactly one public class to every cataloged document and reject
+- [x] Add exactly one public class to every cataloged document and reject
   unknown or missing classes.
-- [ ] Enforce the nine component sections in order.
-- [ ] Enforce one primary asset owner per component and uniqueness across
+- [x] Enforce the nine component sections in order.
+- [x] Enforce one primary asset owner per component and uniqueness across
   Pages.
-- [ ] Enforce the five allowed semantic labels and reject
+- [x] Enforce the five allowed semantic labels and reject
   `canonical-example`.
-- [ ] Enforce GIF owner, nonempty alt text, reduced-motion PNG, caption,
+- [x] Enforce GIF owner, nonempty alt text, reduced-motion PNG, caption,
   contact sheet, source, and scope.
-- [ ] Preserve all current permalinks and validate all literal and generated
+- [x] Preserve all current permalinks and validate all literal and generated
   links/anchors.
-- [ ] Distinguish the general pipeline from the named SAT worked example in
+- [x] Distinguish the general pipeline from the named SAT worked example in
   visible copy.
-- [ ] Keep technical references and dated evidence available without
+- [x] Keep technical references and dated evidence available without
   duplicating their prose in story pages.
-- [ ] Build and check the site with no native build, renderer environment,
+- [x] Build and check the site with no native build, renderer environment,
   dossier generation, or LaTeX installation.
 
 ## 10. V2 PDF implementation gates
@@ -235,12 +235,12 @@ checks prove the old files are unreferenced before deletion.
 
 ## 12. Final migration audit
 
-- [ ] The public catalog reports the expected counts for story, reference,
+- [x] The public catalog reports the expected counts for story, reference,
   evidence, and history.
-- [ ] All 27 legacy technical routes and `/` resolve after the migration.
-- [ ] Every new sitemap route resolves with one H1, description, canonical URL,
+- [x] All 27 legacy technical routes and `/` resolve after the migration.
+- [x] Every new sitemap route resolves with one H1, description, canonical URL,
   and expected page class.
-- [ ] Every narrative asset has one owner, one source chain, and one allowed
+- [x] Every narrative asset has one owner, one source chain, and one allowed
   semantic label.
 - [ ] No GIF is duplicated, embedded by two owners, missing a static fallback,
   or included in a PDF.
@@ -249,6 +249,6 @@ checks prove the old files are unreferenced before deletion.
 - [ ] `unsat-search` remains visibly and cryptographically separate.
 - [ ] Removing documentation and explainability leaves core build, solve,
   oracles, verifier, and standard export functional.
-- [ ] Full suites, strict compilers, sanitizer, analyzer, dynamic analysis,
+- [x] Full suites, strict compilers, sanitizer, analyzer, dynamic analysis,
   applicable profiling, renderer tests, Pages/Jekyll, TeX smoke, diff, secret,
   file-mode, and artifact checks are green before publication.

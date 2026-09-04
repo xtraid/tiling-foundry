@@ -1,0 +1,799 @@
+{
+  "schema": "wang-narrative-assets-v1",
+  "product": "canonical-pages",
+  "case": {
+    "id": "pipeline-sat-v2",
+    "expected_status": "sat",
+    "source_sha256": "3caaa6b29ac988fb4f51cc7071202d83ea1591ba6170e683b6da449cb3641542"
+  },
+  "identities": {
+    "source_formula": "3caaa6b29ac988fb4f51cc7071202d83ea1591ba6170e683b6da449cb3641542",
+    "formula_snapshot": "5098eb9a85adebf28757b1368e9307fdb5fea0617de3256b717ead1af1d67815",
+    "tileset": "462a102690c420bfe52a634e7b365a6be3bfcf59169f0acd96264831196723fa",
+    "region": "aad4dc7dcb46ed070995bf975248a7f2f0bf27d69db3eb653208d08c5826199a",
+    "provenance": "6abbea9333509f852d59ed9be943d76380a49bfbdcf0f1c13e923e9ec4c4f3e2",
+    "boolean_z3_summary": "c0213b57faade9f61c7b0f31813f0b91322a7484d383d7971e3f554dbc4ae214",
+    "reference_trace_manifest": "2134fe7587b71ca245b7e2820c5cbcc1c9d469ac537f246a6021108b776e2f57",
+    "reference_trace": "4a3ad4cbb476949a61db74dbc22696bc8ef69cb9e6226b816495a0b10322628c",
+    "reference_solution": "2273f58cda026dca73c0dfa25c960e01296ac1e34ae6accbddf5be29034d156a",
+    "optimized_trace_manifest": "9646e24077890a86e32b4d974d18c6a60b2de7dc2612beac39ab455dc9493699",
+    "optimized_trace": "92e4389e7eba41fa9c075b21f1dc19700c2a039add2d7449b01c83d163525bc0",
+    "optimized_solution": "9c02aea7867d26514d013dc44ea1d7e105ae86ddeef1ff247e0311e3c030377d",
+    "wang_z3_summary": "a150dc76e2193d9ae65e165b8555df4b269afcbe572c6d55026a97d0765fb62b"
+  },
+  "animations": {
+    "pipeline_overview": {
+      "owner": "/pipeline/",
+      "semantic_label": "observed",
+      "caption": "One validated v2 capture in fixed component order.",
+      "alt_text": "The captured formula moves through Boolean Z3, Yang-Zhang reduction, both native solvers, Wang Z3, verification, and presentation.",
+      "source_contract": "wang-run-dossier-v2#named-components",
+      "source_sha256": "197f9a2d1b55722b1680c3b04443c1ea183ad37340cfeacce4aadb5d867d8b18",
+      "producer": "dossier.narrative_assets",
+      "validator": "formats.run_dossier_v2_bundle.load_run_dossier_v2",
+      "compositor": "renderer.wang_narrative.render_overview_assets",
+      "scope": {
+        "complete": true,
+        "selected": true,
+        "truncated": false
+      },
+      "animation": {
+        "path": "pipeline-overview/trace.gif",
+        "sha256": "a6bfed665e4f2861b4755ddbd86d6a388c33c83355cfe54e92c1ad6df71e6b08",
+        "media_type": "image/gif"
+      },
+      "fallback": {
+        "path": "pipeline-overview/frame-07.png",
+        "sha256": "a7199a7372405572d5b1aca0c36ca8a4258bdd610d9fb3ecf88ba7acd07c05d9",
+        "media_type": "image/png"
+      },
+      "contact_sheet": {
+        "path": "pipeline-overview/contact-sheet.png",
+        "sha256": "f57d90bb9f66511d4217a5ac9599e0f2d8b414f69ae4b9dbbf2c680b30083031",
+        "media_type": "image/png"
+      },
+      "frames": [
+        {
+          "path": "pipeline-overview/frame-00.png",
+          "sha256": "035a5fe720745671248735debc42c740184db64be179980b4fcd114ccfc7d6f3",
+          "media_type": "image/png"
+        },
+        {
+          "path": "pipeline-overview/frame-01.png",
+          "sha256": "5ce0045655044abffdc093f43fc0bcefc25245baa74a36d6a845d5bf18e78151",
+          "media_type": "image/png"
+        },
+        {
+          "path": "pipeline-overview/frame-02.png",
+          "sha256": "9ba1499f598142daf6e102c8d98a59b106116fbd9418e8252aeb67d8a2e52592",
+          "media_type": "image/png"
+        },
+        {
+          "path": "pipeline-overview/frame-03.png",
+          "sha256": "290d4663c000298f68583ccf7952109fd9784d8ea91771cd41edb1090eb58885",
+          "media_type": "image/png"
+        },
+        {
+          "path": "pipeline-overview/frame-04.png",
+          "sha256": "5981d818629ea64b4742c76da2caf20bff4c59b03ea91986c49058f42cdd0a5e",
+          "media_type": "image/png"
+        },
+        {
+          "path": "pipeline-overview/frame-05.png",
+          "sha256": "a20b6e761b9e8dc09db2a50cf37ce3579717f90c61151cf378ee2ab4fc5ae857",
+          "media_type": "image/png"
+        },
+        {
+          "path": "pipeline-overview/frame-06.png",
+          "sha256": "9f5e7f2b1beb929ce0a0451e015018a5aaf54456378d752553f7ff78eb3c1cfe",
+          "media_type": "image/png"
+        },
+        {
+          "path": "pipeline-overview/frame-07.png",
+          "sha256": "a7199a7372405572d5b1aca0c36ca8a4258bdd610d9fb3ecf88ba7acd07c05d9",
+          "media_type": "image/png"
+        }
+      ]
+    },
+    "boolean_z3": {
+      "owner": "/components/boolean-z3/",
+      "semantic_label": "encoding-order",
+      "caption": "Project-owned Boolean constraint construction and returned assignment.",
+      "alt_text": "Four frames add Boolean variables and source-order exactly-one clauses before showing the copied result.",
+      "source_contract": "z3-encoding-summary-v1",
+      "source_sha256": "c0213b57faade9f61c7b0f31813f0b91322a7484d383d7971e3f554dbc4ae214",
+      "producer": "formats.z3_encoding_summary.build_boolean_z3_summary",
+      "validator": "renderer.wang_z3_summary.load_z3_encoding_summary",
+      "compositor": "renderer.wang_z3_summary.render_boolean_z3_assets",
+      "scope": {
+        "complete": true,
+        "selected": false,
+        "truncated": false
+      },
+      "animation": {
+        "path": "boolean-z3/trace.gif",
+        "sha256": "724aeb4c06babd8fd14e5b541198e0d6a7edbbb27f2376f6b5cd4db9c279ac71",
+        "media_type": "image/gif"
+      },
+      "fallback": {
+        "path": "boolean-z3/frame-02.png",
+        "sha256": "a2991b1e2781d51192347e3fd76f3264527ae7ceafb644ed81805e2ea08f2a44",
+        "media_type": "image/png"
+      },
+      "contact_sheet": {
+        "path": "boolean-z3/contact-sheet.png",
+        "sha256": "acd7b8cf0fb8769adcc2c743edc41bfa2eb87f2f38f1327b10691cb7ddfc9800",
+        "media_type": "image/png"
+      },
+      "frames": [
+        {
+          "path": "boolean-z3/frame-00.png",
+          "sha256": "ff9f45064c479dbd4e77482af090201af9786a5d4202738077201db733f47de0",
+          "media_type": "image/png"
+        },
+        {
+          "path": "boolean-z3/frame-01.png",
+          "sha256": "c1ffee1bc549c7d9a739ad3a894f5cec5c3af77baa57f81d2a56dfc210a78125",
+          "media_type": "image/png"
+        },
+        {
+          "path": "boolean-z3/frame-02.png",
+          "sha256": "a2991b1e2781d51192347e3fd76f3264527ae7ceafb644ed81805e2ea08f2a44",
+          "media_type": "image/png"
+        },
+        {
+          "path": "boolean-z3/frame-03.png",
+          "sha256": "8f742d1e90d4eb554d9cd485860fb107afabda9282845a71c1f8505fa4e069af",
+          "media_type": "image/png"
+        }
+      ]
+    },
+    "region_construction": {
+      "owner": "/components/yang-zhang/",
+      "semantic_label": "canonical-construction",
+      "caption": "Native Yang-Zhang gadget spans accumulated over the observed region.",
+      "alt_text": "Six frames reveal variable, forwarding, crossover, and clause gadget spans on the same region.",
+      "source_contract": "wang-reduction-explanation-v1",
+      "source_sha256": "6abbea9333509f852d59ed9be943d76380a49bfbdcf0f1c13e923e9ec4c4f3e2",
+      "producer": "formats.solver_trace_snapshot.dump_solver_trace_bundle",
+      "validator": "renderer.wang_snapshot.load_explainability_bundle",
+      "compositor": "renderer.wang_algorithm_animation.render_builder_assets",
+      "scope": {
+        "complete": true,
+        "selected": true,
+        "truncated": false
+      },
+      "animation": {
+        "path": "region-construction/trace.gif",
+        "sha256": "7a5e3938527a3d2ed4a1e90d0ae01cd694d5e632f0f637ca5c76b2693d7edf64",
+        "media_type": "image/gif"
+      },
+      "fallback": {
+        "path": "region-construction/frame-04.png",
+        "sha256": "ba4c03ddb50f4cf2a3bfe492b23f1c95a4ceed62cf40764bbb55a82272a9f5ab",
+        "media_type": "image/png"
+      },
+      "contact_sheet": {
+        "path": "region-construction/contact-sheet.png",
+        "sha256": "b00710859c6f96efc972d1a999c867465b91a5e6903d120cc776e0a0048c1a96",
+        "media_type": "image/png"
+      },
+      "frames": [
+        {
+          "path": "region-construction/frame-00.png",
+          "sha256": "8dfb4ca866b5503375fe9dad3611522d8ff8b5e5b997033f8116d8439b383a71",
+          "media_type": "image/png"
+        },
+        {
+          "path": "region-construction/frame-01.png",
+          "sha256": "9181341338b5bc21798d1715ecce20c799def0a62f9c7115e6edc1d0cfe89cb1",
+          "media_type": "image/png"
+        },
+        {
+          "path": "region-construction/frame-02.png",
+          "sha256": "d95745a1d26f63679f3ae5b416ed3371bc9ee96c7571ce2909cea57739903d96",
+          "media_type": "image/png"
+        },
+        {
+          "path": "region-construction/frame-03.png",
+          "sha256": "b355cf3531374a02ea0812aa80847d339090b6a88da1657789e17143fe250d3b",
+          "media_type": "image/png"
+        },
+        {
+          "path": "region-construction/frame-04.png",
+          "sha256": "ba4c03ddb50f4cf2a3bfe492b23f1c95a4ceed62cf40764bbb55a82272a9f5ab",
+          "media_type": "image/png"
+        },
+        {
+          "path": "region-construction/frame-05.png",
+          "sha256": "4e700c2bdefa0315b177e225b4d069058b38815c0cf57980f45303323a662829",
+          "media_type": "image/png"
+        }
+      ]
+    },
+    "reference_trace": {
+      "owner": "/components/reference-solver/",
+      "semantic_label": "observed",
+      "caption": "Selected semantic milestones from the complete reference trace.",
+      "alt_text": "Observed reference domain states at root, propagation, decision, search, and result milestones.",
+      "source_contract": "wang-explain-manifest-v3",
+      "source_sha256": "2134fe7587b71ca245b7e2820c5cbcc1c9d469ac537f246a6021108b776e2f57",
+      "producer": "formats.solver_trace_snapshot.dump_solver_trace_bundle",
+      "validator": "renderer.wang_trace.load_trace_bundle",
+      "compositor": "renderer.wang_trace_render.render_trace_assets",
+      "scope": {
+        "complete": true,
+        "selected": true,
+        "truncated": false
+      },
+      "animation": {
+        "path": "reference-trace/trace.gif",
+        "sha256": "bd9b88a90a41f079987ba3de6d3982f7eef2fb3823e0f5e30f69979d079b7ce3",
+        "media_type": "image/gif"
+      },
+      "fallback": {
+        "path": "reference-trace/frame-002517.png",
+        "sha256": "a0e5619938a6ce5a370935420b66bb2dda997e898a4c0b9d8edcc648f0f40e62",
+        "media_type": "image/png"
+      },
+      "contact_sheet": {
+        "path": "reference-trace/contact-sheet.png",
+        "sha256": "6e54fc956d2f750e49ef31e6b01312d377c1de2a845cf0fcd29907b52b02b236",
+        "media_type": "image/png"
+      },
+      "frames": [
+        {
+          "path": "reference-trace/frame-000000.png",
+          "sha256": "38cc17f0f06068f2c19aafc43b53bb877e03140c7dc362ed2e9149e62405c8cc",
+          "media_type": "image/png"
+        },
+        {
+          "path": "reference-trace/frame-000001.png",
+          "sha256": "6c1dcde135d552722b1a5983502b739c192227b601b4592869d36733347cd4fd",
+          "media_type": "image/png"
+        },
+        {
+          "path": "reference-trace/frame-001258.png",
+          "sha256": "fb8ae6449ddcf336d4116c13e01734d2426f661210a854014a8c7847391cbddd",
+          "media_type": "image/png"
+        },
+        {
+          "path": "reference-trace/frame-001887.png",
+          "sha256": "863753a075613f19948d2195f67a4c45c327e665fea23b611848f1d10d5bf3f3",
+          "media_type": "image/png"
+        },
+        {
+          "path": "reference-trace/frame-002516.png",
+          "sha256": "5587f030f1655a84bf7a0170ed6e2843cd019989742630d4f7ce086f29e17cb2",
+          "media_type": "image/png"
+        },
+        {
+          "path": "reference-trace/frame-002517.png",
+          "sha256": "a0e5619938a6ce5a370935420b66bb2dda997e898a4c0b9d8edcc648f0f40e62",
+          "media_type": "image/png"
+        },
+        {
+          "path": "reference-trace/frame-002518.png",
+          "sha256": "63ef43ee6d99ea6250196a52d657c71dc1421fef278f275a92d6b4f0d2370e75",
+          "media_type": "image/png"
+        },
+        {
+          "path": "reference-trace/frame-002893.png",
+          "sha256": "25337a3aa0bd9bc9a054e176e526c621587356588395960da03c69d98777fcd1",
+          "media_type": "image/png"
+        },
+        {
+          "path": "reference-trace/frame-002894.png",
+          "sha256": "d83f134bae8c463108457486886979c749e231ff0624bf807eeed5126beb2414",
+          "media_type": "image/png"
+        },
+        {
+          "path": "reference-trace/frame-002895.png",
+          "sha256": "abcdb03dd746ee8e7588a4d9c0341a2958e5a81e0ee35cde005e9add2f3ec0ea",
+          "media_type": "image/png"
+        }
+      ]
+    },
+    "optimized_trace": {
+      "owner": "/components/optimized-solver/",
+      "semantic_label": "observed",
+      "caption": "Selected semantic milestones from the complete optimized trace.",
+      "alt_text": "Observed optimized domain states at root, propagation, decision, search, and result milestones.",
+      "source_contract": "wang-explain-manifest-v3",
+      "source_sha256": "9646e24077890a86e32b4d974d18c6a60b2de7dc2612beac39ab455dc9493699",
+      "producer": "formats.solver_trace_snapshot.dump_solver_trace_bundle",
+      "validator": "renderer.wang_trace.load_trace_bundle",
+      "compositor": "renderer.wang_trace_render.render_trace_assets",
+      "scope": {
+        "complete": true,
+        "selected": true,
+        "truncated": false
+      },
+      "animation": {
+        "path": "optimized-trace/trace.gif",
+        "sha256": "e65aabffac9f8e72458bdd1bbebf57cf3a6c96763f1229997ef72ded5d456620",
+        "media_type": "image/gif"
+      },
+      "fallback": {
+        "path": "optimized-trace/frame-002562.png",
+        "sha256": "ad118624dc3350d399c8ff84924dd49754e03c1a554dc1c862057c05c98ab79f",
+        "media_type": "image/png"
+      },
+      "contact_sheet": {
+        "path": "optimized-trace/contact-sheet.png",
+        "sha256": "4fbf79fad2e8226ae14b7bb6c6c2b7b8e66890420b3aad5a712ba70e8ee78922",
+        "media_type": "image/png"
+      },
+      "frames": [
+        {
+          "path": "optimized-trace/frame-000000.png",
+          "sha256": "bd190ac15f769b666215f6c88071ebea8be864bf53ee794a31caa086f26e3eb6",
+          "media_type": "image/png"
+        },
+        {
+          "path": "optimized-trace/frame-000001.png",
+          "sha256": "d8a852c029d862b7f9e50a02a137033d07fc94f67e39519007c6fd7b3ae79505",
+          "media_type": "image/png"
+        },
+        {
+          "path": "optimized-trace/frame-000641.png",
+          "sha256": "4573fb517160ac2d415eddd1d332880b984be7f699696870de1081ca6c38c887",
+          "media_type": "image/png"
+        },
+        {
+          "path": "optimized-trace/frame-001281.png",
+          "sha256": "49d370ff9376595252f1aae7b936c57dbeb407a4cba26de49403972181a5cb5d",
+          "media_type": "image/png"
+        },
+        {
+          "path": "optimized-trace/frame-002561.png",
+          "sha256": "832884d407c0463e32365d8741b2c834a7525d6b8d5c65a3a74f0a43d5083ca8",
+          "media_type": "image/png"
+        },
+        {
+          "path": "optimized-trace/frame-002562.png",
+          "sha256": "ad118624dc3350d399c8ff84924dd49754e03c1a554dc1c862057c05c98ab79f",
+          "media_type": "image/png"
+        },
+        {
+          "path": "optimized-trace/frame-002563.png",
+          "sha256": "44298474500d368c92d9286c55f409ec82885f8c466b50641800a9b95bce9483",
+          "media_type": "image/png"
+        },
+        {
+          "path": "optimized-trace/frame-002938.png",
+          "sha256": "d28144f3f7f1949584b8c62ab7602bdf9ebbe419e338be4996a0a2c1548b51b6",
+          "media_type": "image/png"
+        },
+        {
+          "path": "optimized-trace/frame-002939.png",
+          "sha256": "843345eb090bf4b2530a765e9fbbcd01d38acb880c28d7f10a05e0e910fafff0",
+          "media_type": "image/png"
+        },
+        {
+          "path": "optimized-trace/frame-002940.png",
+          "sha256": "ce8fa205d52a9185a54f8e978e1da989774448e09ea8d28a72b775be3c8cf2ee",
+          "media_type": "image/png"
+        }
+      ]
+    },
+    "wang_z3": {
+      "owner": "/components/wang-z3/",
+      "semantic_label": "encoding-order",
+      "caption": "Project-owned Wang edge-term construction and returned model.",
+      "alt_text": "Five frames add edge terms, shared internal edges, tile relations, boundaries, and the copied result.",
+      "source_contract": "z3-encoding-summary-v1",
+      "source_sha256": "a150dc76e2193d9ae65e165b8555df4b269afcbe572c6d55026a97d0765fb62b",
+      "producer": "formats.z3_encoding_summary.build_wang_z3_summary",
+      "validator": "renderer.wang_z3_summary.load_z3_encoding_summary",
+      "compositor": "renderer.wang_z3_summary.render_wang_z3_assets",
+      "scope": {
+        "complete": true,
+        "selected": false,
+        "truncated": false
+      },
+      "animation": {
+        "path": "wang-z3/trace.gif",
+        "sha256": "f6c93f5ee0914113b188d659012b92c4bb3f094c3a1f7f93c6b16c7e09e2d06c",
+        "media_type": "image/gif"
+      },
+      "fallback": {
+        "path": "wang-z3/frame-03.png",
+        "sha256": "48a850e4f5d335bc6562e37563d345de83ec838941aa9990ca61da5d08d672b4",
+        "media_type": "image/png"
+      },
+      "contact_sheet": {
+        "path": "wang-z3/contact-sheet.png",
+        "sha256": "a8a93a04a0df6558874086a7766d79422799d5782395843f61758b5889815606",
+        "media_type": "image/png"
+      },
+      "frames": [
+        {
+          "path": "wang-z3/frame-00.png",
+          "sha256": "74e6ffcf5e70386304af308cf6587491ff128d93d96f1caeba810f30e7dd3868",
+          "media_type": "image/png"
+        },
+        {
+          "path": "wang-z3/frame-01.png",
+          "sha256": "dc6d7e04cd37bf313a5be866e62b653cc45cb07ad65567294db28a8ad7f946db",
+          "media_type": "image/png"
+        },
+        {
+          "path": "wang-z3/frame-02.png",
+          "sha256": "5ea43effac89a4b4b7d235c841abc8301562a9b29bd720951394f812a2abb970",
+          "media_type": "image/png"
+        },
+        {
+          "path": "wang-z3/frame-03.png",
+          "sha256": "48a850e4f5d335bc6562e37563d345de83ec838941aa9990ca61da5d08d672b4",
+          "media_type": "image/png"
+        },
+        {
+          "path": "wang-z3/frame-04.png",
+          "sha256": "1414ec4028027935cb36c2db02afd97d2b87b61196d9c4d7dff236710adb3509",
+          "media_type": "image/png"
+        }
+      ]
+    },
+    "verification": {
+      "owner": "/components/verification/",
+      "semantic_label": "observed",
+      "caption": "The six named independent checker records from the captured run.",
+      "alt_text": "Six frames report Boolean, native, and Wang Z3 witness checks without rerunning a verifier.",
+      "source_contract": "wang-run-dossier-v2#verification",
+      "source_sha256": "a47f7172f07dd65be697be97dab5ab608b07f4d0fb139e10ebc3a1a621da17e3",
+      "producer": "formats.run_dossier_v2_builder.build_run_dossier_v2",
+      "validator": "formats.run_dossier_v2.validate_run_dossier_v2+renderer.wang_narrative._load_verification",
+      "compositor": "renderer.wang_narrative.render_verification_assets",
+      "scope": {
+        "complete": true,
+        "selected": false,
+        "truncated": false
+      },
+      "animation": {
+        "path": "verification/trace.gif",
+        "sha256": "04f4ed56ed1da0ca40b60b964732647a81c42746841965f422ba4438e241e76f",
+        "media_type": "image/gif"
+      },
+      "fallback": {
+        "path": "verification/frame-05.png",
+        "sha256": "98edd0a7e37c2ac38e4b9ee853607a3ed003d5be3df50beb3dea1ab7101d246d",
+        "media_type": "image/png"
+      },
+      "contact_sheet": {
+        "path": "verification/contact-sheet.png",
+        "sha256": "de396acac387952b1591329d040d31150375bbcb043810f1fa9aa8b8b938335f",
+        "media_type": "image/png"
+      },
+      "frames": [
+        {
+          "path": "verification/frame-00.png",
+          "sha256": "13fa18831f69137ee961a8f1d2b5f88a9429fa4057747dae51ed28001500cd6f",
+          "media_type": "image/png"
+        },
+        {
+          "path": "verification/frame-01.png",
+          "sha256": "8ca06c4f98766b88a47a7eb39c385ad2e746d146179bf280e89cb3d559f532a0",
+          "media_type": "image/png"
+        },
+        {
+          "path": "verification/frame-02.png",
+          "sha256": "5b6f321887b36fab1989bf6b9b42373c56d6f6c24c0f59e42037d02e9dd749b2",
+          "media_type": "image/png"
+        },
+        {
+          "path": "verification/frame-03.png",
+          "sha256": "48dd44e40082bcd220b22ab255fb228b6398fbe58a338499d5595676027889f8",
+          "media_type": "image/png"
+        },
+        {
+          "path": "verification/frame-04.png",
+          "sha256": "2b29f63fcac42416a2fcf02f2ee098ee1c54d99f260a684f97607d68488dacb3",
+          "media_type": "image/png"
+        },
+        {
+          "path": "verification/frame-05.png",
+          "sha256": "98edd0a7e37c2ac38e4b9ee853607a3ed003d5be3df50beb3dea1ab7101d246d",
+          "media_type": "image/png"
+        }
+      ]
+    },
+    "witness_presentation": {
+      "owner": "/components/visualization/",
+      "semantic_label": "verified-transformation",
+      "caption": "Verified square witness, exact generalized overlay, and checked hex port.",
+      "alt_text": "Four frames move from the verified square witness through generalized recognition to the checked hex presentation.",
+      "source_contract": "wang-solution-v1+wang-generalized-tiles-v1+checked-square-to-hex",
+      "source_sha256": "30e43f79c5967c481c781ae975327c1af9cf8a941677d65841fe20f06aa34af0",
+      "producer": "formats.solver_trace_snapshot.dump_solver_trace_bundle",
+      "validator": "renderer.wang_square.load_wang_presentation+renderer.wang_generalized.recognize_generalized_tiles+renderer.wang_hex_port.check_square_to_hex",
+      "compositor": "renderer.wang_narrative.render_witness_assets",
+      "scope": {
+        "complete": true,
+        "selected": false,
+        "truncated": false
+      },
+      "animation": {
+        "path": "presentation/trace.gif",
+        "sha256": "fd23bfddb27ca4e74de58e9ae5adbffbcc66d01b0fd086cb1564dc99c3ccf42f",
+        "media_type": "image/gif"
+      },
+      "fallback": {
+        "path": "presentation/frame-03.png",
+        "sha256": "52d75fecd13738c85d10a8179a77ba976ea2a2a26cc0e691e2388c26c57e16bd",
+        "media_type": "image/png"
+      },
+      "contact_sheet": {
+        "path": "presentation/contact-sheet.png",
+        "sha256": "1b5b6d177f8ad99765bc2aa86cf36a028bd6fc0785b61ed9014ffd439ce4fd11",
+        "media_type": "image/png"
+      },
+      "frames": [
+        {
+          "path": "presentation/frame-00.png",
+          "sha256": "c7fb208c02038fc6a8f9c6b7b75447c1abab14de90a27288b6eff09c3a349719",
+          "media_type": "image/png"
+        },
+        {
+          "path": "presentation/frame-01.png",
+          "sha256": "13845f481415f3b0a8b8920578d6068f7a4b3ab1822ae09e346bb8556b48c3e2",
+          "media_type": "image/png"
+        },
+        {
+          "path": "presentation/frame-02.png",
+          "sha256": "5b37808d37f863385be683950a6262cf9cab4974fbd107f40036f810b37d9507",
+          "media_type": "image/png"
+        },
+        {
+          "path": "presentation/frame-03.png",
+          "sha256": "52d75fecd13738c85d10a8179a77ba976ea2a2a26cc0e691e2388c26c57e16bd",
+          "media_type": "image/png"
+        }
+      ]
+    },
+    "optimized_mechanisms": {
+      "owner": "/components/optimized-solver/",
+      "semantic_label": "didactic",
+      "caption": "The six retained serial mechanisms, including the lazy MRV index.",
+      "alt_text": "Seven didactic frames contrast the reference baseline with six measured optimized mechanisms.",
+      "source_contract": "wang-optimized-mechanisms-v1",
+      "source_sha256": "5f0c6e1f80601f6112ae8e358fe8029fa3d94fd260693edf0b37ea474419f212",
+      "producer": "renderer/data/optimized-mechanisms-v1.json",
+      "validator": "renderer.wang_algorithm_animation._load_optimizations",
+      "compositor": "renderer.wang_algorithm_animation.render_optimized_assets",
+      "scope": {
+        "complete": true,
+        "selected": false,
+        "truncated": false
+      },
+      "animation": {
+        "path": "optimized-mechanisms/trace.gif",
+        "sha256": "148f55b4796e04dc4fb3fb020608879422d8448095115f93154449351ebe9fd3",
+        "media_type": "image/gif"
+      },
+      "fallback": {
+        "path": "optimized-mechanisms/frame-06.png",
+        "sha256": "1335f54b894100393d7bcbaf68558a879c60169dbb590c87014db496fbc33e83",
+        "media_type": "image/png"
+      },
+      "contact_sheet": {
+        "path": "optimized-mechanisms/contact-sheet.png",
+        "sha256": "789efc596c7e0b853ee3d057f39b48595d9a8230ef9635fedaafc7ff75e30664",
+        "media_type": "image/png"
+      },
+      "frames": [
+        {
+          "path": "optimized-mechanisms/frame-00.png",
+          "sha256": "3c25541c2b85ea2785f2d58e02cf1afb9f2d301e3ea35e3ea51b721afeeba906",
+          "media_type": "image/png"
+        },
+        {
+          "path": "optimized-mechanisms/frame-01.png",
+          "sha256": "49cf477983620cc0f0c1faf5efb67ba7098ff07b0664cb39efa21cb5be3d5ceb",
+          "media_type": "image/png"
+        },
+        {
+          "path": "optimized-mechanisms/frame-02.png",
+          "sha256": "80fdfa6e029b2f5165d1ea499ba27e33b3d18d315fc97dc19c1b8f6be46ac3b5",
+          "media_type": "image/png"
+        },
+        {
+          "path": "optimized-mechanisms/frame-03.png",
+          "sha256": "6fabbde7c8ca8543bfc6ce41ae2724ad59037d85516f2b12f4d2ae6f7d5eeb49",
+          "media_type": "image/png"
+        },
+        {
+          "path": "optimized-mechanisms/frame-04.png",
+          "sha256": "b3deccba1235538143021207c332c19377142d47326215cdd2f6a68a1483225d",
+          "media_type": "image/png"
+        },
+        {
+          "path": "optimized-mechanisms/frame-05.png",
+          "sha256": "ee34b6de2c6d72a3c465423a18302295c1921d300fe0c2501522756e69a2f9ab",
+          "media_type": "image/png"
+        },
+        {
+          "path": "optimized-mechanisms/frame-06.png",
+          "sha256": "1335f54b894100393d7bcbaf68558a879c60169dbb590c87014db496fbc33e83",
+          "media_type": "image/png"
+        }
+      ]
+    }
+  },
+  "statics": {
+    "home_preview": {
+      "owner": "/",
+      "semantic_label": "observed",
+      "caption": "Selected verified SAT square output for the captured instance.",
+      "alt_text": "A compact square Wang witness preview for the captured SAT source.",
+      "source_contract": "wang-solution-v1",
+      "source_sha256": "2273f58cda026dca73c0dfa25c960e01296ac1e34ae6accbddf5be29034d156a",
+      "producer": "dossier.narrative_assets",
+      "validator": "formats.run_dossier_v2_bundle.load_run_dossier_v2",
+      "compositor": "renderer.wang_narrative.render_overview_assets",
+      "artifact": {
+        "path": "pipeline-overview/home-preview.png",
+        "sha256": "84d555657f7d8977a4ba6ccbeab99eb769c0404698e4aec7eaea1a2ce90ae05f",
+        "media_type": "image/png"
+      }
+    },
+    "worked_example": {
+      "owner": "/worked-example/",
+      "semantic_label": "observed",
+      "caption": "Static t0 through tn component milestones for one SAT run.",
+      "alt_text": "Eight static panels follow the captured source from formula to checked presentation.",
+      "source_contract": "wang-run-dossier-v2#named-components",
+      "source_sha256": "197f9a2d1b55722b1680c3b04443c1ea183ad37340cfeacce4aadb5d867d8b18",
+      "producer": "dossier.narrative_assets",
+      "validator": "formats.run_dossier_v2_bundle.load_run_dossier_v2",
+      "compositor": "renderer.wang_narrative.render_overview_assets",
+      "artifact": {
+        "path": "pipeline-overview/worked-example.png",
+        "sha256": "8f56f45967a9c68aa0f42e6478a9953b8c1ae6b418d09080c9fd52ebe2b8c1af",
+        "media_type": "image/png"
+      }
+    },
+    "formula": {
+      "owner": "/worked-example/",
+      "semantic_label": "observed",
+      "caption": "Parsed formula snapshot for the named canonical source.",
+      "alt_text": "The parsed CM1-in-3 formula and its source-order clauses.",
+      "source_contract": "cm13-formula-snapshot-v1",
+      "source_sha256": "5098eb9a85adebf28757b1368e9307fdb5fea0617de3256b717ead1af1d67815",
+      "producer": "dossier.narrative_assets",
+      "validator": "renderer.wang_snapshot.load_explainability_bundle",
+      "compositor": "renderer.wang_snapshot.render_pipeline_snapshot",
+      "artifact": {
+        "path": "formula.png",
+        "sha256": "381879859d1987cb8b2b6e7b65ed9e51d9580972e8d87ea118c1b21c5e2b6c11",
+        "media_type": "image/png"
+      }
+    },
+    "generalized_sheet": {
+      "owner": "/components/tileset/",
+      "semantic_label": "canonical-construction",
+      "caption": "The exact 14 generalized tiles decomposed into 23 positional atomic IDs.",
+      "alt_text": "A sheet of fourteen Yang-Zhang generalized tiles with internal seams and atomic identifiers.",
+      "source_contract": "wang-generalized-tiles-v1+wang-tileset-snapshot-v1",
+      "source_sha256": "ce7331049b9bbec8e481bef7e332eaa6e10b6232351282c120dc5d460b218c0d",
+      "producer": "dossier.narrative_assets",
+      "validator": "renderer.wang_snapshot.load_explainability_bundle+renderer.wang_generalized.check_canonical_atomic_tileset",
+      "compositor": "renderer.wang_narrative.render_generalized_assets",
+      "artifact": {
+        "path": "generalized-tiles/sheet.png",
+        "sha256": "753b1042553aa8dfe347fada252bd7cbed1b8cb2f41b4b40d08864da282d7830",
+        "media_type": "image/png"
+      }
+    },
+    "atomic_legend": {
+      "owner": "/components/tileset/",
+      "semantic_label": "canonical-construction",
+      "caption": "All 23 atomic IDs with symbolic paper colors and generalized roles.",
+      "alt_text": "A semantic legend for twenty-three positional Wang tiles and their edge colors.",
+      "source_contract": "wang-generalized-tiles-v1+wang-tileset-snapshot-v1",
+      "source_sha256": "ce7331049b9bbec8e481bef7e332eaa6e10b6232351282c120dc5d460b218c0d",
+      "producer": "dossier.narrative_assets",
+      "validator": "renderer.wang_snapshot.load_explainability_bundle+renderer.wang_generalized.check_canonical_atomic_tileset",
+      "compositor": "renderer.wang_narrative.render_generalized_assets",
+      "artifact": {
+        "path": "generalized-tiles/atomic-legend.png",
+        "sha256": "e93c587b15ba9810b610688e614ecf4b51cc46be25ab677dc44a6e71b3e2b315",
+        "media_type": "image/png"
+      }
+    },
+    "square_presentation": {
+      "owner": "/components/visualization/",
+      "semantic_label": "observed",
+      "caption": "The independently verified square witness with atomic IDs and boundaries.",
+      "alt_text": "The complete square Wang witness for the captured SAT source.",
+      "source_contract": "wang-solution-v1",
+      "source_sha256": "2273f58cda026dca73c0dfa25c960e01296ac1e34ae6accbddf5be29034d156a",
+      "producer": "dossier.narrative_assets",
+      "validator": "renderer.wang_square.load_wang_presentation",
+      "compositor": "renderer.wang_narrative.render_witness_assets",
+      "artifact": {
+        "path": "presentation/square.png",
+        "sha256": "6bfdf8b9545e35a54d1f64b2477235488b270027f3c10775cf3fa41dd0530707",
+        "media_type": "image/png"
+      }
+    },
+    "generalized_presentation": {
+      "owner": "/components/visualization/",
+      "semantic_label": "canonical-construction",
+      "caption": "Exact generalized contours over the same verified square witness.",
+      "alt_text": "The square witness grouped into exact Yang-Zhang generalized tile occurrences.",
+      "source_contract": "wang-solution-v1+wang-generalized-tiles-v1",
+      "source_sha256": "5df89e1b413106a7d61478194eb0f37d3a68a3add1da16b2158e391ad943c10e",
+      "producer": "dossier.narrative_assets",
+      "validator": "renderer.wang_square.load_wang_presentation+renderer.wang_generalized.recognize_generalized_tiles",
+      "compositor": "renderer.wang_narrative.render_witness_assets",
+      "artifact": {
+        "path": "presentation/generalized.png",
+        "sha256": "86fe403887af74ac642afcf834e2a8fd79643c68297aa6b5371752fd45ebd2a1",
+        "media_type": "image/png"
+      }
+    },
+    "hex_presentation": {
+      "owner": "/components/visualization/",
+      "semantic_label": "verified-transformation",
+      "caption": "The checked Basire/Culik square-to-hex port of the same witness.",
+      "alt_text": "A pointy-top hex presentation preserving the square witness cells, edges, and boundary.",
+      "source_contract": "wang-solution-v1+checked-square-to-hex",
+      "source_sha256": "308c9bfa297bde34b6c85711f3c21e5d42604b5356863700dff65305b8a16c4e",
+      "producer": "dossier.narrative_assets",
+      "validator": "renderer.wang_square.load_wang_presentation+renderer.wang_hex_port.check_square_to_hex",
+      "compositor": "renderer.wang_narrative.render_witness_assets",
+      "artifact": {
+        "path": "presentation/hex.png",
+        "sha256": "0f5a968eaa8175b699739823318f6f12fed8ec28be148f3338ec7e8120bbc554",
+        "media_type": "image/png"
+      }
+    },
+    "presentation_status": null
+  },
+  "pdf_milestones": {
+    "selector": "semantic-milestones-v1",
+    "region_construction": [
+      "region-construction/frame-00.png",
+      "region-construction/frame-01.png",
+      "region-construction/frame-02.png",
+      "region-construction/frame-03.png",
+      "region-construction/frame-04.png",
+      "region-construction/frame-05.png"
+    ],
+    "reference_trace": [
+      "reference-trace/frame-000000.png",
+      "reference-trace/frame-000001.png",
+      "reference-trace/frame-001258.png",
+      "reference-trace/frame-001887.png",
+      "reference-trace/frame-002516.png",
+      "reference-trace/frame-002517.png",
+      "reference-trace/frame-002518.png",
+      "reference-trace/frame-002893.png",
+      "reference-trace/frame-002894.png",
+      "reference-trace/frame-002895.png"
+    ],
+    "optimized_trace": [
+      "optimized-trace/frame-000000.png",
+      "optimized-trace/frame-000001.png",
+      "optimized-trace/frame-000641.png",
+      "optimized-trace/frame-001281.png",
+      "optimized-trace/frame-002561.png",
+      "optimized-trace/frame-002562.png",
+      "optimized-trace/frame-002563.png",
+      "optimized-trace/frame-002938.png",
+      "optimized-trace/frame-002939.png",
+      "optimized-trace/frame-002940.png"
+    ],
+    "end_to_end": [
+      "pipeline-overview/frame-00.png",
+      "pipeline-overview/frame-01.png",
+      "pipeline-overview/frame-02.png",
+      "pipeline-overview/frame-03.png",
+      "pipeline-overview/frame-04.png",
+      "pipeline-overview/frame-05.png",
+      "pipeline-overview/frame-06.png",
+      "pipeline-overview/frame-07.png"
+    ]
+  }
+}

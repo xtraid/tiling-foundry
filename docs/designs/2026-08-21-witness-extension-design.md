@@ -2,6 +2,7 @@
 layout: page
 title: Boolean–Wang witness correspondence
 permalink: /witness_correspondence/
+page_class: reference
 description: How exact Boolean assignments are extended to Wang tilings and extracted again without coupling the generic solver to reduction semantics.
 section: Architecture and correctness
 document_kind: Technical design

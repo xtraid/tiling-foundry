@@ -3,8 +3,14 @@ layout: default
 ---
 <article class="article article--reference" data-wang-sections>
   <header class="document-context" data-content-column data-wang-landmark>
+    {% assign catalog_route = '/reference/' %}
+    {% assign catalog_label = 'Reference' %}
+    {% if page.page_class == 'evidence' %}
+      {% assign catalog_route = '/evidence/' %}
+      {% assign catalog_label = 'Evidence' %}
+    {% endif %}
     <nav class="document-breadcrumb" aria-label="Breadcrumb">
-      <a href="{{ '/#documentation' | relative_url }}">Documentation</a>
+      <a href="{{ catalog_route | relative_url }}">{{ catalog_label }}</a>
       <span aria-hidden="true">/</span>
       <span>{{ page.section | escape }}</span>
     </nav>
@@ -37,7 +43,7 @@ layout: default
   </div>
 
   <nav class="document-return" aria-label="Documentation navigation">
-    <a href="{{ '/#documentation' | relative_url }}">Back to documentation index</a>
+    <a href="{{ catalog_route | relative_url }}">Back to {{ catalog_label | downcase }}</a>
   </nav>
 </article>
 <script type="module" src="{{ '/assets/js/document-toc.js' | relative_url }}"></script>

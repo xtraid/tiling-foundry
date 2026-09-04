@@ -1,0 +1,22 @@
+<figure class="narrative-asset narrative-animation" data-asset-id="{{ include.asset_id | escape }}">
+  <picture>
+    <source
+      media="(prefers-reduced-motion: reduce)"
+      srcset="{{ include.fallback | relative_url }}"
+    >
+    <img
+      src="{{ include.animation | relative_url }}"
+      alt="{{ include.alt | escape }}"
+      width="{{ include.width }}"
+      height="{{ include.height }}"
+      loading="lazy"
+      decoding="async"
+    >
+  </picture>
+  <figcaption>
+    <strong>{{ include.label | escape }}.</strong>
+    {{ include.caption | escape }}
+    <a href="{{ include.contact_sheet | relative_url }}">Open the static contact sheet.</a>
+    <span class="asset-source">Source contract: <code>{{ include.source | escape }}</code>.</span>
+  </figcaption>
+</figure>

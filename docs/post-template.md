@@ -28,12 +28,6 @@ Use normal Markdown structures:
 north(A) = south(B)
 ```
 
-## Figure
-
-![The edge convention of a Wang tile.]({{ "/assets/images/wang-edge-convention.svg" | relative_url }})
-
-_Figure 1. Each triangle carries the label of one directed edge._
-
 ## Result
 
 Close with the evidence, limitations, and the next falsifiable question.

@@ -2,6 +2,7 @@
 layout: page
 title: Serial Wang solver and independent verification
 permalink: /serial_solver_implementation_guide/
+page_class: reference
 description: Domain propagation, deterministic search, ownership, diagnostics, and the independent verifier used by both native solver paths.
 section: Architecture and correctness
 document_kind: Technical reference
@@ -19,13 +20,9 @@ result, the optional semantic event trace, and the optional failed-leaf
 diagnostics. Public headers and regression tests remain authoritative for
 exact ABI behavior.
 
-<figure class="algorithm-animation">
-  <picture>
-    <source media="(prefers-reduced-motion: reduce)" srcset="{{ '/assets/images/solver-trace/frame-002517.png' | relative_url }}">
-    <img src="{{ '/assets/images/solver-trace/trace.gif' | relative_url }}" alt="Observed reference solver domains narrowing across root initialization, propagation, decisions, and the final SAT result.">
-  </picture>
-  <figcaption><strong>Observed state.</strong> An offline consumer replays selected events from one complete 2,896-event reference run; skipped visual frames do not imply skipped solver events. The <a href="{{ '/assets/images/solver-trace/contact-sheet.png' | relative_url }}">static contact sheet</a> shows every rendered frame.</figcaption>
-</figure>
+The [reference solver component]({{ '/components/reference-solver/' | relative_url }})
+owns the observed trace animation. This page remains the detailed API,
+ownership, and verification reference for both native paths.
 
 ## 1. Scope and dependency boundary
 
@@ -554,7 +551,7 @@ The benchmark and profiler paths keep metrics runs separate from timings and
 measure MRV scans and packed-word probes, queue duplication, trail pressure,
 domain reductions, support aggregation, SAT-copy bytes, process peak RSS, and
 instruction/cache attribution. Dated reports in the
-[solver optimization section]({{ '/#solver-optimization' | relative_url }})
+[evidence index]({{ '/evidence/' | relative_url }})
 record the evidence for each retained optimized mechanism.
 
 ## 15. Current guarantees and limits

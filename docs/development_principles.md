@@ -2,6 +2,7 @@
 layout: page
 title: Development principles and architecture boundaries
 permalink: /development_principles/
+page_class: reference
 description: How Tiling Foundry separates source data, derived state, native lifetimes, solvers, and independent verification.
 section: Architecture and correctness
 document_kind: Architecture reference

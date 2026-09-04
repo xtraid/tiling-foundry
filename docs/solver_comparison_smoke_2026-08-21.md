@@ -2,6 +2,7 @@
 layout: page
 title: Native and Z3 solver comparison smoke baseline
 permalink: /solver_comparison_smoke_2026-08-21/
+page_class: evidence
 description: Seven-sample native and Z3 baseline on the smallest shared SAT and UNSAT inputs.
 section: Cross-engine benchmarks
 document_kind: Benchmark report

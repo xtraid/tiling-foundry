@@ -2,6 +2,7 @@
 layout: page
 title: Optimized solver queue and trail profile
 permalink: /solver_queue_trail_profile_2026-08-20/
+page_class: evidence
 description: Queue, trail, Callgrind, and Cachegrind evidence used to select queue deduplication.
 section: Solver optimization
 document_kind: Profiling report

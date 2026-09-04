@@ -2,6 +2,7 @@
 layout: page
 title: C and Python coverage baseline
 permalink: /coverage_baseline_2026-08-22/
+page_class: evidence
 description: Informational line, function, and branch coverage from the complete local test suites.
 section: Architecture and correctness
 document_kind: Coverage report

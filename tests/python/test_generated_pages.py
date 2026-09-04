@@ -8,20 +8,36 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
 
-from check_generated_pages import REPRESENTATIVE_ROUTES, check_site  # noqa: E402
+from check_generated_pages import (  # noqa: E402
+    COMPONENT_HEADINGS,
+    COMPONENTS,
+    EXPECTED_ROUTE_CLASSES,
+    EXPECTED_ROUTES,
+    check_site,
+)
+from check_pages import ANIMATION_POLICY, STATIC_POLICY  # noqa: E402
 
 
 SITE_URL = "https://xtraid.github.io"
 BASEURL = "/tiling-foundry"
 
 
-def _html(route: str, title: str, body: str, kind: str = "page") -> str:
+def _html(
+    route: str,
+    title: str,
+    body: str,
+    *,
+    page_class: str,
+    kind: str = "page",
+    component_id: str = "",
+) -> str:
     return f"""<!doctype html><html lang="en"><head>
 <title>{title}</title>
 <meta name="description" content="Description for this page.">
 <link rel="canonical" href="{SITE_URL}{BASEURL}{route}">
 <link rel="stylesheet" href="{BASEURL}/assets/site.css">
-</head><body data-page-kind="{kind}">
+</head><body data-page-kind="{kind}" data-page-class="{page_class}"
+data-component-id="{component_id}">
 <a href="#main-content">Skip</a><main id="main-content">{body}</main>
 <script src="{BASEURL}/assets/main.js"></script></body></html>"""
 
@@ -37,16 +53,69 @@ def _valid_site(root: Path) -> None:
     (root / "assets").mkdir()
     (root / "assets/site.css").write_text("body {}\n", encoding="utf-8")
     (root / "assets/main.js").write_text("export {};\n", encoding="utf-8")
-    body = f"""<section class="layout-reading"><h1>Tiling Foundry</h1>
-<section id="reading-path"></section></section>
-<section class="layout-presentation home-catalog-section" id="documentation"></section>
-<section id="cross-engine-benchmarks"></section>
+    home_body = f"""<section class="layout-reading home-section"><h1>Tiling Foundry</h1>
+<section id="project-map"></section><section id="reading-path"></section></section>
+<section class="layout-presentation home-section" id="verified-output"></section>
 <a href="{BASEURL}/development_principles/#principles">Principles</a>"""
-    _write(root, "/", _html("/", "Tiling Foundry", body, "home"))
-    for route in REPRESENTATIVE_ROUTES[1:]:
-        label = route.strip("/").replace("_", " ").title()
-        body = f'<h1 id="principles">{label}</h1><a href="{BASEURL}/">Home</a>'
-        _write(root, route, _html(route, f"{label} · Tiling Foundry", body))
+    _write(
+        root,
+        "/",
+        _html(
+            "/",
+            "Tiling Foundry",
+            home_body,
+            page_class="story",
+            kind="home",
+        ),
+    )
+    for route in sorted(EXPECTED_ROUTES - {"/"}):
+        label = route.strip("/").replace("-", " ").replace("_", " ").title()
+        component_id = COMPONENTS[route][0] if route in COMPONENTS else ""
+        headings = "".join(f"<h2>{heading}</h2>" for heading in COMPONENT_HEADINGS)
+        body = f'<h1 id="principles">{label}</h1>{headings}<a href="{BASEURL}/">Home</a>'
+        _write(
+            root,
+            route,
+            _html(
+                route,
+                f"{label} · Tiling Foundry",
+                body,
+                page_class=EXPECTED_ROUTE_CLASSES[route],
+                component_id=component_id,
+            ),
+        )
+
+    for asset_id, (route, _) in ANIMATION_POLICY.items():
+        page = root / route.strip("/") / "index.html" if route != "/" else root / "index.html"
+        figure = f"""<figure class="narrative-asset narrative-animation" data-asset-id="{asset_id}"><picture>
+<source media="(prefers-reduced-motion: reduce)" srcset="{BASEURL}/assets/narrative/{asset_id}/fallback.png">
+<img src="{BASEURL}/assets/narrative/{asset_id}/animation.gif" alt="{asset_id} animation." width="940" height="430">
+</picture><figcaption>{asset_id} caption.
+<a href="{BASEURL}/assets/narrative/{asset_id}/contact-sheet.png">Contact sheet</a>
+</figcaption></figure>"""
+        page.write_text(
+            page.read_text(encoding="utf-8").replace("</main>", f"{figure}</main>"),
+            encoding="utf-8",
+        )
+        narrative = root / "assets/narrative" / asset_id
+        narrative.mkdir(parents=True, exist_ok=True)
+        for name in ("fallback.png", "animation.gif", "contact-sheet.png"):
+            (narrative / name).write_bytes(b"asset")
+
+    for asset_id, (route, _) in STATIC_POLICY.items():
+        if asset_id == "presentation_status":
+            continue
+        page = root / route.strip("/") / "index.html" if route != "/" else root / "index.html"
+        figure = f"""<figure class="narrative-asset narrative-static" data-asset-id="{asset_id}">
+<img src="{BASEURL}/assets/narrative/{asset_id}/image.png" alt="{asset_id} image." width="940" height="430">
+<figcaption>{asset_id} caption.</figcaption></figure>"""
+        page.write_text(
+            page.read_text(encoding="utf-8").replace("</main>", f"{figure}</main>"),
+            encoding="utf-8",
+        )
+        narrative = root / "assets/narrative" / asset_id
+        narrative.mkdir(parents=True, exist_ok=True)
+        (narrative / "image.png").write_bytes(b"asset")
 
 
 def _contrast(foreground: str, background: str) -> float:
@@ -65,12 +134,13 @@ def _contrast(foreground: str, background: str) -> float:
 
 
 class GeneratedPagesTests(unittest.TestCase):
-    def test_accepts_semantic_pages_and_resolved_targets(self) -> None:
+    def test_accepts_all_routes_and_resolved_targets(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             _valid_site(root)
             result = check_site(root, site_url=SITE_URL, baseurl=BASEURL)
         self.assertEqual(result.errors, ())
+        self.assertEqual(result.page_count, 40)
 
     def test_rejects_the_known_home_regression_and_broken_links(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -93,6 +163,169 @@ class GeneratedPagesTests(unittest.TestCase):
         self.assertIn("expected one non-empty H1", errors)
         self.assertIn("unexpected home title", errors)
         self.assertIn("unresolved href target", errors)
+
+    def test_checks_generated_animation_fallback_contact_sheet_and_dimensions(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _valid_site(root)
+            route = "/components/boolean-z3/"
+            page = root / route.strip("/") / "index.html"
+            html = page.read_text(encoding="utf-8")
+            figure = f"""<figure><picture>
+<source media="(prefers-reduced-motion: reduce)"
+srcset="{BASEURL}/assets/narrative/boolean-z3/fallback.png">
+<img src="{BASEURL}/assets/narrative/boolean-z3/animation.gif"
+alt="A complete explanation." width="940" height="430">
+</picture><figcaption>Caption.
+<a href="{BASEURL}/assets/narrative/boolean-z3/contact-sheet.png">Contact sheet</a>
+</figcaption></figure>"""
+            page.write_text(html.replace("</main>", f"{figure}</main>"), encoding="utf-8")
+            narrative = root / "assets/narrative/boolean-z3"
+            narrative.mkdir(parents=True)
+            for name in ("fallback.png", "animation.gif", "contact-sheet.png"):
+                (narrative / name).write_bytes(b"asset")
+            good = check_site(root, site_url=SITE_URL, baseurl=BASEURL)
+            self.assertEqual(good.errors, ())
+
+            broken = page.read_text(encoding="utf-8")
+            broken = broken.replace(' width="940" height="430"', "")
+            broken = broken.replace("contact-sheet.png", "frames.png")
+            page.write_text(broken, encoding="utf-8")
+            result = check_site(root, site_url=SITE_URL, baseurl=BASEURL)
+        errors = "\n".join(result.errors)
+        self.assertIn("lacks positive intrinsic dimensions", errors)
+        self.assertIn("requires one contact-sheet link", errors)
+
+    def test_rejects_an_omitted_required_animation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _valid_site(root)
+            page = root / "components/boolean-z3/index.html"
+            html = page.read_text(encoding="utf-8")
+            start = html.index('<figure class="narrative-asset narrative-animation" data-asset-id="boolean_z3">')
+            end = html.index("</figure>", start) + len("</figure>")
+            page.write_text(html[:start] + html[end:], encoding="utf-8")
+            result = check_site(root, site_url=SITE_URL, baseurl=BASEURL)
+
+        self.assertIn(
+            "missing narrative animation asset 'boolean_z3'",
+            "\n".join(result.errors),
+        )
+
+    def test_rejects_an_omitted_required_static(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _valid_site(root)
+            page = root / "worked-example/index.html"
+            html = page.read_text(encoding="utf-8")
+            start = html.index('<figure class="narrative-asset narrative-static" data-asset-id="formula">')
+            end = html.index("</figure>", start) + len("</figure>")
+            page.write_text(html[:start] + html[end:], encoding="utf-8")
+            result = check_site(root, site_url=SITE_URL, baseurl=BASEURL)
+
+        self.assertIn(
+            "missing narrative static asset 'formula'",
+            "\n".join(result.errors),
+        )
+
+    def test_rejects_duplicate_and_wrong_route_asset_id(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _valid_site(root)
+            page = root / "worked-example/index.html"
+            html = page.read_text(encoding="utf-8").replace(
+                'data-asset-id="formula"',
+                'data-asset-id="worked_example"',
+            )
+            page.write_text(html, encoding="utf-8")
+            result = check_site(root, site_url=SITE_URL, baseurl=BASEURL)
+
+        errors = "\n".join(result.errors)
+        self.assertIn("narrative asset 'worked_example' occurs 2 times", errors)
+        self.assertIn("missing narrative static asset 'formula'", errors)
+
+    def test_rejects_an_asset_id_on_the_wrong_owner_route(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _valid_site(root)
+            worked = root / "worked-example/index.html"
+            html = worked.read_text(encoding="utf-8")
+            start = html.index('<figure class="narrative-asset narrative-static" data-asset-id="formula">')
+            end = html.index("</figure>", start) + len("</figure>")
+            worked.write_text(html[:start] + html[end:], encoding="utf-8")
+            boolean = root / "components/boolean-z3/index.html"
+            boolean.write_text(
+                boolean.read_text(encoding="utf-8").replace(
+                    'data-asset-id="boolean_z3"',
+                    'data-asset-id="formula"',
+                ),
+                encoding="utf-8",
+            )
+            result = check_site(root, site_url=SITE_URL, baseurl=BASEURL)
+
+        self.assertIn(
+            "narrative asset 'formula' is rendered on '/components/boolean-z3/', expected owner '/worked-example/'",
+            "\n".join(result.errors),
+        )
+
+    def test_rejects_wrong_narrative_asset_kind(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _valid_site(root)
+            page = root / "components/boolean-z3/index.html"
+            html = page.read_text(encoding="utf-8").replace(
+                'class="narrative-asset narrative-animation" data-asset-id="boolean_z3"',
+                'class="narrative-asset narrative-static" data-asset-id="boolean_z3"',
+            )
+            page.write_text(html, encoding="utf-8")
+            result = check_site(root, site_url=SITE_URL, baseurl=BASEURL)
+
+        self.assertIn(
+            "narrative asset 'boolean_z3' must be an animation figure",
+            "\n".join(result.errors),
+        )
+
+    def test_rejects_narrative_animation_with_swapped_asset_roles(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _valid_site(root)
+            route = "/components/boolean-z3/"
+            page = root / route.strip("/") / "index.html"
+            html = page.read_text(encoding="utf-8")
+            figure = f"""<figure class="narrative-asset narrative-animation"
+data-asset-id="boolean_z3"><picture>
+<source media="(prefers-reduced-motion: reduce)"
+srcset="{BASEURL}/assets/narrative/boolean-z3/fallback.png">
+<img src="{BASEURL}/assets/narrative/boolean-z3/contact-sheet.png"
+alt="A complete explanation." width="940" height="430">
+</picture><figcaption>Caption.
+<a href="{BASEURL}/assets/narrative/boolean-z3/animation.gif">Animation</a>
+</figcaption></figure>"""
+            page.write_text(html.replace("</main>", f"{figure}</main>"), encoding="utf-8")
+            narrative = root / "assets/narrative/boolean-z3"
+            narrative.mkdir(parents=True)
+            for name in ("fallback.png", "animation.gif", "contact-sheet.png"):
+                (narrative / name).write_bytes(b"asset")
+
+            result = check_site(root, site_url=SITE_URL, baseurl=BASEURL)
+
+        errors = "\n".join(result.errors)
+        self.assertIn("must contain exactly one GIF", errors)
+        self.assertIn("requires one contact-sheet link", errors)
+
+    def test_rejects_missing_component_heading_and_body_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _valid_site(root)
+            page = root / "components/tileset/index.html"
+            html = page.read_text(encoding="utf-8")
+            html = html.replace("<h2>Trust boundary</h2>", "")
+            html = html.replace('data-component-id="tileset"', 'data-component-id="other"')
+            page.write_text(html, encoding="utf-8")
+            result = check_site(root, site_url=SITE_URL, baseurl=BASEURL)
+        errors = "\n".join(result.errors)
+        self.assertIn("expected component id", errors)
+        self.assertIn("component H2 sequence", errors)
 
     def test_faint_and_comment_text_meet_normal_text_contrast(self) -> None:
         css = (ROOT / "docs/assets/css/site.css").read_text(encoding="utf-8")

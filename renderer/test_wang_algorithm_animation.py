@@ -18,7 +18,8 @@ BUILDER_MANIFEST = (
     ROOT / "tests/fixtures/pipeline_sat_reduction_explain/manifest.json"
 )
 SQUARE_SOLUTION = ROOT / "tests/fixtures/wang_solution_v1_square_sat.json"
-GOLDENS = ROOT / "docs/assets/images"
+GOLDENS = ROOT / "docs/assets/narrative"
+PRIVATE_GOLDENS = RENDERER / "test_data"
 
 
 def _tree_bytes(directory: Path) -> dict[str, bytes]:
@@ -53,7 +54,7 @@ def test_builder_animation_uses_versioned_provenance_and_is_byte_stable(tmp_path
     _assert_stable_assets(
         tmp_path / "first",
         tmp_path / "second",
-        GOLDENS / "builder-routing",
+        GOLDENS / "region-construction",
         frame_count=6,
         fallback_name="frame-04.png",
     )
@@ -81,7 +82,7 @@ def test_hex_animation_checks_the_pure_port_and_is_byte_stable(tmp_path):
     _assert_stable_assets(
         tmp_path / "first",
         tmp_path / "second",
-        GOLDENS / "square-to-hex",
+        PRIVATE_GOLDENS / "square-to-hex-animation",
         frame_count=4,
         fallback_name="frame-02.png",
     )

@@ -2,6 +2,7 @@
 layout: page
 title: Initial C/OpenMP architecture specification
 permalink: /historical_architecture/
+page_class: history
 description: Context and limitations for the project's original future-facing architecture PDF.
 section: Historical material
 document_kind: Historical specification
