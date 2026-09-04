@@ -19,7 +19,7 @@ not spliced into this run.
 ## Source formula
 
 The parser reads a canonical Cubic Monotone 1-in-3 SAT document with three
-variables and one source-order clause. The snapshot below is bound to those
+variables and three source-order clauses. The snapshot below is bound to those
 source bytes; it is not reconstructed from a later tiling.
 
 {% include narrative-static.html asset_id="formula" image="/assets/narrative/formula.png" alt="The parsed CM1-in-3 formula and its source-order clauses." width="796" height="394" label="observed" caption="Parsed formula snapshot for the named canonical source." source="cm13-formula-snapshot-v1" %}
