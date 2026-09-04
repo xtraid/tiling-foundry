@@ -81,7 +81,7 @@ Classification totals are one `story`, 15 `reference`, 11 `evidence`, and one
 - [x] Keep `/run-dossiers/` an index; do not render `run.json` as Markdown.
 - [x] Add taxonomy, component-section, primary-owner, semantic-label,
   fallback, caption, alt-text, permalink, and generated-output checks.
-- [ ] Build Pages without generating any dossier or invoking LaTeX.
+- [x] Build Pages without generating any dossier or invoking LaTeX.
 
 ## 4. Public asset inventory
 
@@ -235,12 +235,12 @@ checks prove the old files are unreferenced before deletion.
 
 ## 12. Final migration audit
 
-- [ ] The public catalog reports the expected counts for story, reference,
+- [x] The public catalog reports the expected counts for story, reference,
   evidence, and history.
-- [ ] All 27 legacy technical routes and `/` resolve after the migration.
-- [ ] Every new sitemap route resolves with one H1, description, canonical URL,
+- [x] All 27 legacy technical routes and `/` resolve after the migration.
+- [x] Every new sitemap route resolves with one H1, description, canonical URL,
   and expected page class.
-- [ ] Every narrative asset has one owner, one source chain, and one allowed
+- [x] Every narrative asset has one owner, one source chain, and one allowed
   semantic label.
 - [ ] No GIF is duplicated, embedded by two owners, missing a static fallback,
   or included in a PDF.
@@ -249,6 +249,6 @@ checks prove the old files are unreferenced before deletion.
 - [ ] `unsat-search` remains visibly and cryptographically separate.
 - [ ] Removing documentation and explainability leaves core build, solve,
   oracles, verifier, and standard export functional.
-- [ ] Full suites, strict compilers, sanitizer, analyzer, dynamic analysis,
+- [x] Full suites, strict compilers, sanitizer, analyzer, dynamic analysis,
   applicable profiling, renderer tests, Pages/Jekyll, TeX smoke, diff, secret,
   file-mode, and artifact checks are green before publication.
