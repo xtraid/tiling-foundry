@@ -445,6 +445,7 @@ samp {
 }
 
 :not(pre) > code {
+  overflow-wrap: anywhere;
   padding: 0.13em 0.35em;
   border: 1px solid #292e30;
   background: #101314;
