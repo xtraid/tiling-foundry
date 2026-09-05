@@ -11,8 +11,10 @@ import sys
 from PIL import Image
 import pytest
 
+import wang_trace_render
 from wang_explain import (
     EXPLAIN_DECISION_RGB,
+    EXPLAIN_PROPAGATION_SOURCE_RGB,
     EXPLAIN_SELECTED_MRV_RGB,
     EXPLAIN_UNRESOLVED_RGB,
 )
@@ -29,6 +31,8 @@ RENDERER = Path(__file__).resolve().parent
 ROOT = RENDERER.parent
 FIXTURE_DIRECTORY = ROOT / "tests/fixtures/pipeline_sat_solver_trace"
 MANIFEST = FIXTURE_DIRECTORY / "manifest.json"
+
+
 def _tree_bytes(directory: Path) -> dict[str, bytes]:
     return {
         path.relative_to(directory).as_posix(): path.read_bytes()
@@ -179,14 +183,74 @@ def test_decision_fallback_has_large_focused_mrv_summary_cards(tmp_path):
         assert fallback.getpixel((1804, 660)) == EXPLAIN_DECISION_RGB
 
 
-def test_semantic_milestones_precede_gap_filling():
+def test_sat_selection_keeps_a_decision_restriction_and_its_continuation():
     bundle = load_trace_bundle(MANIFEST)
     selected = select_semantic_milestones(bundle.trace.events, 10)
+    # Hand-checked contiguous search events: select cell 0, restrict it,
+    # then remove tile 8 from its neighbor cell 1.
+    assert {2517, 2518, 2519, 2894, 2895} <= set(selected)
+    assert selected == tuple(sorted(set(selected)))
 
-    assert selected == (0, 1, 1258, 1887, 2516, 2517, 2518, 2893, 2894, 2895)
-    assert selected != tuple(
-        slot * (len(bundle.trace.events) - 1) // 9 for slot in range(10)
+
+def test_propagation_reason_uses_unique_shared_edge_in_observed_before_state():
+    bundle = load_trace_bundle(MANIFEST)
+    before = replay_trace(bundle.trace)[2518]
+    reason = getattr(wang_trace_render, "_propagation_reason", None)
+    assert reason is not None, "the observed reduction needs a derived edge reason"
+    assert reason(bundle, bundle.trace.events[2519], before) == (0, "E", "W", (2,))
+
+
+def test_propagation_frame_marks_the_uniquely_derived_source(tmp_path):
+    rendered = render_trace_assets(MANIFEST, tmp_path / "rendered", max_frames=10)
+    propagation = tmp_path / "rendered/frame-002519.png"
+    assert propagation in rendered.frames
+    with Image.open(propagation) as frame:
+        assert frame.getpixel((30, 182)) == EXPLAIN_PROPAGATION_SOURCE_RGB
+
+
+def test_ambiguous_propagation_source_is_not_presented_as_observed():
+    bundle = load_trace_bundle(MANIFEST)
+    before = list(replay_trace(bundle.trace)[2518])
+    # Both west cell 0 and east cell 2 now independently imply {7,8}->{7}.
+    before[2] = 128
+    reason = getattr(wang_trace_render, "_propagation_reason", None)
+    assert reason is not None, "ambiguous sources must remain unidentified"
+    assert reason(bundle, bundle.trace.events[2519], tuple(before)) is None
+
+
+def test_rollback_focus_restores_repeated_changes_in_reverse_trail_order():
+    trace = _small_trace()
+    events = trace.events[:5] + (
+        TraceEvent(
+            5, "domain_reduction", "search", "propagation", 1, 1, 3, 3, 2, None
+        ),
+        TraceEvent(
+            6, "domain_reduction", "search", "propagation", 1, 1, 4, 2, 0, None
+        ),
+        TraceEvent(7, "conflict", "search", None, 1, 1, 4, None, None, None),
+        TraceEvent(8, "backtrack", "search", None, 1, 0, 1, None, None, None),
+        TraceEvent(9, "result", None, None, 0, 1, 1, None, None, "unsat"),
     )
+    trace = replace(
+        trace,
+        width=2,
+        initial_domains=((1 << 23) - 1, 3),
+        events=events,
+        status="unsat",
+        solution_sha256=None,
+        event_capacity=10,
+        observed_event_count=10,
+    )
+    assert replay_trace(trace)[8] == (3, 3)
+    restore = getattr(wang_trace_render, "_restored_changes", None)
+    assert restore is not None, "rollback focus needs the reversed observed deltas"
+    assert restore(events, 8) == ((1, 0, 2), (1, 2, 3), (0, 1, 3))
+
+
+def test_tall_search_grid_retains_room_for_the_rollback_story():
+    frame_height = getattr(wang_trace_render, "_frame_height", None)
+    assert frame_height is not None, "tall traces need a visible story panel"
+    assert frame_height(15 * 18 * 2) == 972
 
 
 def test_rejects_hash_tampering_before_parsing_trace(tmp_path):

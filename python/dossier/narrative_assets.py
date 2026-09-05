@@ -193,6 +193,19 @@ def _animation_metadata(
     run: dict[str, object],
 ) -> dict[str, dict[str, str]]:
     pipeline_digest = pipeline_source_sha256(identities, run)
+    search_diagnostic = run["case"]["expected_status"] == "unsat"
+    reference_trace_caption = (
+        "Selected semantic milestones from the complete observed search "
+        "diagnostic; it is not an UNSAT certificate."
+        if search_diagnostic
+        else "Selected semantic milestones from the complete reference trace."
+    )
+    optimized_trace_caption = (
+        "Selected semantic milestones from the complete observed search "
+        "diagnostic; it is not an UNSAT certificate."
+        if search_diagnostic
+        else "Selected semantic milestones from the complete optimized trace."
+    )
     mechanism_digest = hashlib.sha256(MECHANISM_SOURCE.read_bytes()).hexdigest()
     if mechanism_digest != OPTIMIZED_MECHANISMS_SHA256:
         raise NarrativeAssetError(
@@ -235,7 +248,7 @@ def _animation_metadata(
         "reference_trace": _metadata(
             owner="/components/reference-solver/",
             semantic_label="observed",
-            caption="Selected semantic milestones from the complete reference trace.",
+            caption=reference_trace_caption,
             alt_text="Observed reference domain states at root, propagation, decision, search, and result milestones.",
             source_contract="wang-explain-manifest-v3",
             source_sha256=str(identities["reference_trace_manifest"]),
@@ -246,7 +259,7 @@ def _animation_metadata(
         "optimized_trace": _metadata(
             owner="/components/optimized-solver/",
             semantic_label="observed",
-            caption="Selected semantic milestones from the complete optimized trace.",
+            caption=optimized_trace_caption,
             alt_text="Observed optimized domain states at root, propagation, decision, search, and result milestones.",
             source_contract="wang-explain-manifest-v3",
             source_sha256=str(identities["optimized_trace_manifest"]),

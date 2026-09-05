@@ -156,6 +156,12 @@ class MultiEngineDossierTests(unittest.TestCase):
             document,
         )
         self.assertEqual(narrative["product"], "run-specific")
+        for solver in ("reference", "optimized"):
+            animation = narrative["animations"][f"{solver}_trace"]
+            self.assertEqual(animation["semantic_label"], "observed")
+            self.assertEqual(animation["scope"], {
+                "complete": True, "selected": True, "truncated": False,
+            })
         self.assertEqual(
             narrative["animations"]["optimized_mechanisms"]["semantic_label"],
             "didactic",
@@ -216,6 +222,34 @@ class MultiEngineDossierTests(unittest.TestCase):
                 {"conflict", "backtrack", "result"} <= selected_kinds,
                 (solver, selected_kinds),
             )
+            animation = narrative["animations"][animation_name]
+            self.assertIn("observed search diagnostic", animation["caption"])
+            self.assertIn("not an UNSAT certificate", animation["caption"])
+            selected = [
+                event for event in trace["events"]
+                if event["sequence"] in selected_sequences
+            ]
+            decision = next(e for e in selected if e["kind"] == "decision")
+            reduction = next(e for e in selected if (
+                e["kind"] == "domain_reduction" and e["reason"] == "propagation"
+                and e["sequence"] > decision["sequence"]
+            ))
+            empty = next(e for e in selected if (
+                e["kind"] == "domain_reduction" and e["new_domain"] == 0
+                and e["sequence"] >= reduction["sequence"]
+            ))
+            conflict = next(e for e in selected if e["kind"] == "conflict")
+            rollback = next(e for e in selected if e["kind"] == "backtrack")
+            next_branches = [e for e in selected if (
+                e["kind"] == "decision" and e["sequence"] > rollback["sequence"]
+            )]
+            self.assertTrue(next_branches, f"{solver} omits the next branch")
+            next_branch = next_branches[0]
+            self.assertLess(decision["sequence"], reduction["sequence"])
+            self.assertLess(empty["sequence"], conflict["sequence"])
+            self.assertLess(conflict["sequence"], rollback["sequence"])
+            self.assertLess(rollback["sequence"], next_branch["sequence"])
+            self.assertLess(rollback["change_mark"], conflict["change_mark"])
 
     def test_case_contract_forbids_initial_domain_overrides(self) -> None:
         invalid = json.loads(SAT_CASE.read_text(encoding="utf-8"))
