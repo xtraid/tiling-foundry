@@ -10,6 +10,7 @@ from PIL import Image, ImageDraw
 
 from wang_animation import AnimationOutputs, write_animation_assets
 from wang_explain import (
+    EXPLAIN_ACTIVE_RGB,
     EXPLAIN_CONFLICT_RGB,
     EXPLAIN_DECISION_RGB,
     EXPLAIN_INACTIVE_DARK_RGB,
@@ -107,12 +108,29 @@ def _domain_rgb(domain: int) -> tuple[int, int, int]:
     return EXPLAIN_UNRESOLVED_RGB
 
 
+def _active_domain_counts(
+    active: tuple[bool, ...], domains: tuple[int, ...]
+) -> tuple[int, int]:
+    """Return fixed and empty domains, excluding inactive bounding-box cells."""
+    return (
+        sum(
+            is_active and domain.bit_count() == 1
+            for is_active, domain in zip(active, domains, strict=True)
+        ),
+        sum(
+            is_active and domain == 0
+            for is_active, domain in zip(active, domains, strict=True)
+        ),
+    )
+
+
 def _compose_frame(
     bundle: TraceBundle,
     event: TraceEvent,
     domains: tuple[int, ...],
 ) -> Image.Image:
     region = bundle.explanation.region
+    fixed_count, empty_count = _active_domain_counts(region.active, domains)
     mrv_candidates: tuple[int, ...] = ()
     minimum_domain_size: int | None = None
     if event.kind == "decision":
@@ -195,7 +213,7 @@ def _compose_frame(
     )
     entries = (
         (_SINGLETON_RGB, "singleton / selected tile"),
-        (_domain_rgb(8), "multiple candidate tiles"),
+        (EXPLAIN_UNRESOLVED_RGB, "multiple candidate tiles"),
         (_UNSAT_RGB, "empty domain / conflict"),
         (_CHANGED_RGB, "current event cell"),
     )
@@ -224,11 +242,9 @@ def _compose_frame(
         )
     if mrv_candidates:
         details = [
-            f"phase: {event.phase or '-'} | depth: {event.depth}",
             "active: "
             f"{sum(region.active)} | fixed: "
-            f"{sum(domain.bit_count() == 1 for domain in domains)} | empty: "
-            f"{sum(domain == 0 for domain in domains)}",
+            f"{fixed_count} | empty: {empty_count}",
             "minimum domain: "
             f"{minimum_domain_size}; tied candidates: {len(mrv_candidates)}",
             f"row-major winner: cell {min(mrv_candidates)}",
@@ -241,8 +257,8 @@ def _compose_frame(
             f"reason: {event.reason or '-'}",
             f"change mark: {event.change_mark}",
             f"active: {sum(region.active)}",
-            f"fixed: {sum(domain.bit_count() == 1 for domain in domains)}",
-            f"empty: {sum(domain == 0 for domain in domains)}",
+            f"fixed: {fixed_count}",
+            f"empty: {empty_count}",
         ]
     y = legend_y + _scaled(155 if mrv_candidates else 142)
     for line in details:
@@ -253,12 +269,72 @@ def _compose_frame(
             fill=EXPLAIN_MUTED_RGB,
         )
         y += _scaled(15)
-    draw.text(
-        (legend_x, height - _MARGIN - _scaled(15)),
-        "Rendering is not a correctness proof.",
-        font=explain_font(_scaled(9)),
-        fill=EXPLAIN_MUTED_RGB,
-    )
+    if mrv_candidates:
+        summary_top = top + grid_height + _scaled(12)
+        summary_box = (
+            _MARGIN,
+            summary_top,
+            width - _MARGIN - 1,
+            height - _MARGIN - 1,
+        )
+        draw.rectangle(
+            summary_box,
+            fill=EXPLAIN_ACTIVE_RGB,
+            outline=(178, 184, 194),
+            width=_scaled(1),
+        )
+        summary_x = _MARGIN + _scaled(12)
+        draw.text(
+            (summary_x, summary_top + _scaled(10)),
+            f"MRV: minimum domain {minimum_domain_size}",
+            font=explain_font(_scaled(26)),
+            fill=EXPLAIN_TEXT_RGB,
+        )
+        draw.text(
+            (summary_x, summary_top + _scaled(42)),
+            f"{len(mrv_candidates)} ties -> cell {min(mrv_candidates)} wins row-major",
+            font=explain_font(_scaled(24)),
+            fill=EXPLAIN_TEXT_RGB,
+        )
+        draw.text(
+            (summary_x, summary_top + _scaled(72)),
+            f"Recorded decision: cell {event.cell}",
+            font=explain_font(_scaled(16)),
+            fill=EXPLAIN_MUTED_RGB,
+        )
+        card_width = _scaled(75)
+        card_height = _scaled(62)
+        card_gap = _scaled(12)
+        card_top = summary_top + _scaled(16)
+        candidate_left = width - _MARGIN - 2 * card_width - card_gap
+        winner_left = candidate_left + card_width + card_gap
+        alternate = next(
+            (candidate for candidate in mrv_candidates if candidate != event.cell),
+            event.cell,
+        )
+        for left, color, title, cell in (
+            (candidate_left, EXPLAIN_SELECTED_MRV_RGB, "tied", alternate),
+            (winner_left, _CHANGED_RGB, "winner", event.cell),
+        ):
+            draw.rectangle(
+                (left, card_top, left + card_width, card_top + card_height),
+                fill=color,
+                outline=EXPLAIN_TEXT_RGB,
+                width=_scaled(1),
+            )
+            centered_text(
+                draw,
+                (left, card_top + _scaled(6), left + card_width, card_top + card_height),
+                f"{title}\ncell {cell}\ndomain {minimum_domain_size}",
+                font=explain_font(_scaled(12)),
+            )
+    else:
+        draw.text(
+            (legend_x, height - _MARGIN - _scaled(15)),
+            "Rendering is not a correctness proof.",
+            font=explain_font(_scaled(9)),
+            fill=EXPLAIN_MUTED_RGB,
+        )
     return image
 
 

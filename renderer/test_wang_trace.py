@@ -11,9 +11,18 @@ import sys
 from PIL import Image
 import pytest
 
+from wang_explain import (
+    EXPLAIN_DECISION_RGB,
+    EXPLAIN_SELECTED_MRV_RGB,
+    EXPLAIN_UNRESOLVED_RGB,
+)
 from wang_hex_port import WangSquareRenderError
 from wang_trace import TraceEvent, TraceSnapshot, load_trace_bundle, replay_trace
-from wang_trace_render import render_trace_assets, select_semantic_milestones
+from wang_trace_render import (
+    _active_domain_counts,
+    render_trace_assets,
+    select_semantic_milestones,
+)
 
 
 RENDERER = Path(__file__).resolve().parent
@@ -142,6 +151,32 @@ def test_observed_mrv_selection_is_row_major_and_deterministic(tmp_path):
 
     assert _tree_bytes(first_dir) == _tree_bytes(second_dir)
     assert Image.open(first.fallback).size == (1976, 828)
+
+
+def test_active_domain_counts_exclude_inactive_positions():
+    bundle = load_trace_bundle(MANIFEST)
+    states = replay_trace(bundle.trace)
+    decision_index = next(
+        index
+        for index, event in enumerate(bundle.trace.events)
+        if event.kind == "decision" and event.phase == "search"
+    )
+    assert _active_domain_counts(
+        bundle.explanation.region.active, states[decision_index - 1]
+    ) == (74, 0)
+
+
+def test_mrv_legend_uses_the_unresolved_grid_color(tmp_path):
+    rendered = render_trace_assets(MANIFEST, tmp_path / "rendered", max_frames=10)
+    with Image.open(rendered.fallback) as fallback:
+        assert fallback.getpixel((1548, 304)) == EXPLAIN_UNRESOLVED_RGB
+
+
+def test_decision_fallback_has_large_focused_mrv_summary_cards(tmp_path):
+    rendered = render_trace_assets(MANIFEST, tmp_path / "rendered", max_frames=10)
+    with Image.open(rendered.fallback) as fallback:
+        assert fallback.getpixel((1630, 660)) == EXPLAIN_SELECTED_MRV_RGB
+        assert fallback.getpixel((1804, 660)) == EXPLAIN_DECISION_RGB
 
 
 def test_semantic_milestones_precede_gap_filling():
