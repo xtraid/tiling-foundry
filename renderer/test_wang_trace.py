@@ -8,7 +8,7 @@ import shutil
 import subprocess
 import sys
 
-from PIL import Image
+from PIL import Image, ImageDraw
 import pytest
 
 import wang_trace_render
@@ -92,6 +92,62 @@ def _small_trace():
         events=events,
         checkpoints=(),
     )
+
+
+def _display_ink_height(image: Image.Image, box: tuple[int, int, int, int]) -> int:
+    display_width = 390
+    scale = display_width / image.width
+    display = image.resize(
+        (display_width, round(image.height * scale)), Image.Resampling.LANCZOS
+    )
+    display_box = tuple(round(coordinate * scale) for coordinate in box)
+    crop = display.crop(display_box)
+    ink_rows = [
+        y
+        for y in range(crop.height)
+        if sum(
+            max(crop.getpixel((x, y))) < 210 for x in range(crop.width)
+        )
+        >= 3
+    ]
+    runs: list[list[int]] = []
+    for row in ink_rows:
+        if not runs or row != runs[-1][-1] + 1:
+            runs.append([row])
+        else:
+            runs[-1].append(row)
+    return max((len(run) for run in runs), default=0)
+
+
+def _search_story_panel(bundle, event_index, restored=()):
+    events = (
+        TraceEvent(0, "root", "initial", None, 0, None, 0, None, None, None),
+        TraceEvent(1, "decision", "search", None, 2, 492, 3990, 9, 1, None),
+        TraceEvent(2, "conflict", "search", None, 2, 614, 4114, None, None, None),
+        TraceEvent(3, "backtrack", "search", None, 2, 492, 3990, None, None, None),
+        TraceEvent(4, "decision", "search", None, 2, 492, 3990, 9, 8, None),
+    )
+    trace = replace(
+        bundle.trace,
+        events=events,
+        event_capacity=len(events),
+        observed_event_count=len(events),
+    )
+    story_bundle = replace(bundle, trace=trace)
+    image = Image.new("RGB", (1976, 972), (255, 255, 255))
+    draw_story = getattr(wang_trace_render, "_draw_search_summary", None)
+    assert draw_story is not None
+    draw_story(
+        ImageDraw.Draw(image),
+        story_bundle,
+        events[event_index],
+        event_index,
+        restored,
+        top=744,
+        width=image.width,
+        height=image.height,
+    )
+    return image
 
 
 def test_loads_and_replays_hash_bound_trace_without_solver_imports():
@@ -206,6 +262,27 @@ def test_propagation_frame_marks_the_uniquely_derived_source(tmp_path):
     assert propagation in rendered.frames
     with Image.open(propagation) as frame:
         assert frame.getpixel((30, 182)) == EXPLAIN_PROPAGATION_SOURCE_RGB
+
+
+def test_trace_story_facts_remain_readable_at_390_px(tmp_path):
+    bundle = load_trace_bundle(MANIFEST)
+    rendered = render_trace_assets(MANIFEST, tmp_path / "rendered", max_frames=10)
+    propagation = tmp_path / "rendered/frame-002519.png"
+    assert propagation in rendered.frames
+    with Image.open(propagation) as frame:
+        assert _display_ink_height(frame, (52, 676, 1400, 734)) >= 8
+        assert _display_ink_height(frame, (52, 726, 1400, 784)) >= 8
+
+    conflict = _search_story_panel(bundle, 2)
+    assert _display_ink_height(conflict, (52, 828, 1400, 900)) >= 8
+
+    rollback = _search_story_panel(
+        bundle,
+        3,
+        ((614, 0, 1 << 8), (614, 1 << 8, (1 << 6) | (1 << 8))),
+    )
+    assert _display_ink_height(rollback, (52, 820, 1400, 884)) >= 8
+    assert _display_ink_height(rollback, (52, 880, 1400, 944)) >= 8
 
 
 def test_ambiguous_propagation_source_is_not_presented_as_observed():

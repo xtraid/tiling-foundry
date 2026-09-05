@@ -382,19 +382,19 @@ def _draw_propagation_summary(
         fill=EXPLAIN_TEXT_RGB,
     )
     draw.text(
-        (x, top + _scaled(40)),
-        "shared edge "
+        (x, top + _scaled(39)),
+        "Shared edge "
         + ", ".join(map(str, colors))
-        + "; uniquely derived from the observed before-state",
-        font=explain_font(_scaled(16)),
-        fill=EXPLAIN_MUTED_RGB,
+        + "; unique in observed before-state",
+        font=explain_font(_scaled(24)),
+        fill=EXPLAIN_TEXT_RGB,
     )
     draw.text(
-        (x, top + _scaled(65)),
-        f"target domain {_format_domain(event.old_domain, tile_count)} -> "
+        (x, top + _scaled(69)),
+        f"Domain {_format_domain(event.old_domain, tile_count)} -> "
         f"{_format_domain(event.new_domain, tile_count)}; "
         f"removed {_format_domain(removed, tile_count)}",
-        font=explain_font(_scaled(15)),
+        font=explain_font(_scaled(24)),
         fill=EXPLAIN_TEXT_RGB,
     )
 
@@ -460,32 +460,31 @@ def _draw_search_summary(
     next_decision = _next_search_event(events, event_index, "decision")
     tile_count = len(bundle.explanation.tileset.tile_edges)
     x = _MARGIN + _scaled(12)
-    title = (
-        f"DFS conflict at depth {event.depth}"
-        if event.kind == "conflict"
-        else f"Rollback at depth {event.depth}"
-    )
+    if decision is not None and decision.cell is not None and decision.new_domain:
+        chosen = _format_domain(decision.new_domain, tile_count)
+        title = (
+            f"DFS conflict d{event.depth}: "
+            if event.kind == "conflict"
+            else f"Rollback d{event.depth}: "
+        )
+        title += f"cell {decision.cell} branch {chosen}"
+    else:
+        title = (
+            f"DFS conflict at depth {event.depth}"
+            if event.kind == "conflict"
+            else f"Rollback at depth {event.depth}"
+        )
     draw.text(
         (x, top + _scaled(9)),
         title,
         font=explain_font(_scaled(24)),
         fill=EXPLAIN_TEXT_RGB,
     )
-    if decision is not None and decision.cell is not None and decision.new_domain:
-        chosen = _format_domain(decision.new_domain, tile_count)
-        draw.text(
-            (x, top + _scaled(40)),
-            f"selected cell {decision.cell}; candidate {chosen}; "
-            f"recorded depth {decision.depth}",
-            font=explain_font(_scaled(16)),
-            fill=EXPLAIN_MUTED_RGB,
-        )
     if event.kind == "conflict":
         draw.text(
-            (x, top + _scaled(65)),
-            f"cell {event.cell} reached the empty domain at trail mark "
-            f"{event.change_mark}",
-            font=explain_font(_scaled(15)),
+            (x, top + _scaled(46)),
+            f"Cell {event.cell} -> empty domain; trail {event.change_mark}",
+            font=explain_font(_scaled(24)),
             fill=EXPLAIN_TEXT_RGB,
         )
     else:
@@ -493,10 +492,10 @@ def _draw_search_summary(
             conflict.change_mark if conflict is not None else event.change_mark
         )
         draw.text(
-            (x, top + _scaled(65)),
-            f"trail {conflict_mark} -> {event.change_mark}; restore "
-            f"{len(restored)} changes in reverse order",
-            font=explain_font(_scaled(15)),
+            (x, top + _scaled(40)),
+            f"Restore {len(restored)} changes in reverse; "
+            f"trail {conflict_mark} -> {event.change_mark}",
+            font=explain_font(_scaled(24)),
             fill=EXPLAIN_TEXT_RGB,
         )
         if restored:
@@ -506,10 +505,10 @@ def _draw_search_summary(
                 for cell, current, previous in restored[:2]
             )
             draw.text(
-                (x, top + _scaled(86)),
-                f"reverse restore: {sample}",
-                font=explain_font(_scaled(12)),
-                fill=EXPLAIN_MUTED_RGB,
+                (x, top + _scaled(70)),
+                f"First restores: {sample}",
+                font=explain_font(_scaled(24)),
+                fill=EXPLAIN_TEXT_RGB,
             )
 
     card_width = _scaled(82)
