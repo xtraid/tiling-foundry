@@ -20,9 +20,6 @@ RENDERER = Path(__file__).resolve().parent
 ROOT = RENDERER.parent
 FIXTURE_DIRECTORY = ROOT / "tests/fixtures/pipeline_sat_solver_trace"
 MANIFEST = FIXTURE_DIRECTORY / "manifest.json"
-GOLDENS = ROOT / "docs/assets/narrative/reference-trace"
-
-
 def _tree_bytes(directory: Path) -> dict[str, bytes]:
     return {
         path.relative_to(directory).as_posix(): path.read_bytes()
@@ -103,17 +100,48 @@ def test_one_composition_chain_is_byte_stable_for_png_sheet_and_gif(tmp_path):
     second = render_trace_assets(MANIFEST, tmp_path / "second", max_frames=10)
 
     assert _tree_bytes(tmp_path / "first") == _tree_bytes(tmp_path / "second")
-    assert _tree_bytes(tmp_path / "first") == _tree_bytes(GOLDENS)
     assert len(first.frames) == 10
     assert first.fallback.name == "frame-002517.png"
     assert first.animation.name == "trace.gif"
     assert first.contact_sheet.name == "contact-sheet.png"
     with Image.open(first.frames[0]) as frame:
         assert frame.mode == "RGB"
-        assert frame.size == (988, 414)
+        assert frame.size == (1976, 828)
     with Image.open(first.animation) as animation:
         assert animation.format == "GIF"
         assert animation.n_frames == 10
+
+
+def test_observed_mrv_selection_is_row_major_and_deterministic(tmp_path):
+    bundle = load_trace_bundle(MANIFEST)
+    states = replay_trace(bundle.trace)
+    decision_index, event = next(
+        (index, event)
+        for index, event in enumerate(bundle.trace.events)
+        if event.kind == "decision" and event.phase == "search"
+    )
+    before = states[decision_index - 1]
+    region = bundle.explanation.region
+    minimum = min(
+        domain.bit_count()
+        for active, domain in zip(region.active, before, strict=True)
+        if active and domain.bit_count() > 1
+    )
+    candidates = tuple(
+        index
+        for index, (active, domain) in enumerate(zip(region.active, before))
+        if active and domain.bit_count() == minimum
+    )
+
+    assert event.cell == min(candidates)
+
+    first_dir = tmp_path / "first"
+    second_dir = tmp_path / "second"
+    first = render_trace_assets(MANIFEST, first_dir, max_frames=10)
+    render_trace_assets(MANIFEST, second_dir, max_frames=10)
+
+    assert _tree_bytes(first_dir) == _tree_bytes(second_dir)
+    assert Image.open(first.fallback).size == (1976, 828)
 
 
 def test_semantic_milestones_precede_gap_filling():

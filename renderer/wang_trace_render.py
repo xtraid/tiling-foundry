@@ -10,11 +10,18 @@ from PIL import Image, ImageDraw
 
 from wang_animation import AnimationOutputs, write_animation_assets
 from wang_explain import (
+    EXPLAIN_CONFLICT_RGB,
+    EXPLAIN_DECISION_RGB,
     EXPLAIN_INACTIVE_DARK_RGB,
     EXPLAIN_INACTIVE_LIGHT_RGB,
     EXPLAIN_MUTED_RGB,
     EXPLAIN_PANEL_RGB,
+    EXPLAIN_RENDER_SCALE,
+    EXPLAIN_SELECTED_MRV_RGB,
+    EXPLAIN_SINGLETON_RGB,
     EXPLAIN_TEXT_RGB,
+    EXPLAIN_UNRESOLVED_RGB,
+    centered_text,
     draw_explain_heading,
     explain_font,
 )
@@ -23,14 +30,18 @@ from wang_square import MAX_CANVAS_PIXELS, MAX_CANVAS_SIDE
 from wang_trace import TraceBundle, TraceEvent, load_trace_bundle, replay_trace
 
 
-_CELL_SIZE: Final = 18
-_MARGIN: Final = 14
-_HEADER: Final = 76
-_LEGEND_WIDTH: Final = 210
-_GAP: Final = 12
-_UNSAT_RGB: Final = (218, 82, 82)
-_SINGLETON_RGB: Final = (83, 166, 116)
-_CHANGED_RGB: Final = (245, 178, 60)
+_CELL_SIZE: Final = 18 * EXPLAIN_RENDER_SCALE
+_MARGIN: Final = 14 * EXPLAIN_RENDER_SCALE
+_HEADER: Final = 76 * EXPLAIN_RENDER_SCALE
+_LEGEND_WIDTH: Final = 210 * EXPLAIN_RENDER_SCALE
+_GAP: Final = 12 * EXPLAIN_RENDER_SCALE
+_UNSAT_RGB: Final = EXPLAIN_CONFLICT_RGB
+_SINGLETON_RGB: Final = EXPLAIN_SINGLETON_RGB
+_CHANGED_RGB: Final = EXPLAIN_DECISION_RGB
+
+
+def _scaled(value: int) -> int:
+    return value * EXPLAIN_RENDER_SCALE
 
 
 def select_semantic_milestones(
@@ -93,8 +104,7 @@ def _domain_rgb(domain: int) -> tuple[int, int, int]:
     count = domain.bit_count()
     if count == 1:
         return _SINGLETON_RGB
-    shade = 225 - min(12, count - 2) * 6
-    return (128, max(145, shade - 24), shade)
+    return EXPLAIN_UNRESOLVED_RGB
 
 
 def _compose_frame(
@@ -103,10 +113,25 @@ def _compose_frame(
     domains: tuple[int, ...],
 ) -> Image.Image:
     region = bundle.explanation.region
+    mrv_candidates: tuple[int, ...] = ()
+    minimum_domain_size: int | None = None
+    if event.kind == "decision":
+        unresolved = tuple(
+            (index, domain.bit_count())
+            for index, (active, domain) in enumerate(
+                zip(region.active, domains, strict=True)
+            )
+            if active and domain.bit_count() > 1
+        )
+        if unresolved:
+            minimum_domain_size = min(count for _, count in unresolved)
+            mrv_candidates = tuple(
+                index for index, count in unresolved if count == minimum_domain_size
+            )
     grid_width = region.width * _CELL_SIZE
     grid_height = region.height * _CELL_SIZE
     width = 2 * _MARGIN + grid_width + _GAP + _LEGEND_WIDTH
-    height = 2 * _MARGIN + _HEADER + max(grid_height, 310)
+    height = 2 * _MARGIN + _HEADER + max(grid_height, _scaled(310))
     if (
         width > MAX_CANVAS_SIDE
         or height > MAX_CANVAS_SIDE
@@ -130,6 +155,7 @@ def _compose_frame(
         (_MARGIN, _MARGIN),
         title=f"Observed {bundle.trace.solver} solver trace",
         subtitle=subtitle,
+        scale=EXPLAIN_RENDER_SCALE,
     )
     top = _MARGIN + _HEADER
     for index, (active, domain) in enumerate(
@@ -146,24 +172,25 @@ def _compose_frame(
             )
         else:
             fill = _domain_rgb(domain)
-        draw.rectangle(box, fill=fill, outline=(178, 184, 194))
-        if active and domain != 0 and domain.bit_count() == 1:
-            tile_id = domain.bit_length() - 1
-            draw.text(
-                (x + 4, y + 2),
-                str(tile_id),
-                font=explain_font(9),
-                fill=EXPLAIN_TEXT_RGB,
+        if index in mrv_candidates:
+            fill = EXPLAIN_SELECTED_MRV_RGB
+        draw.rectangle(box, fill=fill, outline=(178, 184, 194), width=_scaled(1))
+        if active:
+            centered_text(
+                draw,
+                box,
+                str(domain.bit_count()),
+                font=explain_font(_scaled(10)),
             )
         if event.cell == index:
-            draw.rectangle(box, outline=_CHANGED_RGB, width=3)
+            draw.rectangle(box, outline=_CHANGED_RGB, width=_scaled(3))
 
     legend_x = _MARGIN + grid_width + _GAP
-    legend_y = top + 4
+    legend_y = top + _scaled(4)
     draw.text(
         (legend_x, legend_y),
         "Domain state",
-        font=explain_font(14),
+        font=explain_font(_scaled(14)),
         fill=EXPLAIN_TEXT_RGB,
     )
     entries = (
@@ -173,35 +200,63 @@ def _compose_frame(
         (_CHANGED_RGB, "current event cell"),
     )
     for offset, (color, label) in enumerate(entries, start=1):
-        y = legend_y + offset * 28
-        draw.rectangle((legend_x, y, legend_x + 18, y + 18), fill=color)
+        y = legend_y + offset * _scaled(24)
+        draw.rectangle(
+            (legend_x, y, legend_x + _scaled(18), y + _scaled(18)), fill=color
+        )
         draw.text(
-            (legend_x + 26, y + 2),
+            (legend_x + _scaled(26), y + _scaled(2)),
             label,
-            font=explain_font(10),
+            font=explain_font(_scaled(10)),
             fill=EXPLAIN_TEXT_RGB,
         )
-    details = [
-        f"phase: {event.phase or '-'}",
-        f"reason: {event.reason or '-'}",
-        f"change mark: {event.change_mark}",
-        f"active: {sum(region.active)}",
-        f"fixed: {sum(domain.bit_count() == 1 for domain in domains)}",
-        f"empty: {sum(domain == 0 for domain in domains)}",
-    ]
-    y = legend_y + 142
+    if mrv_candidates:
+        y = legend_y + (len(entries) + 1) * _scaled(24)
+        draw.rectangle(
+            (legend_x, y, legend_x + _scaled(18), y + _scaled(18)),
+            fill=EXPLAIN_SELECTED_MRV_RGB,
+        )
+        draw.text(
+            (legend_x + _scaled(26), y + _scaled(2)),
+            "minimum-domain candidate",
+            font=explain_font(_scaled(10)),
+            fill=EXPLAIN_TEXT_RGB,
+        )
+    if mrv_candidates:
+        details = [
+            f"phase: {event.phase or '-'} | depth: {event.depth}",
+            "active: "
+            f"{sum(region.active)} | fixed: "
+            f"{sum(domain.bit_count() == 1 for domain in domains)} | empty: "
+            f"{sum(domain == 0 for domain in domains)}",
+            "minimum domain: "
+            f"{minimum_domain_size}; tied candidates: {len(mrv_candidates)}",
+            f"row-major winner: cell {min(mrv_candidates)}",
+            f"selected cell: {event.cell}",
+            "tie-break: lowest row-major cell",
+        ]
+    else:
+        details = [
+            f"phase: {event.phase or '-'}",
+            f"reason: {event.reason or '-'}",
+            f"change mark: {event.change_mark}",
+            f"active: {sum(region.active)}",
+            f"fixed: {sum(domain.bit_count() == 1 for domain in domains)}",
+            f"empty: {sum(domain == 0 for domain in domains)}",
+        ]
+    y = legend_y + _scaled(155 if mrv_candidates else 142)
     for line in details:
         draw.text(
             (legend_x, y),
             line,
-            font=explain_font(10),
+            font=explain_font(_scaled(10)),
             fill=EXPLAIN_MUTED_RGB,
         )
-        y += 18
+        y += _scaled(15)
     draw.text(
-        (legend_x, height - _MARGIN - 15),
+        (legend_x, height - _MARGIN - _scaled(15)),
         "Rendering is not a correctness proof.",
-        font=explain_font(9),
+        font=explain_font(_scaled(9)),
         fill=EXPLAIN_MUTED_RGB,
     )
     return image
@@ -219,7 +274,13 @@ def render_trace_assets(
     states = replay_trace(bundle.trace)
     selected = select_semantic_milestones(bundle.trace.events, max_frames)
     frames = tuple(
-        _compose_frame(bundle, bundle.trace.events[index], states[index])
+        _compose_frame(
+            bundle,
+            bundle.trace.events[index],
+            states[index - 1]
+            if bundle.trace.events[index].kind == "decision" and index > 0
+            else states[index],
+        )
         for index in selected
     )
     fallback_index = next(

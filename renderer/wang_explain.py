@@ -17,6 +17,17 @@ EXPLAIN_OUTLINE_RGB: Final = (28, 32, 40)
 EXPLAIN_INACTIVE_LIGHT_RGB: Final = (226, 230, 236)
 EXPLAIN_INACTIVE_DARK_RGB: Final = (190, 197, 207)
 EXPLAIN_ACTIVE_RGB: Final = (238, 241, 246)
+EXPLAIN_RENDER_SCALE: Final = 2
+EXPLAIN_UNRESOLVED_RGB: Final = (128, 164, 201)
+EXPLAIN_SINGLETON_RGB: Final = (83, 166, 116)
+EXPLAIN_SELECTED_MRV_RGB: Final = (111, 82, 176)
+EXPLAIN_PROPAGATION_SOURCE_RGB: Final = (238, 177, 69)
+EXPLAIN_PROPAGATION_TARGET_RGB: Final = (75, 151, 202)
+EXPLAIN_QUEUED_RGB: Final = (108, 117, 132)
+EXPLAIN_DECISION_RGB: Final = (245, 178, 60)
+EXPLAIN_CONFLICT_RGB: Final = (218, 82, 82)
+EXPLAIN_TRAIL_MUTATION_RGB: Final = (203, 107, 151)
+EXPLAIN_RESTORED_RGB: Final = (89, 166, 169)
 
 
 def explain_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
@@ -55,14 +66,20 @@ def draw_explain_heading(
     *,
     title: str,
     subtitle: str,
+    scale: int = 1,
 ) -> None:
     """Draw the common two-line heading used by explainability views."""
     x, y = origin
-    draw.text((x, y), title, font=explain_font(20), fill=EXPLAIN_TEXT_RGB)
     draw.text(
-        (x, y + 28),
+        (x, y),
+        title,
+        font=explain_font(20 * scale),
+        fill=EXPLAIN_TEXT_RGB,
+    )
+    draw.text(
+        (x, y + 28 * scale),
         subtitle,
-        font=explain_font(12),
+        font=explain_font(12 * scale),
         fill=EXPLAIN_MUTED_RGB,
     )
 
