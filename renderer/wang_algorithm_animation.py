@@ -176,15 +176,26 @@ def _draw_signal_order(
             outline=(217, 119, 6) if highlighted else (181, 188, 199),
             width=4 if highlighted else 2,
         )
+        text = (
+            f"+{omitted} rows"
+            if signal is None
+            else _builder_signal_label(signal, compact=box_width < 120)
+        )
+        font_size = 16 if signal is None else 28
+        font = explain_font(font_size * scale)
+        if len(signals) > 15:
+            inner_width = box_width - 8
+            while font_size > 12:
+                text_box = draw.textbbox((0, 0), text, font=font)
+                if text_box[2] - text_box[0] <= inner_width:
+                    break
+                font_size -= 1
+                font = explain_font(font_size * scale)
         centered_text(
             draw,
             (x + 4, y + 3, x + box_width - 4, y + 55),
-            (
-                f"+{omitted} rows"
-                if signal is None
-                else _builder_signal_label(signal, compact=box_width < 120)
-            ),
-            font=explain_font((16 if signal is None else 28) * scale),
+            text,
+            font=font,
             fill=(
                 EXPLAIN_MUTED_RGB
                 if muted or signal is None

@@ -230,6 +230,25 @@ def test_builder_summarizes_a_valid_44_variable_signal_strip():
         highlighted_rows=(86, 87),
     )
     assert image.size == (1976, 828)
+    box_width, gap = 134, 10
+    for position in range(len(items) - 1):
+        gap_x = 220 + position * (box_width + gap) + box_width + gap // 2
+        assert all(
+            max(image.getpixel((gap_x, pixel_y))) >= 180
+            for pixel_y in range(148, 191)
+        )
+
+    display = image.resize((390, 164), Image.Resampling.LANCZOS)
+    display_scale = 390 / image.width
+    for position in range(len(items) - 1):
+        gap_x = round(
+            (220 + position * (box_width + gap) + box_width + gap // 2)
+            * display_scale
+        )
+        assert all(
+            max(display.getpixel((gap_x, pixel_y))) >= 180
+            for pixel_y in range(round(148 * display_scale), round(191 * display_scale))
+        )
 
 
 def test_optimized_didactic_animation_is_byte_stable(tmp_path):
