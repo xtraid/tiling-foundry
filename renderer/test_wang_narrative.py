@@ -17,6 +17,7 @@ from wang_narrative import (
     render_verification_assets,
     render_witness_assets,
 )
+from wang_snapshot import load_explainability_bundle
 
 
 RENDERER = Path(__file__).resolve().parent
@@ -110,11 +111,69 @@ def test_witness_and_generalized_assets_reuse_checked_presentations(tmp_path):
     assert first.hex.is_file()
 
     generalized = render_generalized_assets(MANIFEST, tmp_path / "generalized")
+    render_generalized_assets(MANIFEST, tmp_path / "generalized-second")
+    assert _tree_bytes(tmp_path / "generalized") == _tree_bytes(
+        tmp_path / "generalized-second"
+    )
     assert generalized.sheet.is_file()
     assert generalized.legend.is_file()
     assert generalized_specification_sha256() == (
         "5e8e6589271f9059b5ed81df00db4e303b338d5243caa475ed09135b129e3cf2"
     )
+
+
+def test_atomic_legend_shows_canonical_valid_and_invalid_adjacency(tmp_path):
+    bundle = load_explainability_bundle(MANIFEST)
+    edges = bundle.tileset.tile_edges
+
+    # Canonical horizontal examples: #0 E meets #4 W, while #0 E cannot
+    # meet #3 W. These literal values are from the checked fixture table.
+    assert edges[0][1] == edges[4][3] == 2
+    assert edges[0][1] == 2
+    assert edges[3][3] == 1
+
+    first = render_generalized_assets(MANIFEST, tmp_path / "first")
+    render_generalized_assets(MANIFEST, tmp_path / "second")
+    assert _tree_bytes(tmp_path / "first") == _tree_bytes(tmp_path / "second")
+
+    with Image.open(first.legend) as legend:
+        assert legend.mode == "RGB"
+        assert legend.size == (1732, 4184)
+        # Valid pair #0/#4 has the same brown logical-color band on both
+        # sides of its gap; invalid pair #0/#3 has brown versus magenta.
+        assert legend.getpixel((216, 3900)) == legend.getpixel((252, 3900)) == (
+            142, 92, 25
+        )
+        assert legend.getpixel((1062, 3900)) == (142, 92, 25)
+        assert legend.getpixel((1098, 3900)) == (240, 36, 160)
+
+
+def test_atomic_vocabulary_remains_readable_at_390_px(tmp_path):
+    outputs = render_generalized_assets(MANIFEST, tmp_path / "generalized")
+    with Image.open(outputs.legend) as source:
+        scale = 390 / source.width
+        display = source.resize(
+            (390, round(source.height * scale)), Image.Resampling.LANCZOS
+        )
+        # The first card's semantic role and edge rows must survive the actual
+        # mobile-width downsample; three dark pixels per row filters borders.
+        for source_box in ((184, 164, 790, 288), (184, 330, 790, 390)):
+            box = tuple(round(value * scale) for value in source_box)
+            crop = display.crop(box)
+            ink_rows = [
+                y
+                for y in range(crop.height)
+                if sum(
+                    max(crop.getpixel((x, y))) < 210 for x in range(crop.width)
+                ) >= 3
+            ]
+            runs: list[list[int]] = []
+            for row in ink_rows:
+                if not runs or row != runs[-1][-1] + 1:
+                    runs.append([row])
+                else:
+                    runs[-1].append(row)
+            assert max((len(run) for run in runs), default=0) >= 8
 
 
 def test_overview_and_unsat_status_are_static_fallback_safe(tmp_path):

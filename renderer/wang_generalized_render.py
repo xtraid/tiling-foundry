@@ -296,6 +296,7 @@ def compose_atomic_semantic_legend(
     *,
     pixels_per_cell: int = DEFAULT_PIXELS_PER_CELL,
     margin: int = DEFAULT_MARGIN,
+    scale: int = 1,
 ) -> np.ndarray:
     """Compose all 23 atomic IDs with generalized part and symbolic edges."""
     try:
@@ -303,14 +304,20 @@ def compose_atomic_semantic_legend(
     except GeneralizedTileError as error:
         raise _as_render_error(error) from error
     ppc, checked_margin = _checked_dimensions(pixels_per_cell, margin)
-    cell_size = max(58, ppc * 2)
-    columns = 3
+    checked_scale = _render_integer(scale, "scale", minimum=1, maximum=2)
+    checked_margin *= checked_scale
+    cell_size = max(58, ppc * 2) * checked_scale
+    columns = 2 if checked_scale == 2 else 3
     rows = (len(tile_edges) + columns - 1) // columns
-    card_width = 420
-    card_height = cell_size + 24
-    gap = 10
+    card_width = 420 * checked_scale
+    card_height = max(
+        cell_size + 24 * checked_scale,
+        142 * checked_scale if checked_scale == 2 else 0,
+    )
+    gap = 10 * checked_scale
     width = 2 * checked_margin + columns * card_width + (columns - 1) * gap
-    height = 2 * checked_margin + _HEADER_HEIGHT + rows * card_height
+    header_height = _HEADER_HEIGHT * checked_scale
+    height = 2 * checked_margin + header_height + rows * card_height
     _check_canvas_limits(width, height)
 
     canvas = Image.new("RGB", (width, height), EXPLAIN_PANEL_RGB)
@@ -323,17 +330,23 @@ def compose_atomic_semantic_legend(
             "generalized role and symbolic color are primary; numeric IDs in "
             "brackets preserve the transport vocabulary"
         ),
+        scale=checked_scale,
     )
     palette = _build_palette_from_edges(tile_edges)
-    grid_y = checked_margin + _HEADER_HEIGHT
+    grid_y = checked_margin + header_height
     for tile_id, edges in enumerate(tile_edges):
         column = tile_id % columns
         row = tile_id // columns
         x = checked_margin + column * (card_width + gap)
         y = grid_y + row * card_height
         draw.rounded_rectangle(
-            (x, y, x + card_width - 1, y + card_height - 8),
-            radius=7,
+            (
+                x,
+                y,
+                x + card_width - 1,
+                y + card_height - 8 * checked_scale,
+            ),
+            radius=7 * checked_scale,
             fill=(249, 250, 252),
             outline=(214, 219, 227),
         )
@@ -344,24 +357,32 @@ def compose_atomic_semantic_legend(
             tile_id=tile_id,
             edge_labels=False,
         )
-        canvas.paste(asset, (x + 8, y + 8))
-        text_x = x + cell_size + 20
+        canvas.paste(
+            asset,
+            (x + 8 * checked_scale, y + 8 * checked_scale),
+        )
+        text_x = x + cell_size + 20 * checked_scale
+        title_size = 22 if checked_scale == 2 else 14
+        edge_size = 24 if checked_scale == 2 else 11
+        title_y = 6 if checked_scale == 2 else 9
+        north_east_y = 48 if checked_scale == 2 else 33
+        south_west_y = 86 if checked_scale == 2 else 53
         draw.text(
-            (text_x, y + 9),
+            (text_x, y + title_y * checked_scale),
             f"{atomic_semantic_label(tile_id)}  -  atomic #{tile_id}",
-            font=explain_font(14),
+            font=explain_font(title_size * checked_scale),
             fill=EXPLAIN_TEXT_RGB,
         )
         draw.text(
-            (text_x, y + 33),
+            (text_x, y + north_east_y * checked_scale),
             f"N {color_label(edges[0])}    E {color_label(edges[1])}",
-            font=explain_font(11),
+            font=explain_font(edge_size * checked_scale),
             fill=EXPLAIN_TEXT_RGB,
         )
         draw.text(
-            (text_x, y + 53),
+            (text_x, y + south_west_y * checked_scale),
             f"S {color_label(edges[2])}    W {color_label(edges[3])}",
-            font=explain_font(11),
+            font=explain_font(edge_size * checked_scale),
             fill=EXPLAIN_TEXT_RGB,
         )
     return np.asarray(canvas, dtype=np.uint8)

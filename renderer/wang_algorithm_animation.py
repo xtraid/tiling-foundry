@@ -11,15 +11,21 @@ from PIL import Image, ImageDraw
 from wang_animation import AnimationOutputs, write_animation_assets
 from wang_explain import (
     EXPLAIN_ACTIVE_RGB,
+    EXPLAIN_INACTIVE_DARK_RGB,
+    EXPLAIN_INACTIVE_LIGHT_RGB,
     EXPLAIN_MUTED_RGB,
     EXPLAIN_PANEL_RGB,
+    EXPLAIN_RENDER_SCALE,
     EXPLAIN_TEXT_RGB,
+    centered_text,
     draw_explain_heading,
     explain_font,
+    square_inactive_tile,
+    square_region_tile,
 )
 from wang_hex_port import WangSquareRenderError, check_square_to_hex, reduce_square_to_hex
-from wang_snapshot import load_explainability_bundle
-from wang_square import load_wang_presentation
+from wang_snapshot import ReductionExplanationSnapshot, load_explainability_bundle
+from wang_square import _build_palette_from_edges, load_wang_presentation
 
 
 _GADGET_COLORS = {
@@ -84,65 +90,317 @@ def _base_frame(title: str, subtitle: str, size: tuple[int, int]) -> tuple[Image
     return image, draw
 
 
+def _builder_signal_label(signal: object, *, compact: bool) -> str:
+    if signal.kind == "redundant":
+        return f"r #{signal.token_id}"
+    if compact:
+        return f"#{signal.token_id}"
+    return f"x{signal.variable}.{signal.occurrence}"
+
+
+def _replay_signal_orders(
+    reduction: ReductionExplanationSnapshot,
+) -> tuple[tuple[object, ...], ...]:
+    """Project the loader-validated adjacent swaps for presentation."""
+    current = list(reduction.source_signals)
+    orders = [tuple(current)]
+    for crossover in (
+        gadget for gadget in reduction.gadgets if gadget.kind == "crossover"
+    ):
+        assert crossover.swap_row is not None
+        row = crossover.swap_row
+        current[row], current[row + 1] = current[row + 1], current[row]
+        orders.append(tuple(current))
+    return tuple(orders)
+
+
+def _draw_signal_order(
+    draw: ImageDraw.ImageDraw,
+    *,
+    y: int,
+    label: str,
+    signals: tuple[object, ...],
+    highlighted_rows: tuple[int, ...] = (),
+    muted: bool = False,
+) -> None:
+    scale = EXPLAIN_RENDER_SCALE
+    draw.text(
+        (36, y + 12),
+        label,
+        font=explain_font(22 * scale),
+        fill=EXPLAIN_MUTED_RGB if muted else EXPLAIN_TEXT_RGB,
+    )
+    gap = 10
+    box_width = min(
+        140,
+        (1720 - max(0, len(signals) - 1) * gap) // len(signals),
+    )
+    for row, signal in enumerate(signals):
+        x = 220 + row * (box_width + gap)
+        highlighted = row in highlighted_rows
+        draw.rounded_rectangle(
+            (x, y, x + box_width, y + 58),
+            radius=8,
+            fill=(255, 232, 188) if highlighted else (239, 242, 246),
+            outline=(217, 119, 6) if highlighted else (181, 188, 199),
+            width=4 if highlighted else 2,
+        )
+        centered_text(
+            draw,
+            (x + 4, y + 3, x + box_width - 4, y + 55),
+            _builder_signal_label(signal, compact=box_width < 120),
+            font=explain_font(28 * scale),
+            fill=EXPLAIN_MUTED_RGB if muted else EXPLAIN_TEXT_RGB,
+        )
+
+
 def _builder_frame(bundle: object, stage: int) -> Image.Image:
     reduction = bundle.reduction
     assert reduction is not None
-    image, draw = _base_frame(
-        "Yang-Zhang construction provenance",
-        f"canonical-construction stage {stage + 1}/6 | actual gadget spans, not a timed builder trace",
-        (980, 390),
+    crossovers = tuple(
+        gadget for gadget in reduction.gadgets if gadget.kind == "crossover"
     )
-    origin_x, origin_y, cell = 18, 92, 15
+    if crossovers:
+        first_swap = crossovers[0]
+        assert first_swap.swap_row is not None
+        first_swap_title = (
+            f"crossover X{first_swap.ordinal} swaps adjacent rows "
+            f"{first_swap.swap_row} and {first_swap.swap_row + 1}"
+        )
+        routing_title = (
+            f"{len(crossovers)} validated adjacent swaps reach the target order"
+        )
+    else:
+        first_swap_title = "source order already matches the target order"
+        routing_title = "routing requires no crossover swaps"
+    stage_titles = (
+        "source signals leave the variable gadgets",
+        "target signals follow clause order",
+        first_swap_title,
+        routing_title,
+        "native gadget spans assemble the final Region",
+        "active, inactive, internal-edge, and exposed-boundary states",
+    )
+    image, draw = _base_frame(
+        "Yang-Zhang routing and Region construction",
+        f"canonical-construction {stage + 1}/6 | {stage_titles[stage]}",
+        (1976, 828),
+    )
+    # _base_frame uses the legacy 1x heading; redraw the shared heading at 2x.
+    draw.rectangle((0, 0, image.width, 126), fill=EXPLAIN_PANEL_RGB)
+    draw_explain_heading(
+        draw,
+        (36, 28),
+        title="Yang-Zhang routing and Region construction",
+        subtitle=f"canonical-construction {stage + 1}/6 | {stage_titles[stage]}",
+        scale=EXPLAIN_RENDER_SCALE,
+    )
+
+    replay_orders = _replay_signal_orders(reduction)
+    first_swap_row = crossovers[0].swap_row if crossovers else None
+    _draw_signal_order(
+        draw,
+        y=140,
+        label="source",
+        signals=reduction.source_signals,
+        highlighted_rows=(
+            (first_swap_row, first_swap_row + 1)
+            if stage == 2 and first_swap_row is not None
+            else ()
+        ),
+    )
+    if stage == 0:
+        _draw_signal_order(
+            draw,
+            y=216,
+            label="target",
+            signals=reduction.target_signals,
+            muted=True,
+        )
+    elif stage == 2:
+        _draw_signal_order(
+            draw,
+            y=216,
+            label=f"after X{crossovers[0].ordinal}" if crossovers else "target",
+            signals=replay_orders[1] if crossovers else reduction.target_signals,
+            highlighted_rows=(
+                (first_swap_row, first_swap_row + 1)
+                if first_swap_row is not None
+                else ()
+            ),
+        )
+    else:
+        _draw_signal_order(
+            draw,
+            y=216,
+            label="target",
+            signals=reduction.target_signals,
+        )
+
+    origin_x, origin_y = 36, 348
+    cell = max(1, min(
+        30,
+        1230 // bundle.region.width,
+        330 // bundle.region.height,
+    ))
     grid_width = bundle.region.width * cell
     grid_height = bundle.region.height * cell
+    palette = _build_palette_from_edges(bundle.tileset.tile_edges)
     for index, active in enumerate(bundle.region.active):
         x = origin_x + (index % bundle.region.width) * cell
         y = origin_y + (index // bundle.region.width) * cell
-        fill = (232, 235, 240) if active else (198, 204, 214)
-        draw.rectangle((x, y, x + cell - 1, y + cell - 1), fill=fill, outline=(187, 193, 203))
+        if stage >= 4:
+            if active:
+                sides = bundle.region.boundary[index]
+                assert sides is not None
+                tile = square_region_tile(cell, sides, palette)
+            else:
+                tile = square_inactive_tile(cell)
+            image.paste(tile, (x, y))
+        else:
+            fill = EXPLAIN_ACTIVE_RGB if active else EXPLAIN_INACTIVE_LIGHT_RGB
+            draw.rectangle(
+                (x, y, x + cell - 1, y + cell - 1),
+                fill=fill,
+                outline=(174, 181, 193),
+            )
 
-    visible_kinds = (
-        (),
-        ("variable",),
-        ("variable", "left_forward"),
-        ("variable", "left_forward", "crossover"),
-        ("variable", "left_forward", "crossover", "right_forward"),
-        tuple(_GADGET_COLORS),
-    )[stage]
     for gadget in reduction.gadgets:
-        if gadget.kind not in visible_kinds:
+        visible = (
+            (stage == 0 and gadget.kind == "variable")
+            or (stage == 1 and gadget.kind in {"variable", "left_forward"})
+            or (
+                stage == 2
+                and (
+                    gadget.kind in {"variable", "left_forward"}
+                    or (crossovers and gadget is crossovers[0])
+                )
+            )
+            or (stage == 3 and gadget.kind == "crossover")
+            or stage == 4
+        )
+        if not visible:
             continue
         x0 = origin_x + gadget.x_begin * cell
         y0 = origin_y + gadget.y_begin * cell
         x1 = origin_x + gadget.x_end * cell - 1
         y1 = origin_y + gadget.y_end * cell - 1
-        draw.rectangle((x0, y0, x1, y1), outline=_GADGET_COLORS[gadget.kind], width=3)
+        width = 7 if stage == 2 and crossovers and gadget is crossovers[0] else 4
+        draw.rectangle(
+            (x0, y0, x1, y1),
+            outline=_GADGET_COLORS[gadget.kind],
+            width=width,
+        )
+        if gadget.kind == "crossover" and stage in {2, 3}:
+            crossover_label = (
+                f"X{gadget.ordinal}: swap rows "
+                f"{gadget.swap_row}/{gadget.swap_row + 1}"
+                if stage == 2
+                else f"X{gadget.ordinal}:s{gadget.swap_row}"
+            )
+            draw.text(
+                (x0 + 8, y0 + 5),
+                crossover_label,
+                font=explain_font(14 * EXPLAIN_RENDER_SCALE),
+                fill=_GADGET_COLORS["crossover"],
+                stroke_width=3,
+                stroke_fill=EXPLAIN_PANEL_RGB,
+            )
 
     legend_x = origin_x + grid_width + 24
-    draw.text((legend_x, 92), "Native sidecar spans", font=explain_font(14), fill=EXPLAIN_TEXT_RGB)
-    y = 126
-    for kind, color in _GADGET_COLORS.items():
-        draw.rectangle((legend_x, y, legend_x + 18, y + 18), fill=color)
-        count = sum(gadget.kind == kind for gadget in reduction.gadgets)
+    if stage == 5:
         draw.text(
-            (legend_x + 27, y + 2),
-            f"{kind.replace('_', ' ')}: {count}",
-            font=explain_font(10),
-            fill=EXPLAIN_TEXT_RGB if kind in visible_kinds else EXPLAIN_MUTED_RGB,
+            (legend_x, origin_y),
+            "Final Region vocabulary",
+            font=explain_font(20 * EXPLAIN_RENDER_SCALE),
+            fill=EXPLAIN_TEXT_RGB,
         )
-        y += 29
+        key_y = origin_y + 68
+        draw.rectangle(
+            (legend_x, key_y, legend_x + 36, key_y + 36),
+            fill=EXPLAIN_ACTIVE_RGB,
+            outline=(174, 181, 193),
+        )
+        draw.text(
+            (legend_x + 54, key_y - 3),
+            "active cell",
+            font=explain_font(22 * EXPLAIN_RENDER_SCALE),
+            fill=EXPLAIN_TEXT_RGB,
+        )
+        key_y += 64
+        image.paste(
+            square_inactive_tile(36),
+            (legend_x, key_y),
+        )
+        draw.text(
+            (legend_x + 54, key_y - 3),
+            "inactive / outside",
+            font=explain_font(22 * EXPLAIN_RENDER_SCALE),
+            fill=EXPLAIN_TEXT_RGB,
+        )
+        key_y += 64
+        draw.line(
+            (legend_x, key_y + 18, legend_x + 36, key_y + 18),
+            fill=(174, 181, 193),
+            width=7,
+        )
+        draw.text(
+            (legend_x + 54, key_y - 3),
+            "internal edge (no boundary)",
+            font=explain_font(22 * EXPLAIN_RENDER_SCALE),
+            fill=EXPLAIN_TEXT_RGB,
+        )
+        key_y += 64
+        draw.line(
+            (legend_x, key_y + 18, legend_x + 36, key_y + 18),
+            fill=palette[0],
+            width=11,
+        )
+        draw.text(
+            (legend_x + 54, key_y - 3),
+            "exposed boundary color",
+            font=explain_font(22 * EXPLAIN_RENDER_SCALE),
+            fill=EXPLAIN_TEXT_RGB,
+        )
+        draw.text(
+            (legend_x, key_y + 70),
+            f"{sum(bundle.region.active)} active / "
+            f"{bundle.region.active.count(False)} inactive\n"
+            "internal sides stay uncolored",
+            font=explain_font(16 * EXPLAIN_RENDER_SCALE),
+            fill=EXPLAIN_MUTED_RGB,
+            spacing=10,
+        )
+    else:
+        draw.text(
+            (legend_x, origin_y),
+            "Construction evidence",
+            font=explain_font(18 * EXPLAIN_RENDER_SCALE),
+            fill=EXPLAIN_TEXT_RGB,
+        )
+        y = origin_y + 52
+        for kind, color in _GADGET_COLORS.items():
+            draw.rectangle((legend_x, y, legend_x + 28, y + 28), fill=color)
+            count = sum(gadget.kind == kind for gadget in reduction.gadgets)
+            draw.text(
+                (legend_x + 42, y),
+                f"{kind.replace('_', ' ')}: {count}",
+                font=explain_font(14 * EXPLAIN_RENDER_SCALE),
+                fill=EXPLAIN_TEXT_RGB,
+            )
+            y += 42
+        draw.text(
+            (legend_x, y + 8),
+            f"source signals: {len(reduction.source_signals)}\nadjacent swaps: "
+            + ", ".join(str(gadget.swap_row) for gadget in crossovers),
+            font=explain_font(14 * EXPLAIN_RENDER_SCALE),
+            fill=EXPLAIN_TEXT_RGB,
+            spacing=12,
+        )
     draw.text(
-        (legend_x, y + 10),
-        f"signals: {len(reduction.source_signals)}\nswaps: "
-        f"{sum(g.kind == 'crossover' for g in reduction.gadgets)}",
-        font=explain_font(10),
-        fill=EXPLAIN_TEXT_RGB,
-        spacing=7,
-    )
-    draw.text(
-        (18, 368),
-        "The provenance describes construction; Region remains presentation-neutral.",
-        font=explain_font(9),
+        (36, 794),
+        "Spans and swaps are canonical construction provenance; boundary colors are constraints, not tile assignments.",
+        font=explain_font(13 * EXPLAIN_RENDER_SCALE),
         fill=EXPLAIN_MUTED_RGB,
     )
     return image
@@ -162,7 +420,7 @@ def render_builder_assets(
         frames,
         tuple(f"frame-{stage:02d}.png" for stage in range(6)),
         output_directory,
-        fallback_index=4,
+        fallback_index=5,
         duration_ms=duration_ms,
     )
 

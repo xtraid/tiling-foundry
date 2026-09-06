@@ -19,6 +19,7 @@ from wang_explain import (
     EXPLAIN_TEXT_RGB,
     draw_explain_heading,
     explain_font,
+    square_explain_tile,
 )
 from wang_generalized_render import (
     compose_atomic_semantic_legend,
@@ -29,6 +30,7 @@ from wang_generalized import generalized_specification_sha256
 from wang_hex_port import WangSquareRenderError, check_square_to_hex, reduce_square_to_hex
 from wang_snapshot import load_explainability_bundle
 from wang_square import (
+    _build_palette_from_edges,
     _compose_wang_hex_explain,
     _compose_wang_square_explain,
     _save_png_atomic,
@@ -394,10 +396,115 @@ def render_generalized_assets(
     sheet = destination / "sheet.png"
     legend = destination / "atomic-legend.png"
     _save_png_atomic(compose_generalized_sheet(bundle.tileset.tile_edges), sheet)
-    _save_png_atomic(
-        compose_atomic_semantic_legend(bundle.tileset.tile_edges), legend
-    )
+    _save_image(_compose_atomic_legend(bundle.tileset.tile_edges), legend)
     return GeneralizedOutputs(sheet, legend)
+
+
+def _compose_atomic_legend(
+    tile_edges: tuple[tuple[int, int, int, int], ...],
+) -> Image.Image:
+    """Append local matching examples to the checked atomic vocabulary."""
+    scale = 2
+    vocabulary = Image.fromarray(
+        compose_atomic_semantic_legend(tile_edges, scale=scale), mode="RGB"
+    )
+    panel_height = 310 * scale
+    image = Image.new(
+        "RGB",
+        (vocabulary.width, vocabulary.height + panel_height),
+        EXPLAIN_PANEL_RGB,
+    )
+    image.paste(vocabulary, (0, 0))
+    draw = ImageDraw.Draw(image)
+    panel_y = vocabulary.height
+    draw.line(
+        (24 * scale, panel_y, image.width - 24 * scale, panel_y),
+        fill=(181, 188, 199),
+        width=2 * scale,
+    )
+    draw.text(
+        (24 * scale, panel_y + 18 * scale),
+        "Local Wang compatibility uses the shared edge only",
+        font=explain_font(32 * scale),
+        fill=EXPLAIN_TEXT_RGB,
+    )
+    draw.text(
+        (24 * scale, panel_y + 57 * scale),
+        "Canonical IDs: equal shared colors = valid; unequal = invalid.",
+        font=explain_font(28 * scale),
+        fill=EXPLAIN_MUTED_RGB,
+    )
+
+    palette = _build_palette_from_edges(tile_edges)
+    examples = (
+        ("VALID", 0, 4, 24 * scale, (213, 237, 224), (52, 145, 94)),
+        ("INVALID", 0, 3, 447 * scale, (248, 226, 226), (190, 62, 62)),
+    )
+    tile_size = 72 * scale
+    tile_y = panel_y + 132 * scale
+    for label, left_id, right_id, card_x, fill, outline in examples:
+        draw.rounded_rectangle(
+            (
+                card_x,
+                panel_y + 88 * scale,
+                card_x + 399 * scale,
+                panel_y + 290 * scale,
+            ),
+            radius=10 * scale,
+            fill=fill,
+            outline=outline,
+            width=3 * scale,
+        )
+        draw.text(
+            (card_x + 16 * scale, panel_y + 98 * scale),
+            label,
+            font=explain_font(28 * scale),
+            fill=EXPLAIN_TEXT_RGB,
+        )
+        left_x = card_x + 18 * scale
+        right_x = card_x + 100 * scale
+        image.paste(
+            square_explain_tile(
+                tile_edges[left_id],
+                palette,
+                tile_size,
+                tile_id=left_id,
+                edge_labels=True,
+            ),
+            (left_x, tile_y),
+        )
+        image.paste(
+            square_explain_tile(
+                tile_edges[right_id],
+                palette,
+                tile_size,
+                tile_id=right_id,
+                edge_labels=True,
+            ),
+            (right_x, tile_y),
+        )
+        left_color = tile_edges[left_id][1]
+        right_color = tile_edges[right_id][3]
+        relation = "=" if left_color == right_color else "!="
+        draw.text(
+            (card_x + 190 * scale, panel_y + 145 * scale),
+            f"#{left_id} E = {left_color}",
+            font=explain_font(20 * scale),
+            fill=EXPLAIN_TEXT_RGB,
+        )
+        draw.text(
+            (card_x + 190 * scale, panel_y + 184 * scale),
+            f"{relation}  #{right_id} W = {right_color}",
+            font=explain_font(20 * scale),
+            fill=EXPLAIN_TEXT_RGB,
+        )
+        draw.text(
+            (card_x + 190 * scale, panel_y + 230 * scale),
+            "shared colors agree" if relation == "=" else "shared colors differ",
+            font=explain_font(18 * scale),
+            fill=outline,
+        )
+    return image
 
 
 def render_presentation_status(status: str, output_path: str | Path) -> Path:
