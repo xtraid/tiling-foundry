@@ -114,6 +114,36 @@ def _replay_signal_orders(
     return tuple(orders)
 
 
+def _signal_strip_items(
+    signals: tuple[object, ...],
+    highlighted_rows: tuple[int, ...],
+) -> tuple[tuple[int | None, object | None, int], ...]:
+    """Keep bounded endpoint/swap context and account for every hidden row."""
+    if len(signals) <= 15:
+        return tuple((row, signal, 0) for row, signal in enumerate(signals))
+
+    selected = {0, 1, 2, len(signals) - 3, len(signals) - 2, len(signals) - 1}
+    for row in highlighted_rows:
+        selected.update(
+            candidate
+            for candidate in (row - 1, row, row + 1)
+            if 0 <= candidate < len(signals)
+        )
+    ordered = sorted(selected)
+    items: list[tuple[int | None, object | None, int]] = []
+    previous = -1
+    for row in ordered:
+        omitted = row - previous - 1
+        if omitted:
+            items.append((None, None, omitted))
+        items.append((row, signals[row], 0))
+        previous = row
+    trailing = len(signals) - previous - 1
+    if trailing:
+        items.append((None, None, trailing))
+    return tuple(items)
+
+
 def _draw_signal_order(
     draw: ImageDraw.ImageDraw,
     *,
@@ -130,13 +160,14 @@ def _draw_signal_order(
         font=explain_font(22 * scale),
         fill=EXPLAIN_MUTED_RGB if muted else EXPLAIN_TEXT_RGB,
     )
+    items = _signal_strip_items(signals, highlighted_rows)
     gap = 10
     box_width = min(
         140,
-        (1720 - max(0, len(signals) - 1) * gap) // len(signals),
+        (1720 - max(0, len(items) - 1) * gap) // len(items),
     )
-    for row, signal in enumerate(signals):
-        x = 220 + row * (box_width + gap)
+    for position, (row, signal, omitted) in enumerate(items):
+        x = 220 + position * (box_width + gap)
         highlighted = row in highlighted_rows
         draw.rounded_rectangle(
             (x, y, x + box_width, y + 58),
@@ -148,9 +179,17 @@ def _draw_signal_order(
         centered_text(
             draw,
             (x + 4, y + 3, x + box_width - 4, y + 55),
-            _builder_signal_label(signal, compact=box_width < 120),
-            font=explain_font(28 * scale),
-            fill=EXPLAIN_MUTED_RGB if muted else EXPLAIN_TEXT_RGB,
+            (
+                f"+{omitted} rows"
+                if signal is None
+                else _builder_signal_label(signal, compact=box_width < 120)
+            ),
+            font=explain_font((16 if signal is None else 28) * scale),
+            fill=(
+                EXPLAIN_MUTED_RGB
+                if muted or signal is None
+                else EXPLAIN_TEXT_RGB
+            ),
         )
 
 

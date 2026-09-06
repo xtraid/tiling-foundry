@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 import wang_algorithm_animation
 from wang_algorithm_animation import (
@@ -173,6 +173,63 @@ def test_builder_preserves_noncanonical_region_capture_scope():
     assert getattr(wang_algorithm_animation, "_builder_frame")(
         wide_bundle, 5
     ).size == (1976, 828)
+
+
+def test_builder_summarizes_a_valid_44_variable_signal_strip():
+    bundle = load_explainability_bundle(BUILDER_MANIFEST)
+    reduction = bundle.reduction
+    assert reduction is not None
+    variable = next(
+        signal for signal in reduction.source_signals if signal.kind == "variable"
+    )
+    redundant = next(
+        signal for signal in reduction.source_signals if signal.kind == "redundant"
+    )
+    signals_list = []
+    for variable_id in range(44):
+        for occurrence in range(3):
+            signals_list.append(
+                replace(
+                    variable,
+                    row=len(signals_list),
+                    token_id=3 * variable_id + occurrence,
+                    variable=variable_id,
+                    occurrence=occurrence,
+                )
+            )
+        if variable_id < 43:
+            signals_list.append(
+                replace(
+                    redundant,
+                    row=len(signals_list),
+                    token_id=132 + variable_id,
+                    variable=None,
+                    occurrence=None,
+                )
+            )
+    signals = tuple(signals_list)
+    assert len(signals) == 4 * 44 - 1
+    strip_items = getattr(wang_algorithm_animation, "_signal_strip_items")
+    items = strip_items(signals, (86, 87))
+
+    shown_rows = tuple(row for row, signal, _ in items if signal is not None)
+    assert shown_rows == (0, 1, 2, 85, 86, 87, 88, 172, 173, 174)
+    assert sum(omitted for _, _, omitted in items) == 165
+    assert tuple(
+        signal.token_id
+        for row, signal, _ in items
+        if row in {86, 87}
+    ) == (65, 153)
+
+    image = Image.new("RGB", (1976, 828), "white")
+    getattr(wang_algorithm_animation, "_draw_signal_order")(
+        ImageDraw.Draw(image),
+        y=140,
+        label="source",
+        signals=signals,
+        highlighted_rows=(86, 87),
+    )
+    assert image.size == (1976, 828)
 
 
 def test_optimized_didactic_animation_is_byte_stable(tmp_path):
