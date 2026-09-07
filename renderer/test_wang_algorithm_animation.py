@@ -252,16 +252,123 @@ def test_builder_summarizes_a_valid_44_variable_signal_strip():
 
 
 def test_optimized_didactic_animation_is_byte_stable(tmp_path):
+    mechanisms = getattr(wang_algorithm_animation, "_load_optimizations")()
+    assert tuple(mechanism.identifier for mechanism in mechanisms) == (
+        "dynamic-dfs-stack",
+        "initial-trail-omission",
+        "sat-ownership-transfer",
+        "byte-support-table",
+        "queue-deduplication",
+        "lazy-mrv-index",
+    )
+
     first = render_optimized_assets(tmp_path / "first")
     render_optimized_assets(tmp_path / "second")
 
     assert first.fallback.name == "frame-06.png"
-    _assert_stable_assets(
-        tmp_path / "first",
-        tmp_path / "second",
-        GOLDENS / "optimized-mechanisms",
-        frame_count=7,
-        fallback_name="frame-06.png",
+    assert _tree_bytes(tmp_path / "first") == _tree_bytes(tmp_path / "second")
+    assert tuple(path.name for path in first.frames) == tuple(
+        f"frame-{index:02d}.png" for index in range(7)
+    )
+    assert len({path.read_bytes() for path in first.frames}) == 7
+    with Image.open(first.animation) as animation:
+        assert animation.format == "GIF"
+        assert animation.n_frames == 7
+    with Image.open(first.fallback) as fallback:
+        assert fallback.size == (1920, 1040)
+    with Image.open(first.contact_sheet) as contact_sheet:
+        assert contact_sheet.size == (5760, 3120)
+
+
+def test_byte_support_panel_aggregates_three_bytes_of_a_23_bit_domain():
+    example = getattr(wang_algorithm_animation, "_byte_support_example")()
+
+    assert example == {
+        "domain": 0x400401,
+        "chunks": (0x01, 0x04, 0x40),
+        "source_tiles": (0, 10, 22),
+        "source_east_edges": (2, 3, 3),
+        "supported_tiles": (
+            4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 16, 17, 18, 19, 20, 21, 22
+        ),
+    }
+
+
+def test_essential_byte_support_and_mrv_labels_survive_mobile_downsampling():
+    frame = getattr(wang_algorithm_animation, "_optimized_frame")
+
+    def mobile_ink_height(image: Image.Image, source_box: tuple[int, int, int, int]) -> int:
+        scale = 390 / image.width
+        preview = image.resize(
+            (390, round(image.height * scale)),
+            Image.Resampling.LANCZOS,
+        )
+        box = tuple(round(value * scale) for value in source_box)
+        crop = preview.crop(box)
+        ink_rows = [
+            y
+            for y in range(crop.height)
+            if any(max(crop.getpixel((x, y))) < 140 for x in range(crop.width))
+        ]
+        return max(ink_rows) - min(ink_rows) + 1 if ink_rows else 0
+
+    byte_support = frame(3)
+    assert mobile_ink_height(byte_support, (65, 315, 390, 380)) >= 7
+    assert mobile_ink_height(byte_support, (65, 375, 430, 445)) >= 7
+    assert mobile_ink_height(byte_support, (65, 435, 370, 495)) >= 7
+
+    lazy_mrv = frame(5)
+    assert mobile_ink_height(lazy_mrv, (60, 430, 220, 520)) >= 7
+    assert mobile_ink_height(lazy_mrv, (50, 600, 160, 670)) >= 7
+    assert mobile_ink_height(lazy_mrv, (40, 900, 1850, 955)) >= 7
+
+    summary = getattr(wang_algorithm_animation, "_optimized_summary")()
+    assert mobile_ink_height(summary, (65, 155, 560, 220)) >= 8
+    assert mobile_ink_height(summary, (650, 245, 915, 325)) >= 7
+
+    trail = frame(1)
+    arrow_corridor = trail.crop((535, 295, 588, 400))
+    assert not any(
+        max(arrow_corridor.getpixel((x, y))) < 140
+        for y in range(arrow_corridor.height)
+        for x in range(arrow_corridor.width)
+    )
+
+    bucket_row = lazy_mrv.crop((48, 755, 620, 815))
+    assert (111, 82, 176) not in bucket_row.get_flattened_data()
+
+
+def test_queue_panel_suppresses_only_while_a_cell_is_pending():
+    assert getattr(wang_algorithm_animation, "_queue_dedup_steps")() == (
+        ("enqueue c7", "append", (7,)),
+        ("enqueue c7 again", "suppress", (7,)),
+        ("dequeue c7", "clear pending", ()),
+        ("enqueue c7 later", "append", (7,)),
+    )
+
+
+def test_lazy_mrv_panel_moves_a_domain_bucket_and_reverses_it_on_rollback():
+    steps = getattr(wang_algorithm_animation, "_mrv_bucket_steps")()
+
+    assert steps == (
+        (
+            "after lazy build",
+            ((2, 4), (5, 2), (9, 3)),
+            ((2, (5,)), (3, (9,)), (4, (2,))),
+            5,
+        ),
+        (
+            "restrict c2: 4 -> 2",
+            ((2, 2), (5, 2), (9, 3)),
+            ((2, (2, 5)), (3, (9,))),
+            2,
+        ),
+        (
+            "rollback c2: 2 -> 4",
+            ((2, 4), (5, 2), (9, 3)),
+            ((2, (5,)), (3, (9,)), (4, (2,))),
+            5,
+        ),
     )
 
 

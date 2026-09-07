@@ -305,8 +305,8 @@ def _animation_metadata(
         "optimized_mechanisms": _metadata(
             owner="/components/optimized-solver/",
             semantic_label="didactic",
-            caption="The six retained serial mechanisms, including the lazy MRV index.",
-            alt_text="Seven didactic frames contrast the reference baseline with six measured optimized mechanisms.",
+            caption="Six concrete panels show the retained serial mechanisms and their private state changes.",
+            alt_text="Seven didactic frames show stack, trail, ownership, byte-support, queue, and lazy-MRV state, ending with a static summary.",
             source_contract="wang-optimized-mechanisms-v1",
             source_sha256=mechanism_digest,
             producer="renderer/data/optimized-mechanisms-v1.json",

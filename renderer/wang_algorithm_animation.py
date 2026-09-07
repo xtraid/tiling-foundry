@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 import json
 from pathlib import Path
+import textwrap
 
 from PIL import Image, ImageDraw
 
@@ -36,9 +38,25 @@ _GADGET_COLORS = {
     "clause": (214, 91, 91),
 }
 _OPTIMIZATION_SOURCE = Path(__file__).resolve().parent / "data/optimized-mechanisms-v1.json"
+_OPTIMIZATION_IDS = (
+    "dynamic-dfs-stack",
+    "initial-trail-omission",
+    "sat-ownership-transfer",
+    "byte-support-table",
+    "queue-deduplication",
+    "lazy-mrv-index",
+)
 
 
-def _load_optimizations() -> tuple[tuple[str, str], ...]:
+@dataclass(frozen=True, slots=True)
+class _Optimization:
+    identifier: str
+    title: str
+    description: str
+    evidence_route: str
+
+
+def _load_optimizations() -> tuple[_Optimization, ...]:
     try:
         document = json.loads(_OPTIMIZATION_SOURCE.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
@@ -52,7 +70,7 @@ def _load_optimizations() -> tuple[tuple[str, str], ...]:
     mechanisms = document["mechanisms"]
     if type(mechanisms) is not list or len(mechanisms) != 6:
         raise WangSquareRenderError("optimized mechanism source must contain six entries")
-    result: list[tuple[str, str]] = []
+    result: list[_Optimization] = []
     identifiers: list[str] = []
     for index, item in enumerate(mechanisms):
         if type(item) is not dict or set(item) != {
@@ -74,8 +92,15 @@ def _load_optimizations() -> tuple[tuple[str, str], ...]:
                 f"optimized mechanism entry {index} has an invalid evidence route"
             )
         identifiers.append(item["id"])
-        result.append((item["title"], item["description"]))
-    if len(set(identifiers)) != len(identifiers) or identifiers[-1] != "lazy-mrv-index":
+        result.append(
+            _Optimization(
+                identifier=item["id"],
+                title=item["title"],
+                description=item["description"],
+                evidence_route=item["evidence_route"],
+            )
+        )
+    if tuple(identifiers) != _OPTIMIZATION_IDS:
         raise WangSquareRenderError("optimized mechanism IDs are invalid or incomplete")
     return tuple(result)
 
@@ -475,67 +500,495 @@ def render_builder_assets(
     )
 
 
-def _optimized_frame(stage: int) -> Image.Image:
-    image, draw = _base_frame(
-        "Optimized serial mechanisms",
-        f"didactic stage {stage + 1}/7 | storage/work changes only; search semantics stay shared",
-        (960, 500),
+def _byte_support_example() -> dict[str, object]:
+    """Return one hand-sized aggregation derived from canonical tile edges."""
+    source_tiles = (0, 10, 22)
+    source_east_edges = (2, 3, 3)
+    canonical_west_edges = (
+        1, 1, 1, 1, 2, 3, 2, 2, 3, 2, 3, 2,
+        10, 3, 11, 2, 2, 3, 2, 2, 3, 3, 3,
     )
+    domain = sum(1 << tile for tile in source_tiles)
+    chunks = tuple((domain >> (8 * byte)) & 0xFF for byte in range(3))
+    supported_edges = frozenset(source_east_edges)
+    supported_tiles = tuple(
+        tile
+        for tile, west in enumerate(canonical_west_edges)
+        if west in supported_edges
+    )
+    return {
+        "domain": domain,
+        "chunks": chunks,
+        "source_tiles": source_tiles,
+        "source_east_edges": source_east_edges,
+        "supported_tiles": supported_tiles,
+    }
+
+
+def _queue_dedup_steps() -> tuple[tuple[str, str, tuple[int, ...]], ...]:
+    queue: list[int] = []
+    pending: set[int] = set()
+    steps: list[tuple[str, str, tuple[int, ...]]] = []
+    for label, operation in (
+        ("enqueue c7", "enqueue"),
+        ("enqueue c7 again", "enqueue"),
+        ("dequeue c7", "dequeue"),
+        ("enqueue c7 later", "enqueue"),
+    ):
+        if operation == "dequeue":
+            queue.pop(0)
+            pending.remove(7)
+            action = "clear pending"
+        elif 7 in pending:
+            action = "suppress"
+        else:
+            queue.append(7)
+            pending.add(7)
+            action = "append"
+        steps.append((label, action, tuple(queue)))
+    return tuple(steps)
+
+
+def _mrv_bucket_steps() -> tuple[
+    tuple[
+        str,
+        tuple[tuple[int, int], ...],
+        tuple[tuple[int, tuple[int, ...]], ...],
+        int,
+    ],
+    ...,
+]:
+    domains = {2: 4, 5: 2, 9: 3}
+
+    def snapshot(label: str) -> tuple[
+        str,
+        tuple[tuple[int, int], ...],
+        tuple[tuple[int, tuple[int, ...]], ...],
+        int,
+    ]:
+        buckets: dict[int, list[int]] = {}
+        for cell, size in domains.items():
+            if 2 <= size <= 23:
+                buckets.setdefault(size, []).append(cell)
+        packed = tuple(
+            (size, tuple(sorted(cells)))
+            for size, cells in sorted(buckets.items())
+        )
+        selected = packed[0][1][0]
+        return label, tuple(sorted(domains.items())), packed, selected
+
+    steps = [snapshot("after lazy build")]
+    domains[2] = 2
+    steps.append(snapshot("restrict c2: 4 -> 2"))
+    domains[2] = 4
+    steps.append(snapshot("rollback c2: 2 -> 4"))
+    return tuple(steps)
+
+
+def _optimized_canvas(mechanism: _Optimization, index: int) -> tuple[Image.Image, ImageDraw.ImageDraw]:
+    image = Image.new("RGB", (1920, 1040), EXPLAIN_PANEL_RGB)
+    draw = ImageDraw.Draw(image)
+    draw_explain_heading(
+        draw,
+        (48, 34),
+        title=mechanism.title,
+        subtitle=(
+            f"didactic mechanism {index + 1}/6 | {mechanism.identifier} | "
+            "same solver semantics"
+        ),
+        scale=EXPLAIN_RENDER_SCALE,
+    )
+    return image, draw
+
+
+def _draw_panel(
+    draw: ImageDraw.ImageDraw,
+    box: tuple[int, int, int, int],
+    title: str,
+    *,
+    fill: tuple[int, int, int] = (239, 242, 246),
+    outline: tuple[int, int, int] = (174, 181, 193),
+) -> None:
+    draw.rounded_rectangle(box, radius=18, fill=fill, outline=outline, width=3)
     draw.text(
-        (18, 82),
-        "Reference baseline",
-        font=explain_font(14),
+        (box[0] + 28, box[1] + 22),
+        title,
+        font=explain_font(48),
         fill=EXPLAIN_TEXT_RGB,
     )
-    draw.rounded_rectangle(
-        (18, 106, 245, 462),
-        radius=7,
-        fill=(239, 241, 245),
-        outline=(170, 177, 190),
-    )
-    baseline = (
-        "direct set-tile support loop",
-        "duplicate-accepting FIFO",
-        "initial trail entries",
-        "full DFS frame reserve",
-        "verified SAT result copy",
-        "linear MRV scan after the root",
-    )
-    y = 130
-    for line in baseline:
-        draw.text((34, y), line, font=explain_font(10), fill=EXPLAIN_MUTED_RGB)
-        y += 48
 
-    draw.text((276, 82), "Retained optimized path", font=explain_font(14), fill=EXPLAIN_TEXT_RGB)
-    for index, (name, description) in enumerate(_OPTIMIZATIONS):
-        y = 106 + index * 57
-        active = index < stage
-        current = index == stage - 1
-        draw.rounded_rectangle(
-            (276, y, 928, y + 45),
-            radius=6,
-            fill=(213, 237, 224) if active else (240, 242, 246),
-            outline=(52, 145, 94) if current else (181, 188, 199),
-            width=2 if current else 1,
-        )
-        draw.text(
-            (290, y + 6),
-            name,
-            font=explain_font(11),
-            fill=EXPLAIN_TEXT_RGB if active else EXPLAIN_MUTED_RGB,
-        )
-        draw.text(
-            (472, y + 8),
-            description,
-            font=explain_font(9),
-            fill=EXPLAIN_TEXT_RGB if active else EXPLAIN_MUTED_RGB,
-        )
-    draw.text(
-        (276, 468),
-        "Measured reports establish benefit separately; this animation claims no speedup.",
-        font=explain_font(9),
-        fill=EXPLAIN_MUTED_RGB,
+
+def _draw_wrapped(
+    draw: ImageDraw.ImageDraw,
+    origin: tuple[int, int],
+    text: str,
+    *,
+    width: int,
+    size: int = 28,
+    fill: tuple[int, int, int] = EXPLAIN_TEXT_RGB,
+    spacing: int = 10,
+) -> None:
+    lines = [
+        wrapped
+        for paragraph in text.splitlines()
+        for wrapped in (textwrap.wrap(paragraph, width=width) or [""])
+    ]
+    draw.multiline_text(
+        origin,
+        "\n".join(lines),
+        font=explain_font(size),
+        fill=fill,
+        spacing=spacing,
     )
+
+
+def _draw_arrow(
+    draw: ImageDraw.ImageDraw,
+    start: tuple[int, int],
+    end: tuple[int, int],
+    *,
+    fill: tuple[int, int, int] = (55, 126, 168),
+) -> None:
+    draw.line((*start, *end), fill=fill, width=7)
+    if abs(end[0] - start[0]) >= abs(end[1] - start[1]):
+        direction = 1 if end[0] >= start[0] else -1
+        head = (
+            end,
+            (end[0] - direction * 20, end[1] - 13),
+            (end[0] - direction * 20, end[1] + 13),
+        )
+    else:
+        direction = 1 if end[1] >= start[1] else -1
+        head = (
+            end,
+            (end[0] - 13, end[1] - direction * 20),
+            (end[0] + 13, end[1] - direction * 20),
+        )
+    draw.polygon(head, fill=fill)
+
+
+def _draw_stack_frame(
+    draw: ImageDraw.ImageDraw,
+    x: int,
+    y: int,
+    *,
+    capacity: int,
+    used: int,
+    columns: int,
+) -> None:
+    cell_width, cell_height, gap = 64, 44, 8
+    for slot in range(capacity):
+        row, column = divmod(slot, columns)
+        left = x + column * (cell_width + gap)
+        top = y + row * (cell_height + gap)
+        draw.rounded_rectangle(
+            (left, top, left + cell_width, top + cell_height),
+            radius=5,
+            fill=(199, 231, 212) if slot < used else (255, 255, 255),
+            outline=(52, 145, 94) if slot < used else (181, 188, 199),
+            width=2,
+        )
+        if slot < used:
+            centered_text(
+                draw,
+                (left, top, left + cell_width, top + cell_height),
+                str(slot),
+                font=explain_font(32),
+            )
+
+
+def _draw_dynamic_stack(draw: ImageDraw.ImageDraw) -> None:
+    _draw_panel(draw, (48, 154, 920, 910), "Reference: reserve active-cell limit")
+    _draw_panel(draw, (1000, 154, 1872, 910), "Optimized: grow within the same limit")
+    _draw_stack_frame(draw, 100, 270, capacity=40, used=11, columns=8)
+    _draw_wrapped(
+        draw,
+        (100, 565),
+        "capacity = active-cell limit (40 shown)\nused frames = 11",
+        width=43,
+        size=42,
+    )
+    _draw_stack_frame(draw, 1050, 270, capacity=16, used=11, columns=8)
+    _draw_wrapped(
+        draw,
+        (1050, 430),
+        "start capacity = min(16, limit)\nused frames = 11",
+        width=43,
+        size=42,
+    )
+    _draw_arrow(draw, (1240, 575), (1510, 575))
+    draw.text((1080, 620), "when count reaches 16", font=explain_font(38), fill=EXPLAIN_MUTED_RGB)
+    draw.text((1515, 548), "16 -> 32 -> limit", font=explain_font(42), fill=EXPLAIN_TEXT_RGB)
+    _draw_wrapped(
+        draw,
+        (1050, 730),
+        "Only capacity changes. Both stacks hold the same DFS frames in the same order.",
+        width=38,
+        size=42,
+    )
+
+
+def _draw_initial_trail(draw: ImageDraw.ImageDraw) -> None:
+    _draw_panel(draw, (48, 154, 920, 910), "Reference: record initial undo entries")
+    _draw_panel(draw, (1000, 154, 1872, 910), "Optimized: omit unusable undo entries")
+    for x, label, color in (
+        (100, "D[c3]\n23 -> 8", (210, 229, 244)),
+        (345, "trail\n(c3, 23)", (246, 216, 232)),
+        (590, "trace\nchange", (255, 232, 188)),
+    ):
+        draw.rounded_rectangle((x, 280, x + 190, 410), radius=12, fill=color, outline=(150, 158, 172), width=3)
+        centered_text(draw, (x, 280, x + 190, 410), label, font=explain_font(40))
+    _draw_arrow(draw, (292, 345), (332, 345))
+    _draw_arrow(draw, (537, 345), (577, 345))
+    for x, label, color in (
+        (1050, "D[c3]\n23 -> 8", (210, 229, 244)),
+        (1295, "no initial\ntrail entry", (239, 242, 246)),
+        (1540, "trace\nchange", (255, 232, 188)),
+    ):
+        draw.rounded_rectangle((x, 280, x + 190, 410), radius=12, fill=color, outline=(150, 158, 172), width=3)
+        centered_text(draw, (x, 280, x + 190, 410), label, font=explain_font(40))
+    _draw_arrow(draw, (1242, 345), (1282, 345))
+    _draw_arrow(draw, (1487, 345), (1527, 345))
+    draw.line((100, 590, 820, 590), fill=(55, 126, 168), width=7)
+    draw.line((1050, 590, 1770, 590), fill=(55, 126, 168), width=7)
+    for x in (100, 1050):
+        draw.ellipse((x - 9, 581, x + 9, 599), fill=(55, 126, 168))
+        draw.ellipse((x + 711, 581, x + 729, 599), fill=(55, 126, 168))
+    draw.text((100, 620), "initial propagation", font=explain_font(38), fill=EXPLAIN_MUTED_RGB)
+    draw.text((570, 620), "clear initial trail", font=explain_font(38), fill=EXPLAIN_TEXT_RGB)
+    draw.text((1050, 620), "initial propagation", font=explain_font(38), fill=EXPLAIN_MUTED_RGB)
+    draw.text((1450, 620), "trail already empty", font=explain_font(38), fill=EXPLAIN_TEXT_RGB)
+    _draw_wrapped(draw, (100, 730), "Search starts with trail recording enabled.", width=31, size=44)
+    _draw_wrapped(draw, (1050, 730), "Search starts with trail recording enabled.", width=31, size=44)
+
+
+def _draw_sat_ownership(draw: ImageDraw.ImageDraw) -> None:
+    _draw_panel(draw, (48, 154, 920, 910), "Reference: copy after verification")
+    _draw_panel(draw, (1000, 154, 1872, 910), "Optimized: transfer after verification")
+    for origin_x in (100, 1050):
+        draw.rounded_rectangle((origin_x, 260, origin_x + 250, 380), radius=12, fill=(210, 229, 244), outline=(75, 151, 202), width=3)
+        centered_text(draw, (origin_x, 260, origin_x + 250, 380), "state.domains", font=explain_font(42))
+        _draw_arrow(draw, (origin_x + 260, 320), (origin_x + 445, 320))
+        draw.rounded_rectangle((origin_x + 455, 260, origin_x + 700, 380), radius=12, fill=(199, 231, 212), outline=(52, 145, 94), width=3)
+        centered_text(draw, (origin_x + 455, 260, origin_x + 700, 380), "verify SAT", font=explain_font(42))
+    draw.text((240, 415), "verified first", font=explain_font(38), fill=EXPLAIN_MUTED_RGB)
+    draw.text((1190, 415), "verified first", font=explain_font(38), fill=EXPLAIN_MUTED_RGB)
+    _draw_arrow(draw, (450, 510), (450, 630))
+    draw.rounded_rectangle((205, 650, 695, 780), radius=12, fill=(246, 216, 232), outline=(203, 107, 151), width=3)
+    centered_text(draw, (205, 650, 695, 780), "copy -> best_snapshot -> result", font=explain_font(38))
+    _draw_arrow(draw, (1400, 510), (1400, 630))
+    draw.rounded_rectangle((1155, 650, 1645, 780), radius=12, fill=(246, 216, 232), outline=(203, 107, 151), width=3)
+    centered_text(draw, (1155, 650, 1645, 780), "result.domains = state.domains", font=explain_font(38))
+    draw.text((1080, 815), "state.domains = NULL before destroy", font=explain_font(38), fill=EXPLAIN_TEXT_RGB)
+    draw.text((275, 815), "caller owns result", font=explain_font(38), fill=EXPLAIN_TEXT_RGB)
+    draw.text((1210, 870), "caller owns result", font=explain_font(38), fill=EXPLAIN_TEXT_RGB)
+
+
+def _draw_byte_support(draw: ImageDraw.ImageDraw) -> None:
+    example = _byte_support_example()
+    domain = int(example["domain"])
+    chunks = example["chunks"]
+    source_tiles = example["source_tiles"]
+    source_edges = example["source_east_edges"]
+    draw.text((48, 145), f"23-bit source domain  0b{domain:023b}", font=explain_font(48), fill=EXPLAIN_TEXT_RGB)
+    colors = ((210, 229, 244), (255, 232, 188), (246, 216, 232))
+    for byte, (chunk, tile, edge, color) in enumerate(zip(chunks, source_tiles, source_edges, colors, strict=True)):
+        x = 48 + byte * 430
+        draw.rounded_rectangle((x, 235, x + 360, 500), radius=16, fill=color, outline=(124, 133, 149), width=3)
+        draw.text((x + 24, 252), f"byte {byte}: 0x{chunk:02X}", font=explain_font(46), fill=EXPLAIN_TEXT_RGB)
+        draw.text((x + 24, 325), f"set bit -> tile {tile}", font=explain_font(44), fill=EXPLAIN_TEXT_RGB)
+        draw.text((x + 24, 390), f"east edge = {edge}", font=explain_font(44), fill=EXPLAIN_TEXT_RGB)
+        draw.text((x + 24, 450), "one table lookup", font=explain_font(42), fill=EXPLAIN_MUTED_RGB)
+        _draw_arrow(draw, (x + 360, 367), (x + 405, 367))
+    draw.rounded_rectangle((1390, 235, 1872, 500), radius=16, fill=(199, 231, 212), outline=(52, 145, 94), width=3)
+    centered_text(draw, (1390, 250, 1872, 330), "OR three support masks", font=explain_font(44))
+    _draw_wrapped(
+        draw,
+        (1420, 345),
+        "east {2,3} supports neighbors whose west edge is 2 or 3",
+        width=23,
+        size=40,
+    )
+    supported = "  ".join(str(tile) for tile in example["supported_tiles"])
+    draw.rounded_rectangle((48, 610, 1872, 820), radius=16, fill=(239, 242, 246), outline=(174, 181, 193), width=3)
+    draw.text((80, 635), "supported neighbor tile IDs", font=explain_font(42), fill=EXPLAIN_MUTED_RGB)
+    draw.text((80, 705), supported, font=explain_font(44), fill=EXPLAIN_TEXT_RGB)
+    draw.text((48, 865), "Zero byte: skip lookup. Unused 24th bit: no tile.", font=explain_font(40), fill=EXPLAIN_MUTED_RGB)
+
+
+def _draw_queue_dedup(draw: ImageDraw.ImageDraw) -> None:
+    steps = _queue_dedup_steps()
+    for index, (label, action, queue) in enumerate(steps):
+        x = 48 + index * 462
+        draw.rounded_rectangle((x, 190, x + 414, 835), radius=18, fill=(239, 242, 246), outline=(174, 181, 193), width=3)
+        draw.text((x + 24, 220), f"{index + 1}. {label}", font=explain_font(36), fill=EXPLAIN_TEXT_RGB)
+        action_color = (52, 145, 94) if action == "append" else ((214, 91, 91) if action == "suppress" else (55, 126, 168))
+        draw.rounded_rectangle((x + 24, 300, x + 390, 390), radius=12, fill=(255, 255, 255), outline=action_color, width=4)
+        centered_text(draw, (x + 24, 300, x + 390, 390), action, font=explain_font(46), fill=action_color)
+        draw.text((x + 24, 455), "FIFO", font=explain_font(38), fill=EXPLAIN_MUTED_RGB)
+        draw.rounded_rectangle((x + 24, 505, x + 390, 615), radius=10, fill=(255, 255, 255), outline=(181, 188, 199), width=3)
+        if queue:
+            draw.rounded_rectangle((x + 45, 525, x + 145, 595), radius=8, fill=(210, 229, 244), outline=(75, 151, 202), width=3)
+            centered_text(draw, (x + 45, 525, x + 145, 595), "c7", font=explain_font(42))
+        else:
+            centered_text(draw, (x + 24, 505, x + 390, 615), "empty", font=explain_font(42), fill=EXPLAIN_MUTED_RGB)
+        pending = bool(queue)
+        draw.text((x + 24, 680), "pending bit c7", font=explain_font(36), fill=EXPLAIN_MUTED_RGB)
+        draw.ellipse((x + 285, 675, x + 345, 735), fill=(52, 145, 94) if pending else (255, 255, 255), outline=(52, 145, 94), width=4)
+        centered_text(draw, (x + 285, 675, x + 345, 735), "1" if pending else "0", font=explain_font(40), fill=(255, 255, 255) if pending else EXPLAIN_TEXT_RGB)
+    draw.text((48, 875), "Suppress only while an unconsumed c7 is pending.", font=explain_font(40), fill=EXPLAIN_MUTED_RGB)
+
+
+def _draw_mrv_state(
+    draw: ImageDraw.ImageDraw,
+    x: int,
+    state: tuple[str, tuple[tuple[int, int], ...], tuple[tuple[int, tuple[int, ...]], ...], int],
+) -> None:
+    label, domains, buckets, selected = state
+    draw.rounded_rectangle((x, 300, x + 570, 820), radius=18, fill=(239, 242, 246), outline=(174, 181, 193), width=3)
+    draw.text((x + 24, 320), label, font=explain_font(40), fill=EXPLAIN_TEXT_RGB)
+    draw.text((x + 24, 390), "domains", font=explain_font(38), fill=EXPLAIN_MUTED_RGB)
+    draw.text((x + 380, 390), f"select c{selected}", font=explain_font(38), fill=(111, 82, 176))
+    for index, (cell, size) in enumerate(domains):
+        left = x + 24 + index * 170
+        fill = (231, 222, 249) if cell == selected else (255, 255, 255)
+        draw.rounded_rectangle((left, 445, left + 145, 520), radius=9, fill=fill, outline=(111, 82, 176) if cell == selected else (181, 188, 199), width=3)
+        centered_text(draw, (left, 445, left + 145, 520), f"c{cell}: {size}", font=explain_font(52))
+    draw.text((x + 24, 555), "buckets: size -> cells", font=explain_font(38), fill=EXPLAIN_MUTED_RGB)
+    y = 615
+    for size, cells in buckets:
+        draw.text((x + 70, y), str(size), font=explain_font(52), fill=EXPLAIN_TEXT_RGB)
+        draw.rounded_rectangle((x + 170, y - 7, x + 520, y + 43), radius=7, fill=(255, 255, 255), outline=(181, 188, 199), width=2)
+        draw.text((x + 190, y), "  ".join(f"c{cell}" for cell in cells), font=explain_font(50), fill=EXPLAIN_TEXT_RGB)
+        y += 58
+
+
+def _draw_lazy_mrv(draw: ImageDraw.ImageDraw) -> None:
+    draw.rounded_rectangle((48, 145, 1872, 255), radius=14, fill=(255, 232, 188), outline=(217, 119, 6), width=3)
+    draw.text((78, 166), "Root: row-major scan. Build the private index only after a surviving nonterminal branch.", font=explain_font(42), fill=EXPLAIN_TEXT_RGB)
+    for x, state in zip((48, 675, 1302), _mrv_bucket_steps(), strict=True):
+        _draw_mrv_state(draw, x, state)
+    draw.text((48, 850), "domains = semantic source of truth", font=explain_font(44), fill=EXPLAIN_TEXT_RGB)
+    draw.text((1010, 850), "MRV index = private derived state", font=explain_font(44), fill=EXPLAIN_TEXT_RGB)
+    _draw_wrapped(
+        draw,
+        (48, 900),
+        "Buckets 2-23; exclude 0, 1, inactive.\nPick lowest size, then lowest row-major cell.",
+        width=72,
+        size=52,
+        fill=EXPLAIN_MUTED_RGB,
+        spacing=3,
+    )
+
+
+def _optimized_frame(stage: int) -> Image.Image:
+    if not 0 <= stage < len(_OPTIMIZATIONS):
+        raise WangSquareRenderError("optimized mechanism stage lies outside panels")
+    mechanism = _OPTIMIZATIONS[stage]
+    image, draw = _optimized_canvas(mechanism, stage)
+    painters = (
+        _draw_dynamic_stack,
+        _draw_initial_trail,
+        _draw_sat_ownership,
+        _draw_byte_support,
+        _draw_queue_dedup,
+        _draw_lazy_mrv,
+    )
+    painters[stage](draw)
+    return image
+
+
+def _draw_summary_card(
+    draw: ImageDraw.ImageDraw,
+    box: tuple[int, int, int, int],
+    mechanism: _Optimization,
+    index: int,
+) -> None:
+    left, top, right, bottom = box
+    draw.rounded_rectangle(
+        box,
+        radius=16,
+        fill=(239, 242, 246),
+        outline=(174, 181, 193),
+        width=3,
+    )
+    draw.text(
+        (left + 24, top + 17),
+        mechanism.title,
+        font=explain_font(50),
+        fill=EXPLAIN_TEXT_RGB,
+    )
+    center_y = top + 143
+    if index == 0:
+        for slot in range(8):
+            x = left + 30 + slot * 54
+            draw.rounded_rectangle(
+                (x, center_y - 28, x + 44, center_y + 28),
+                radius=5,
+                fill=(199, 231, 212) if slot < 5 else (255, 255, 255),
+                outline=(52, 145, 94) if slot < 5 else (181, 188, 199),
+                width=2,
+            )
+        _draw_arrow(draw, (left + 482, center_y), (left + 590, center_y))
+        draw.text((left + 610, center_y - 28), "grow -> limit", font=explain_font(42), fill=EXPLAIN_TEXT_RGB)
+    elif index == 1:
+        draw.rounded_rectangle((left + 30, center_y - 40, left + 235, center_y + 40), radius=8, fill=(210, 229, 244), outline=(75, 151, 202), width=3)
+        centered_text(draw, (left + 30, center_y - 40, left + 250, center_y + 40), "domain delta", font=explain_font(38))
+        _draw_arrow(draw, (left + 265, center_y), (left + 365, center_y))
+        draw.rounded_rectangle((left + 380, center_y - 40, left + 555, center_y + 40), radius=8, fill=(255, 232, 188), outline=(217, 119, 6), width=3)
+        centered_text(draw, (left + 380, center_y - 40, left + 555, center_y + 40), "trace kept", font=explain_font(36))
+        draw.rounded_rectangle((left + 610, center_y - 40, left + 835, center_y + 40), radius=8, fill=(255, 255, 255), outline=(214, 91, 91), width=3)
+        centered_text(draw, (left + 600, center_y - 40, left + 845, center_y + 40), "no undo entry", font=explain_font(36), fill=(214, 91, 91))
+        draw.line((left + 625, center_y + 27, left + 820, center_y - 27), fill=(214, 91, 91), width=4)
+    elif index == 2:
+        draw.rounded_rectangle((left + 30, center_y - 40, left + 245, center_y + 40), radius=8, fill=(199, 231, 212), outline=(52, 145, 94), width=3)
+        centered_text(draw, (left + 30, center_y - 40, left + 245, center_y + 40), "verify SAT", font=explain_font(40))
+        _draw_arrow(draw, (left + 260, center_y), (left + 390, center_y))
+        draw.rounded_rectangle((left + 405, center_y - 40, left + 680, center_y + 40), radius=8, fill=(246, 216, 232), outline=(203, 107, 151), width=3)
+        centered_text(draw, (left + 405, center_y - 40, left + 680, center_y + 40), "transfer buffer", font=explain_font(38))
+        draw.text((left + 700, center_y - 25), "caller owns", font=explain_font(38), fill=EXPLAIN_TEXT_RGB)
+    elif index == 3:
+        for byte, label in enumerate(("01", "04", "40")):
+            x = left + 30 + byte * 120
+            draw.rounded_rectangle((x, center_y - 40, x + 90, center_y + 40), radius=8, fill=((210, 229, 244), (255, 232, 188), (246, 216, 232))[byte], outline=(124, 133, 149), width=3)
+            centered_text(draw, (x, center_y - 40, x + 90, center_y + 40), label, font=explain_font(42))
+        _draw_arrow(draw, (left + 390, center_y), (left + 520, center_y))
+        draw.rounded_rectangle((left + 535, center_y - 40, left + 835, center_y + 40), radius=8, fill=(199, 231, 212), outline=(52, 145, 94), width=3)
+        centered_text(draw, (left + 535, center_y - 40, left + 835, center_y + 40), "OR 3 support masks", font=explain_font(38))
+    elif index == 4:
+        labels = (("+ c7", "1"), ("dup x", "1"), ("pop", "0"), ("later +", "1"))
+        for step, (event, pending) in enumerate(labels):
+            x = left + 30 + step * 205
+            draw.text((x, center_y - 35), event, font=explain_font(38), fill=EXPLAIN_TEXT_RGB)
+            draw.ellipse((x + 118, center_y - 38, x + 190, center_y + 34), fill=(52, 145, 94) if pending == "1" else (255, 255, 255), outline=(52, 145, 94), width=3)
+            centered_text(draw, (x + 118, center_y - 38, x + 190, center_y + 34), pending, font=explain_font(40), fill=(255, 255, 255) if pending == "1" else EXPLAIN_TEXT_RGB)
+    else:
+        labels = (("bucket 4", "c2"), ("bucket 2", "c2 c5"), ("bucket 4", "c2"))
+        for step, (bucket, cells) in enumerate(labels):
+            x = left + 30 + step * 275
+            draw.rounded_rectangle((x, center_y - 45, x + 225, center_y + 45), radius=8, fill=(231, 222, 249), outline=(111, 82, 176), width=3)
+            centered_text(draw, (x, center_y - 45, x + 225, center_y - 3), bucket, font=explain_font(36))
+            centered_text(draw, (x, center_y + 1, x + 225, center_y + 45), cells, font=explain_font(38), fill=(111, 82, 176))
+            if step < 2:
+                _draw_arrow(draw, (x + 232, center_y), (x + 267, center_y))
+
+
+def _optimized_summary() -> Image.Image:
+    image = Image.new("RGB", (1920, 1040), EXPLAIN_PANEL_RGB)
+    draw = ImageDraw.Draw(image)
+    draw_explain_heading(
+        draw,
+        (48, 34),
+        title="Optimized serial mechanisms",
+        subtitle="didactic summary | six private storage/work changes; shared search semantics",
+        scale=EXPLAIN_RENDER_SCALE,
+    )
+    for index, mechanism in enumerate(_OPTIMIZATIONS):
+        column, row = index % 2, index // 2
+        x = 48 + column * 936
+        y = 145 + row * 267
+        _draw_summary_card(draw, (x, y, x + 888, y + 235), mechanism, index)
+    draw.text((48, 950), "Six concrete state changes; full frames retain details.", font=explain_font(34), fill=EXPLAIN_MUTED_RGB)
     return image
 
 
@@ -544,7 +997,8 @@ def render_optimized_assets(
     *,
     duration_ms: int = 750,
 ) -> AnimationOutputs:
-    frames = tuple(_optimized_frame(stage) for stage in range(7))
+    mechanism_frames = tuple(_optimized_frame(stage) for stage in range(6))
+    frames = (*mechanism_frames, _optimized_summary())
     return write_animation_assets(
         frames,
         tuple(f"frame-{stage:02d}.png" for stage in range(7)),
