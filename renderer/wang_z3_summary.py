@@ -17,9 +17,11 @@ from wang_explain import (
     EXPLAIN_TEXT_RGB,
     draw_explain_heading,
     explain_font,
+    square_explain_tile,
 )
 from wang_hex_port import WangSquareRenderError
 from wang_snapshot import (
+    ExplainabilityBundle,
     _array,
     _fields,
     _integer,
@@ -28,7 +30,9 @@ from wang_snapshot import (
     _read_bytes,
     _sha256,
     _string,
+    load_explainability_bundle,
 )
+from wang_square import _build_palette_from_edges
 
 
 SCHEMA_NAME = "z3-encoding-summary-v1"
@@ -271,212 +275,288 @@ def load_z3_encoding_summary(path: str | Path) -> Z3EncodingSummary:
     )
 
 
-def _compose_wang_frame(summary: Z3EncodingSummary, stage: int) -> Image.Image:
-    width, height = 940, 430
+def _boolean_clause_lines(
+    bundle: ExplainabilityBundle,
+) -> tuple[tuple[str, str], ...]:
+    return tuple(
+        (
+            f"c{clause_id} source positions: "
+            + ", ".join(f"x{variable}" for variable in clause),
+            " + ".join(f"If(x{variable})" for variable in clause) + " = 1",
+        )
+        for clause_id, clause in enumerate(bundle.formula.clauses)
+    )
+
+
+def _bind_oracle_inputs(
+    summary: Z3EncodingSummary, bundle: ExplainabilityBundle
+) -> None:
+    if summary.source_formula_sha256 != bundle.source_formula_sha256:
+        raise WangSquareRenderError(
+            "Z3 summary source formula identity disagrees with explainability bundle"
+        )
+    if summary.variable_count != bundle.formula.variable_count:
+        raise WangSquareRenderError(
+            "Z3 summary variable count disagrees with explainability bundle"
+        )
+    if summary.engine != WANG_ENGINE:
+        return
+    reduction = bundle.reduction
+    if reduction is None or summary.region_sha256 != reduction.region_sha256:
+        raise WangSquareRenderError(
+            "Z3 summary region identity disagrees with explainability bundle"
+        )
+    if (summary.width, summary.height) != (bundle.region.width, bundle.region.height):
+        raise WangSquareRenderError(
+            "Z3 summary region dimensions disagree with explainability bundle"
+        )
+    if summary.active_cell_count != sum(bundle.region.active):
+        raise WangSquareRenderError(
+            "Z3 summary active-cell count disagrees with explainability bundle"
+        )
+    if summary.unique_tile_tuple_count != len(bundle.tileset.tile_edges):
+        raise WangSquareRenderError(
+            "Z3 summary canonical tile table disagrees with explainability bundle"
+        )
+    if summary.cells is not None and any(
+        (tile_id is None) == active
+        for tile_id, active in zip(summary.cells, bundle.region.active, strict=True)
+    ):
+        raise WangSquareRenderError(
+            "Z3 model projection active cells disagree with explainability bundle"
+        )
+
+
+def _wang_example_lines(
+    summary: Z3EncodingSummary, bundle: ExplainabilityBundle
+) -> tuple[str, str, str, str]:
+    if summary.cells is None:
+        raise WangSquareRenderError("Wang SAT example requires a returned model")
+    region = bundle.region
+    selected: tuple[int, int] | None = None
+    for index, active in enumerate(region.active):
+        if not active:
+            continue
+        column = index % region.width
+        sides = region.boundary[index]
+        if (
+            column + 1 < region.width
+            and region.active[index + 1]
+            and sides is not None
+            and sides[0] is not None
+        ):
+            selected = (index, 0)
+            break
+    if selected is None:
+        raise WangSquareRenderError(
+            "Wang explanation needs an active cell with an east neighbor and exposed north edge"
+        )
+    index, boundary_direction = selected
+    right_index = index + 1
+    tile_id = summary.cells[index]
+    right_id = summary.cells[right_index]
+    if tile_id is None or right_id is None:
+        raise WangSquareRenderError("Wang explanation selected an inactive model cell")
+    tile = bundle.tileset.tile_edges[tile_id]
+    right_tile = bundle.tileset.tile_edges[right_id]
+    if tile[1] != right_tile[3]:
+        raise WangSquareRenderError("Wang example internal term has unequal model colors")
+    boundary = region.boundary[index]
+    assert boundary is not None and boundary[boundary_direction] is not None
+    required = boundary[boundary_direction]
+    if tile[boundary_direction] != required:
+        raise WangSquareRenderError("Wang example does not satisfy its exposed boundary")
+    x = region.min_x + index % region.width
+    y = region.min_y + index // region.width
+    return (
+        f"active cell ({x},{y}) -> returned tile #{tile_id}",
+        f"canonical tile #{tile_id} = (N={tile[0]}, E={tile[1]}, S={tile[2]}, W={tile[3]})",
+        f"shared term edge({x},{y},E) = edge({x + 1},{y},W) = {tile[1]}",
+        f"exposed edge({x},{y},N) = required boundary N={required}",
+    )
+
+
+def _compose_wang_frame(
+    summary: Z3EncodingSummary, bundle: ExplainabilityBundle, stage: int
+) -> Image.Image:
+    width, height = 1880, 1040
     image = Image.new("RGB", (width, height), EXPLAIN_PANEL_RGB)
     draw = ImageDraw.Draw(image)
-    labels = (
-        "configuration",
-        "edge terms",
-        "shared internal edges",
-        "cell relations and boundaries",
-        "result, model, and encoding statistics",
-    )
+    labels = ("terms", "shared", "tile tuple", "boundary", "model")
     draw_explain_heading(
         draw,
-        (18, 16),
+        (36, 20),
         title="Wang Z3 encoding order",
         subtitle=(
-            f"encoding-order stage {stage + 1}/5 | {labels[stage]} | "
-            "not a Z3 internal execution trace"
+            f"encoding-order {stage + 1}/5 | row-major cells, then N/E/S/W | "
+            "project construction, not Z3 search"
         ),
+        scale=2,
     )
-    draw.text(
-        (18, 78),
-        f"Z3 {summary.version} | random_seed={summary.random_seed} | "
-        f"threads={summary.threads}",
-        font=explain_font(12),
-        fill=EXPLAIN_TEXT_RGB,
-    )
-    steps = (
-        "1. create edge terms in row-major cell order",
-        "2. share north/south and east/west internal terms",
-        "3. add one positional tile-tuple relation per active cell",
-        "4. add exposed boundary equalities in N,E,S,W order",
-        "5. check once; copy model and encoding statistics",
-    )
-    for index, label in enumerate(steps):
-        y = 112 + index * 38
+    for index, label in enumerate(labels):
+        x = 36 + index * 362
         active = index <= stage
         draw.rounded_rectangle(
-            (18, y, 455, y + 28),
-            radius=5,
+            (x, 118, x + 332, 184),
+            radius=10,
             fill=(213, 235, 246) if active else (239, 241, 245),
             outline=(54, 127, 169) if index == stage else (184, 190, 201),
-            width=2 if index == stage else 1,
+            width=4 if index == stage else 2,
         )
         draw.text(
-            (29, y + 7),
-            label,
-            font=explain_font(10),
+            (x + 20, 136),
+            f"{index + 1}  {label}",
+            font=explain_font(28),
             fill=EXPLAIN_TEXT_RGB if active else EXPLAIN_MUTED_RGB,
         )
+    facts = _wang_example_lines(summary, bundle) if summary.status == "sat" else (
+        "No returned model for this result",
+        f"canonical tile tuples: {summary.unique_tile_tuple_count}",
+        f"shared internal terms: {summary.shared_internal_edge_count}",
+        "boundary equalities remain project-owned assertions",
+    )
+    draw.rounded_rectangle((36, 216, 930, 968), radius=18, fill=EXPLAIN_ACTIVE_RGB, outline=(180, 187, 198), width=2)
+    draw.text((72, 244), "One real cell relation", font=explain_font(48), fill=EXPLAIN_TEXT_RGB)
+    if summary.status == "sat" and summary.cells is not None:
+        region = bundle.region
+        selected = next(i for i, active in enumerate(region.active) if active and i % region.width + 1 < region.width and region.active[i + 1] and region.boundary[i] is not None and region.boundary[i][0] is not None)
+        tile_id = summary.cells[selected]
+        right_id = summary.cells[selected + 1]
+        assert tile_id is not None and right_id is not None
+        palette = _build_palette_from_edges(bundle.tileset.tile_edges)
+        left_edges = bundle.tileset.tile_edges[tile_id]
+        right_edges = bundle.tileset.tile_edges[right_id]
+        image.paste(square_explain_tile(left_edges, palette, 280, tile_id=tile_id, edge_labels=True), (94, 382))
+        image.paste(square_explain_tile(right_edges, palette, 280, tile_id=right_id, edge_labels=True), (500, 382))
+        draw.line((374, 522, 500, 522), fill=(54, 127, 169), width=12)
+        draw.text((382, 456), f"E = W", font=explain_font(48), fill=EXPLAIN_TEXT_RGB)
+        draw.text((404, 530), f"{left_edges[1]}", font=explain_font(56), fill=(32, 103, 148))
+        draw.text((160, 314), facts[0], font=explain_font(48), fill=EXPLAIN_TEXT_RGB)
+        draw.text((78, 704), f"tile #{tile_id}: N{left_edges[0]}  E{left_edges[1]}  S{left_edges[2]}  W{left_edges[3]}", font=explain_font(48), fill=EXPLAIN_TEXT_RGB)
+        draw.text((78, 782), f"shared term: E{left_edges[1]} = W{right_edges[3]}", font=explain_font(52), fill=EXPLAIN_TEXT_RGB)
+        required = region.boundary[selected][0]
+        draw.text((78, 864), f"boundary: N{left_edges[0]} = required N{required}", font=explain_font(48), fill=EXPLAIN_TEXT_RGB)
 
-    panel = (485, 106, 922, 402)
-    draw.rounded_rectangle(panel, radius=6, fill=EXPLAIN_ACTIVE_RGB, outline=(180, 187, 198))
-    if stage == 0:
-        lines = (
-            f"formula variables: {summary.variable_count}",
-            f"region: {summary.width} x {summary.height}",
-            f"active cells: {summary.active_cell_count}",
-            "project order is public; Z3 search order is not",
-        )
-    elif stage == 1:
-        lines = (
-            f"distinct edge terms: {summary.edge_term_count}",
-            "N and W reuse already-created neighbor terms",
-            "E and S create the forward row-major frontier",
-        )
-    elif stage == 2:
-        lines = (
-            f"shared internal edges: {summary.shared_internal_edge_count}",
-            "one arithmetic term represents both sides of an adjacency",
-            "no support implications or copied native propagation",
-        )
-    elif stage == 3:
-        lines = (
-            f"unique tile tuples: {summary.unique_tile_tuple_count}",
-            f"assertions: {summary.assertion_count}",
-            "cell relation precedes boundary equalities",
-        )
-    else:
-        lines = (
-            f"result: {summary.status.upper()}",
-            f"model cells: {0 if summary.cells is None else len(summary.cells)}",
-            f"encoding statistics: {len(summary.statistics)}",
-            "internal Z3 counters and debug order are not claimed",
-        )
-    y = 124
-    for line in lines:
-        draw.text((502, y), line, font=explain_font(11), fill=EXPLAIN_TEXT_RGB)
-        y += 27
-
-    if stage == 4 and summary.cells is not None:
-        cell = 8
-        origin_x, origin_y = 502, 246
+    draw.rounded_rectangle((960, 216, 1844, 968), radius=18, fill=EXPLAIN_ACTIVE_RGB, outline=(180, 187, 198), width=2)
+    draw.text((996, 244), "Returned model projection", font=explain_font(48), fill=EXPLAIN_TEXT_RGB)
+    draw.text((996, 316), f"{summary.width} x {summary.height} | {summary.active_cell_count} active", font=explain_font(42), fill=EXPLAIN_MUTED_RGB)
+    if summary.cells is not None:
+        cell = max(2, min(18, 800 // summary.width, 300 // summary.height))
+        origin_x, origin_y = 996, 420
         for index, tile_id in enumerate(summary.cells):
             x = origin_x + (index % summary.width) * cell
             y = origin_y + (index // summary.width) * cell
             fill = (205, 210, 218) if tile_id is None else (88, 170, 122)
             draw.rectangle((x, y, x + cell - 1, y + cell - 1), fill=fill)
         draw.text(
-            (502, 346),
-            "model projection (inactive positions in gray)",
-            font=explain_font(9),
+            (996, 420 + summary.height * cell + 34),
+            "green = tile ID   gray = inactive",
+            font=explain_font(42),
             fill=EXPLAIN_MUTED_RGB,
         )
+        draw.text((996, 754), f"copied {summary.status.upper()} model", font=explain_font(52), fill=EXPLAIN_TEXT_RGB)
+        draw.text((996, 830), f"{len(summary.cells)} dense entries", font=explain_font(44), fill=EXPLAIN_TEXT_RGB)
     draw.text(
-        (18, 408),
-        "Rendering explains the declared encoding order; it makes no claim about Z3's internal decisions.",
-        font=explain_font(9),
+        (36, 996),
+        "Project construction order and returned projection only; Z3 internal search decisions are not exposed.",
+        font=explain_font(32),
         fill=EXPLAIN_MUTED_RGB,
     )
     return image
 
 
-def _compose_boolean_frame(summary: Z3EncodingSummary, stage: int) -> Image.Image:
-    width, height = 940, 430
+def _compose_boolean_frame(
+    summary: Z3EncodingSummary, bundle: ExplainabilityBundle, stage: int
+) -> Image.Image:
+    width, height = 1880, 1040
     image = Image.new("RGB", (width, height), EXPLAIN_PANEL_RGB)
     draw = ImageDraw.Draw(image)
-    labels = (
-        "configuration",
-        "Boolean variables",
-        "source-order clauses",
-        "result, assignment, and encoding statistics",
-    )
+    labels = ("variables", "source order", "ExactlyOne", "model")
     draw_explain_heading(
         draw,
-        (18, 16),
+        (36, 20),
         title="Boolean Z3 encoding order",
         subtitle=(
-            f"encoding-order stage {stage + 1}/4 | {labels[stage]} | "
-            "not a Z3 internal execution trace"
+            f"encoding-order {stage + 1}/4 | repeated positions stay distinct | "
+            "project construction, not Z3 search"
         ),
+        scale=2,
     )
-    draw.text(
-        (18, 78),
-        f"Z3 {summary.version} | random_seed={summary.random_seed} | "
-        f"threads={summary.threads}",
-        font=explain_font(12),
-        fill=EXPLAIN_TEXT_RGB,
-    )
-    steps = (
-        "1. create one Boolean term per variable in ascending ID order",
-        "2. visit clauses in source order",
-        "3. visit each clause left-to-right and assert exactly one true",
-        "4. check once; copy assignment and project-owned statistics",
-    )
-    for index, label in enumerate(steps):
-        y = 112 + index * 48
+    for index, label in enumerate(labels):
+        x = 36 + index * 452
         active = index <= stage
         draw.rounded_rectangle(
-            (18, y, 520, y + 34),
-            radius=5,
+            (x, 118, x + 420, 184),
+            radius=10,
             fill=(213, 235, 246) if active else (239, 241, 245),
             outline=(54, 127, 169) if index == stage else (184, 190, 201),
-            width=2 if index == stage else 1,
+            width=4 if index == stage else 2,
         )
         draw.text(
-            (29, y + 9),
-            label,
-            font=explain_font(10),
+            (x + 20, 136),
+            f"{index + 1}  {label}",
+            font=explain_font(28),
             fill=EXPLAIN_TEXT_RGB if active else EXPLAIN_MUTED_RGB,
         )
 
-    draw.rounded_rectangle(
-        (548, 106, 922, 378),
-        radius=6,
-        fill=EXPLAIN_ACTIVE_RGB,
-        outline=(180, 187, 198),
-    )
-    if stage == 0:
-        lines = (
-            f"formula variables: {summary.variable_count}",
-            "fixed seed and one solver thread",
-            "project order is public; Z3 search order is not",
-        )
-    elif stage == 1:
-        lines = (
-            f"Boolean terms: {summary.variable_count}",
-            "term IDs follow the formula variable IDs",
-            "no native-solver state is imported",
-        )
-    elif stage == 2:
-        lines = (
-            f"assertions: {summary.assertion_count}",
-            "clause order follows the parsed source",
-            "literal positions remain left-to-right",
-        )
+    draw.rounded_rectangle((36, 216, 1844, 968), radius=18, fill=EXPLAIN_ACTIVE_RGB, outline=(180, 187, 198), width=2)
+    clause_lines = _boolean_clause_lines(bundle)
+    if len(clause_lines) <= 3:
+        selected = tuple(enumerate(clause_lines))
+        omission = None
     else:
-        assignment = summary.assignment or ()
-        assignment_text = ", ".join(
-            f"x{index + 1}={'1' if value else '0'}"
-            for index, value in enumerate(assignment)
+        selected = ((0, clause_lines[0]), (1, clause_lines[1]), (len(clause_lines) - 1, clause_lines[-1]))
+        omission = f"{len(clause_lines) - 3} source clauses omitted between c1 and c{len(clause_lines) - 1}"
+    draw.text((72, 244), "Source positions", font=explain_font(40), fill=EXPLAIN_TEXT_RGB)
+    draw.text((1040, 244), "Actual sum asserted equal to one", font=explain_font(40), fill=EXPLAIN_TEXT_RGB)
+    if omission is not None:
+        draw.text((620, 250), omission, font=explain_font(28), fill=EXPLAIN_MUTED_RGB)
+    for row, (clause_id, (_, equation)) in enumerate(selected):
+        y = 330 + row * 176
+        visible = stage >= 2
+        draw.rounded_rectangle(
+            (72, y, 800, y + 128),
+            radius=8,
+            fill=(213, 235, 246) if visible else (242, 244, 247),
+            outline=(54, 127, 169) if visible else (190, 196, 205),
+            width=2,
         )
-        lines = (
-            f"result: {summary.status.upper()}",
-            f"assignment: {assignment_text or 'not applicable'}",
-            f"encoding statistics: {len(summary.statistics)}",
-            "independent assignment checking is downstream",
+        variables = bundle.formula.clauses[clause_id]
+        draw.text((96, y + 38), f"c{clause_id}", font=explain_font(52), fill=EXPLAIN_TEXT_RGB if visible else EXPLAIN_MUTED_RGB)
+        for position, variable in enumerate(variables):
+            x = 230 + position * 170
+            draw.rounded_rectangle((x, y + 24, x + 132, y + 104), radius=12, fill=EXPLAIN_PANEL_RGB, outline=(54, 127, 169), width=3)
+            draw.text((x + 36, y + 40), f"x{variable}", font=explain_font(48), fill=EXPLAIN_TEXT_RGB if visible else EXPLAIN_MUTED_RGB)
+        draw.line((820, y + 64, 994, y + 64), fill=(54, 127, 169), width=8)
+        draw.polygon(((994, y + 64), (964, y + 46), (964, y + 82)), fill=(54, 127, 169))
+        draw.rounded_rectangle((1020, y, 1808, y + 128), radius=8, fill=(213, 235, 246) if visible else (242, 244, 247), outline=(54, 127, 169) if visible else (190, 196, 205), width=2)
+        draw.text((1050, y + 38), equation.replace(" + ", "+"), font=explain_font(48), fill=EXPLAIN_TEXT_RGB if visible else EXPLAIN_MUTED_RGB)
+    assignment = summary.assignment or ()
+    assignment_items = tuple(
+        f"x{index}={'true' if value else 'false'}"
+        for index, value in enumerate(assignment)
+    )
+    if len(assignment_items) <= 6:
+        assignment_text = ", ".join(assignment_items)
+        assignment_font = 48
+    else:
+        assignment_text = (
+            ", ".join(assignment_items[:3])
+            + f"  ... {len(assignment_items) - 5} omitted ...  "
+            + ", ".join(assignment_items[-2:])
         )
-    y = 128
-    for line in lines:
-        draw.text((566, y), line, font=explain_font(11), fill=EXPLAIN_TEXT_RGB)
-        y += 31
+        assignment_font = 40
+    draw.rounded_rectangle((320, 874, 1560, 950), radius=12, fill=(213, 237, 224) if stage == 3 else (242, 244, 247), outline=(53, 144, 93), width=3)
     draw.text(
-        (18, 408),
-        "Rendering explains declared construction order; it does not expose Z3 decisions.",
-        font=explain_font(9),
+        (352, 890),
+        f"copied {summary.status.upper()} model: {assignment_text or 'not applicable'}",
+        font=explain_font(assignment_font),
+        fill=EXPLAIN_TEXT_RGB if stage == 3 else EXPLAIN_MUTED_RGB,
+    )
+    draw.text(
+        (36, 996),
+        "Each repeated clause position remains a separate If term; Z3 internal search decisions are not exposed.",
+        font=explain_font(32),
         fill=EXPLAIN_MUTED_RGB,
     )
     return image
@@ -484,6 +564,7 @@ def _compose_boolean_frame(summary: Z3EncodingSummary, stage: int) -> Image.Imag
 
 def render_boolean_z3_assets(
     summary_path: str | Path,
+    manifest_path: str | Path,
     output_directory: str | Path,
     *,
     duration_ms: int = 800,
@@ -491,18 +572,21 @@ def render_boolean_z3_assets(
     summary = load_z3_encoding_summary(summary_path)
     if summary.engine != BOOLEAN_ENGINE:
         raise WangSquareRenderError("encoding animation requires a Boolean Z3 summary")
-    frames = tuple(_compose_boolean_frame(summary, stage) for stage in range(4))
+    bundle = load_explainability_bundle(manifest_path)
+    _bind_oracle_inputs(summary, bundle)
+    frames = tuple(_compose_boolean_frame(summary, bundle, stage) for stage in range(4))
     return write_animation_assets(
         frames,
         tuple(f"frame-{stage:02d}.png" for stage in range(4)),
         output_directory,
-        fallback_index=2,
+        fallback_index=3,
         duration_ms=duration_ms,
     )
 
 
 def render_wang_z3_assets(
     summary_path: str | Path,
+    manifest_path: str | Path,
     output_directory: str | Path,
     *,
     duration_ms: int = 800,
@@ -510,12 +594,14 @@ def render_wang_z3_assets(
     summary = load_z3_encoding_summary(summary_path)
     if summary.engine != WANG_ENGINE:
         raise WangSquareRenderError("encoding animation requires a Wang Z3 summary")
-    frames = tuple(_compose_wang_frame(summary, stage) for stage in range(5))
+    bundle = load_explainability_bundle(manifest_path)
+    _bind_oracle_inputs(summary, bundle)
+    frames = tuple(_compose_wang_frame(summary, bundle, stage) for stage in range(5))
     return write_animation_assets(
         frames,
         tuple(f"frame-{stage:02d}.png" for stage in range(5)),
         output_directory,
-        fallback_index=3,
+        fallback_index=4,
         duration_ms=duration_ms,
     )
 
@@ -525,6 +611,7 @@ def _parser() -> argparse.ArgumentParser:
         description="render a declared Boolean or Wang Z3 encoding order without Z3"
     )
     parser.add_argument("summary", type=Path)
+    parser.add_argument("manifest", type=Path)
     parser.add_argument("output_directory", type=Path)
     parser.add_argument("--duration-ms", type=int, default=800)
     return parser
@@ -541,7 +628,10 @@ def main(arguments: list[str] | None = None) -> int:
             else render_wang_z3_assets
         )
         outputs = renderer(
-            args.summary, args.output_directory, duration_ms=args.duration_ms
+            args.summary,
+            args.manifest,
+            args.output_directory,
+            duration_ms=args.duration_ms,
         )
     except (FileNotFoundError, WangSquareRenderError) as error:
         parser.error(str(error))

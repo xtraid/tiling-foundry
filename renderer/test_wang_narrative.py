@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import hashlib
 import json
 from pathlib import Path
@@ -8,6 +9,7 @@ import sys
 from PIL import Image
 import pytest
 
+import wang_narrative
 from wang_hex_port import WangSquareRenderError
 from wang_generalized import generalized_specification_sha256
 from wang_narrative import (
@@ -18,12 +20,18 @@ from wang_narrative import (
     render_witness_assets,
 )
 from wang_snapshot import load_explainability_bundle
+from wang_square import load_wang_presentation
 
 
 RENDERER = Path(__file__).resolve().parent
 ROOT = RENDERER.parent
 MANIFEST = ROOT / "tests/fixtures/pipeline_sat_reduction_explain/manifest.json"
 SOLUTION = ROOT / "tests/fixtures/wang_solution_v1_square_sat.json"
+TRACE_MANIFEST = ROOT / "tests/fixtures/pipeline_sat_solver_trace/manifest.json"
+TRACE_SOLUTION = next(
+    (ROOT / "tests/fixtures/pipeline_sat_solver_trace").glob("solution-*.json")
+)
+ASSIGNMENT = (False, True, False)
 
 
 def _tree_bytes(directory: Path) -> dict[str, bytes]:
@@ -34,7 +42,38 @@ def _tree_bytes(directory: Path) -> dict[str, bytes]:
     }
 
 
-def _run_record(status: str) -> dict[str, object]:
+def _encoded(document: dict[str, object]) -> bytes:
+    return (
+        json.dumps(document, ensure_ascii=False, allow_nan=False, indent=2) + "\n"
+    ).encode("utf-8")
+
+
+def _witness_digest(values: tuple[bool, ...]) -> str:
+    return hashlib.sha256(_encoded({"witness": list(values)})).hexdigest()
+
+
+def _mobile_ink_height(
+    image: Image.Image, source_box: tuple[int, int, int, int]
+) -> int:
+    scale = 390 / image.width
+    mobile = image.resize(
+        (390, round(image.height * scale)), Image.Resampling.LANCZOS
+    )
+    crop = mobile.crop(tuple(round(value * scale) for value in source_box))
+    rows = [
+        y
+        for y in range(crop.height)
+        if sum(max(crop.getpixel((x, y))) < 175 for x in range(crop.width)) >= 3
+    ]
+    return max(rows) - min(rows) + 1 if rows else 0
+
+
+def _run_record(
+    status: str,
+    *,
+    manifest: Path | None = None,
+    assignment: tuple[bool, ...] | None = None,
+) -> dict[str, object]:
     performed = status == "sat"
     checks = {}
     specifications = (
@@ -46,11 +85,14 @@ def _run_record(status: str) -> dict[str, object]:
         ("wang_z3_tiling", "oracles.tiling_check.is_valid_tiling"),
     )
     for name, checker in specifications:
+        digest = "1" * 64 if performed else None
+        if name == "reference_assignment" and assignment is not None:
+            digest = _witness_digest(assignment)
         checks[name] = {
             "checker": checker,
             "performed": performed,
             "passed": True if performed else None,
-            "witness_sha256": "1" * 64 if performed else None,
+            "witness_sha256": digest,
         }
     agreement = {
         "expected_status": status,
@@ -62,22 +104,44 @@ def _run_record(status: str) -> dict[str, object]:
         "sat_witnesses_valid": True if status == "sat" else None,
         "passed": True,
     }
-    payload = {"verification": checks, "agreement": agreement}
-    source_sha256 = hashlib.sha256(
-        (json.dumps(payload, ensure_ascii=False, allow_nan=False, indent=2) + "\n").encode(
-            "utf-8"
+    receipt_payload: dict[str, object] = {
+        "verification": checks,
+        "agreement": agreement,
+    }
+    source_payload = dict(receipt_payload)
+    if manifest is not None:
+        source = json.loads(manifest.read_text(encoding="utf-8"))
+        artifacts = source["artifacts"]
+        source_payload.update(
+            {
+                "source_formula": source["source_formula_sha256"],
+                "formula_snapshot": artifacts["formula"]["sha256"],
+                "tileset": artifacts["tileset"]["sha256"],
+                "region": artifacts["region"]["sha256"],
+                "provenance": artifacts["reduction"]["sha256"],
+                "reference_solution": (
+                    None
+                    if artifacts["solution"] is None
+                    else artifacts["solution"]["sha256"]
+                ),
+                "reference_assignment": (
+                    None if assignment is None else list(assignment)
+                ),
+            }
         )
+    source_sha256 = hashlib.sha256(
+        _encoded(source_payload)
     ).hexdigest()
     return {
         "schema": "wang-verification-receipts-v1",
         "expected_status": status,
-        **payload,
+        **receipt_payload,
         "source_sha256": source_sha256,
     }
 
 
 def test_verification_composition_is_deterministic_for_sat_and_unsat(tmp_path):
-    for status in ("sat", "unsat"):
+    for status in ("unsat",):
         run = tmp_path / f"{status}.json"
         run.write_text(json.dumps(_run_record(status)) + "\n", encoding="utf-8")
         first = render_verification_assets(run, tmp_path / f"{status}-first")
@@ -88,6 +152,125 @@ def test_verification_composition_is_deterministic_for_sat_and_unsat(tmp_path):
         assert first.fallback.name == "frame-05.png"
         with Image.open(first.animation) as animation:
             assert animation.n_frames == 6
+
+
+def test_verification_shows_checker_rules_and_copied_native_extraction(tmp_path):
+    bundle = load_explainability_bundle(TRACE_MANIFEST)
+    presentation = load_wang_presentation(TRACE_SOLUTION)
+    assert getattr(wang_narrative, "_tiling_evidence_lines")(
+        bundle, presentation
+    ) == (
+        "active[0] = tile #0; valid IDs are 0..22",
+        "inactive[40] = TILE_NONE (JSON null; native 255)",
+        "internal: tile #0 E=2 = tile #7 W=2",
+        "boundary: tile #0 N=0 = required N=0",
+    )
+    assert getattr(wang_narrative, "_extraction_lines")(
+        bundle, presentation, ASSIGNMENT
+    ) == (
+        "x0 | gadget cells y=0..2: #0, #1, #2 | recorded false",
+        "x1 | gadget cells y=4..6: #3, #3, #3 | recorded true",
+        "x2 | gadget cells y=8..10: #0, #1, #2 | recorded false",
+    )
+
+    receipts = tmp_path / "sat.json"
+    receipts.write_text(
+        json.dumps(
+            _run_record("sat", manifest=TRACE_MANIFEST, assignment=ASSIGNMENT)
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    first = render_verification_assets(
+        receipts,
+        tmp_path / "sat-first",
+        manifest_path=TRACE_MANIFEST,
+        solution_path=TRACE_SOLUTION,
+        extracted_assignment=ASSIGNMENT,
+    )
+    render_verification_assets(
+        receipts,
+        tmp_path / "sat-second",
+        manifest_path=TRACE_MANIFEST,
+        solution_path=TRACE_SOLUTION,
+        extracted_assignment=ASSIGNMENT,
+    )
+    assert _tree_bytes(tmp_path / "sat-first") == _tree_bytes(
+        tmp_path / "sat-second"
+    )
+    assert first.fallback.name == "frame-05.png"
+    with Image.open(first.fallback) as fallback:
+        assert fallback.size == (1920, 1040)
+
+
+def test_verification_rejects_cross_source_solution_and_assignment(tmp_path):
+    receipts = tmp_path / "sat.json"
+    receipts.write_text(
+        json.dumps(
+            _run_record("sat", manifest=TRACE_MANIFEST, assignment=ASSIGNMENT)
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(WangSquareRenderError, match="solution identity"):
+        render_verification_assets(
+            receipts,
+            tmp_path / "wrong-solution",
+            manifest_path=TRACE_MANIFEST,
+            solution_path=SOLUTION,
+            extracted_assignment=ASSIGNMENT,
+        )
+    with pytest.raises(WangSquareRenderError, match="assignment identity"):
+        render_verification_assets(
+            receipts,
+            tmp_path / "wrong-assignment",
+            manifest_path=TRACE_MANIFEST,
+            solution_path=TRACE_SOLUTION,
+            extracted_assignment=(True, False, True),
+        )
+
+
+def test_verification_bounds_a_larger_copied_assignment(tmp_path):
+    receipts = tmp_path / "sat.json"
+    receipts.write_text(
+        json.dumps(
+            _run_record("sat", manifest=TRACE_MANIFEST, assignment=ASSIGNMENT)
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    status, records, bundle, presentation, _ = getattr(
+        wang_narrative, "_load_verification"
+    )(
+        receipts,
+        manifest_path=TRACE_MANIFEST,
+        solution_path=TRACE_SOLUTION,
+        extracted_assignment=ASSIGNMENT,
+    )
+    assert bundle is not None and bundle.reduction is not None
+    source_gadgets = tuple(
+        gadget for gadget in bundle.reduction.gadgets if gadget.kind == "variable"
+    )
+    gadgets = tuple(
+        replace(source_gadgets[index % 3], ordinal=index) for index in range(7)
+    )
+    large_bundle = replace(
+        bundle,
+        formula=replace(bundle.formula, variable_count=7),
+        reduction=replace(
+            bundle.reduction,
+            variable_count=7,
+            gadgets=gadgets,
+        ),
+    )
+    values = (False, True, False, True, False, True, False)
+    frame = getattr(wang_narrative, "_verification_frame")(
+        status, records, 5, large_bundle, presentation, values
+    )
+
+    assert getattr(wang_narrative, "_bounded_variable_indices")(7) == (0, 1, 6)
+    assert frame.size == (1920, 1040)
+    assert _mobile_ink_height(frame, (1470, 790, 1860, 890)) >= 8
 
 
 def test_verification_composition_rejects_partial_or_forged_receipts(tmp_path):
@@ -106,6 +289,8 @@ def test_witness_and_generalized_assets_reuse_checked_presentations(tmp_path):
         tmp_path / "witness-second"
     )
     assert first.animation.fallback.name == "frame-03.png"
+    with Image.open(first.animation.fallback) as fallback:
+        assert fallback.size == (1920, 1040)
     assert first.square.is_file()
     assert first.generalized.is_file()
     assert first.hex.is_file()

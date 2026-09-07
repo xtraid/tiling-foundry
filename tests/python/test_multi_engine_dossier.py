@@ -15,7 +15,12 @@ from unittest.mock import patch
 from dossier import multi_engine
 from dossier import narrative_assets as narrative_generator
 from formats.pipeline_snapshot import PipelineSnapshotError
-from formats.narrative_assets import load_narrative_assets
+from formats.narrative_assets import (
+    boolean_z3_source_sha256,
+    load_narrative_assets,
+    verification_source_sha256,
+    wang_z3_source_sha256,
+)
 from formats.run_case_v2 import (
     CASE_SCHEMA,
     load_run_case_v2,
@@ -168,6 +173,43 @@ class MultiEngineDossierTests(unittest.TestCase):
         )
         self.assertFalse((self.sat_directory / "report.tex").exists())
         self.assertFalse((self.sat_directory / "report.pdf").exists())
+
+    def test_narrative_source_hashes_cover_every_consumed_identity(self) -> None:
+        run = self.sat_document
+        verification_digest = verification_source_sha256(run)
+        for path, replacement in (
+            (("source", "sha256"), "0" * 64),
+            (("reduction", "formula_sha256"), "1" * 64),
+            (("reduction", "tileset_sha256"), "2" * 64),
+            (("reduction", "region_sha256"), "3" * 64),
+            (("reduction", "provenance_sha256"), "4" * 64),
+            (("reference", "solution_sha256"), "5" * 64),
+            (("reference", "extracted_assignment"), [True, False, True]),
+        ):
+            mutated = copy.deepcopy(run)
+            mutated[path[0]][path[1]] = replacement
+            self.assertNotEqual(
+                verification_source_sha256(mutated),
+                verification_digest,
+                path,
+            )
+
+        boolean_digest = boolean_z3_source_sha256("a" * 64, "b" * 64)
+        self.assertNotEqual(
+            boolean_z3_source_sha256("c" * 64, "b" * 64),
+            boolean_digest,
+        )
+        self.assertNotEqual(
+            boolean_z3_source_sha256("a" * 64, "c" * 64),
+            boolean_digest,
+        )
+        wang_digest = wang_z3_source_sha256("a" * 64, "b" * 64, "c" * 64)
+        for values in (
+            ("d" * 64, "b" * 64, "c" * 64),
+            ("a" * 64, "d" * 64, "c" * 64),
+            ("a" * 64, "b" * 64, "d" * 64),
+        ):
+            self.assertNotEqual(wang_z3_source_sha256(*values), wang_digest)
 
     def test_unsat_capture_has_no_witness_or_fabricated_verification(self) -> None:
         document = self.unsat_document
