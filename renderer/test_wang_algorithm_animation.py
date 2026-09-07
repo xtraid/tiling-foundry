@@ -337,6 +337,22 @@ def test_essential_byte_support_and_mrv_labels_survive_mobile_downsampling():
     bucket_row = lazy_mrv.crop((48, 755, 620, 815))
     assert (111, 82, 176) not in bucket_row.get_flattened_data()
 
+    ownership = frame(2)
+    for corridor in (
+        (60, 275, 99, 365),
+        (170, 665, 204, 765),
+        (696, 665, 730, 765),
+        (1010, 275, 1049, 365),
+        (1120, 665, 1154, 765),
+        (1646, 665, 1680, 765),
+    ):
+        outside_box = ownership.crop(corridor)
+        assert not any(
+            max(outside_box.getpixel((x, y))) < 140
+            for y in range(outside_box.height)
+            for x in range(outside_box.width)
+        )
+
 
 def test_queue_panel_suppresses_only_while_a_cell_is_pending():
     assert getattr(wang_algorithm_animation, "_queue_dedup_steps")() == (
