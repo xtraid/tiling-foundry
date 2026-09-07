@@ -354,6 +354,68 @@ def test_essential_byte_support_and_mrv_labels_survive_mobile_downsampling():
         )
 
 
+def test_static_summary_names_the_omitted_initial_undo_entry_positively(monkeypatch):
+    labels: list[str] = []
+    original_centered_text = wang_algorithm_animation.centered_text
+
+    def record_centered_text(draw, box, text, **kwargs):
+        labels.append(text)
+        return original_centered_text(draw, box, text, **kwargs)
+
+    monkeypatch.setattr(wang_algorithm_animation, "centered_text", record_centered_text)
+
+    summary = getattr(wang_algorithm_animation, "_optimized_summary")()
+
+    assert "initial undo entry" in (label.replace("\n", " ") for label in labels)
+    assert "no undo entry" not in labels
+    mobile = summary.resize((390, round(summary.height * 390 / summary.width)), Image.Resampling.LANCZOS)
+    label_box = mobile.crop(tuple(round(value * 390 / summary.width) for value in (1604, 248, 1774, 328)))
+    ink_rows = [
+        y
+        for y in range(label_box.height)
+        if any(max(label_box.getpixel((x, y))) < 140 for x in range(label_box.width))
+    ]
+    assert max(ink_rows) - min(ink_rows) + 1 >= 12
+
+
+def test_static_summary_support_union_stays_out_of_incoming_arrow():
+    summary = getattr(wang_algorithm_animation, "_optimized_summary")()
+
+    for width in (1920, 390, 720):
+        scale = width / summary.width
+        preview = summary.resize(
+            (width, round(summary.height * scale)),
+            Image.Resampling.LANCZOS,
+        )
+        arrow_only_corridor = preview.crop(
+            tuple(round(value * scale) for value in (1374, 515, 1519, 595))
+        )
+        assert not any(
+            max(arrow_only_corridor.getpixel((x, y))) < 140
+            for y in range(arrow_only_corridor.height)
+            for x in range(arrow_only_corridor.width)
+        )
+
+
+def test_optimized_ownership_outcome_clears_panel_bottom_border():
+    ownership = getattr(wang_algorithm_animation, "_optimized_frame")(2)
+
+    for width in (1920, 390, 720):
+        scale = width / ownership.width
+        preview = ownership.resize(
+            (width, round(ownership.height * scale)),
+            Image.Resampling.LANCZOS,
+        )
+        bottom_safety_band = preview.crop(
+            tuple(round(value * scale) for value in (1001, 890, 1872, 910))
+        )
+        assert not any(
+            max(bottom_safety_band.getpixel((x, y))) < 140
+            for y in range(bottom_safety_band.height)
+            for x in range(bottom_safety_band.width)
+        )
+
+
 def test_queue_panel_suppresses_only_while_a_cell_is_pending():
     assert getattr(wang_algorithm_animation, "_queue_dedup_steps")() == (
         ("enqueue c7", "append", (7,)),

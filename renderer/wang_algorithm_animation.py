@@ -779,9 +779,9 @@ def _draw_sat_ownership(draw: ImageDraw.ImageDraw) -> None:
     _draw_arrow(draw, (1400, 510), (1400, 630))
     draw.rounded_rectangle((1155, 650, 1645, 780), radius=12, fill=(246, 216, 232), outline=(203, 107, 151), width=3)
     centered_text(draw, (1155, 650, 1645, 780), "transfer state.domains", font=explain_font(38))
-    draw.text((1080, 815), "state.domains = NULL before destroy", font=explain_font(38), fill=EXPLAIN_TEXT_RGB)
+    draw.text((1080, 795), "state.domains = NULL before destroy", font=explain_font(38), fill=EXPLAIN_TEXT_RGB)
     draw.text((275, 815), "caller owns result", font=explain_font(38), fill=EXPLAIN_TEXT_RGB)
-    draw.text((1210, 870), "caller owns result", font=explain_font(38), fill=EXPLAIN_TEXT_RGB)
+    draw.text((1210, 850), "caller owns result", font=explain_font(38), fill=EXPLAIN_TEXT_RGB)
 
 
 def _draw_byte_support(draw: ImageDraw.ImageDraw) -> None:
@@ -938,8 +938,9 @@ def _draw_summary_card(
         draw.rounded_rectangle((left + 380, center_y - 40, left + 555, center_y + 40), radius=8, fill=(255, 232, 188), outline=(217, 119, 6), width=3)
         centered_text(draw, (left + 380, center_y - 40, left + 555, center_y + 40), "trace kept", font=explain_font(36))
         draw.rounded_rectangle((left + 610, center_y - 40, left + 835, center_y + 40), radius=8, fill=(255, 255, 255), outline=(214, 91, 91), width=3)
-        centered_text(draw, (left + 600, center_y - 40, left + 845, center_y + 40), "no undo entry", font=explain_font(36), fill=(214, 91, 91))
-        draw.line((left + 625, center_y + 27, left + 820, center_y - 27), fill=(214, 91, 91), width=4)
+        centered_text(draw, (left + 620, center_y - 40, left + 790, center_y + 40), "initial\nundo entry", font=explain_font(36), fill=EXPLAIN_TEXT_RGB)
+        draw.line((left + 800, center_y - 20, left + 825, center_y + 20), fill=(214, 91, 91), width=5)
+        draw.line((left + 825, center_y - 20, left + 800, center_y + 20), fill=(214, 91, 91), width=5)
     elif index == 2:
         draw.rounded_rectangle((left + 30, center_y - 40, left + 245, center_y + 40), radius=8, fill=(199, 231, 212), outline=(52, 145, 94), width=3)
         centered_text(draw, (left + 30, center_y - 40, left + 245, center_y + 40), "verify SAT", font=explain_font(40))
@@ -954,7 +955,7 @@ def _draw_summary_card(
             centered_text(draw, (x, center_y - 40, x + 90, center_y + 40), label, font=explain_font(42))
         _draw_arrow(draw, (left + 390, center_y), (left + 520, center_y))
         draw.rounded_rectangle((left + 535, center_y - 40, left + 835, center_y + 40), radius=8, fill=(199, 231, 212), outline=(52, 145, 94), width=3)
-        centered_text(draw, (left + 535, center_y - 40, left + 835, center_y + 40), "OR 3 support masks", font=explain_font(38))
+        centered_text(draw, (left + 535, center_y - 40, left + 835, center_y + 40), "OR 3 masks", font=explain_font(42))
     elif index == 4:
         labels = (("+ c7", "1"), ("dup x", "1"), ("pop", "0"), ("later +", "1"))
         for step, (event, pending) in enumerate(labels):
