@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import hashlib
 import json
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 from PIL import Image, ImageDraw
@@ -90,6 +91,23 @@ class OverviewOutputs:
     animation: AnimationOutputs
     home_preview: Path | None
     worked_example: Path | None
+
+
+class _TilingEvidence(NamedTuple):
+    active_index: int
+    inactive_index: int
+    tile_id: int
+    right_id: int
+    tile_edges: tuple[int, int, int, int]
+    right_edges: tuple[int, int, int, int]
+    required_n: int
+    maximum_tile_id: int
+
+
+class _ExtractionEvidence(NamedTuple):
+    variable: int
+    tile_ids: tuple[int, int, int]
+    value: bool
 
 
 def _save_image(image: Image.Image, path: Path) -> None:
@@ -203,9 +221,9 @@ def _bind_solution(
     return presentation
 
 
-def _tiling_evidence_lines(
+def _tiling_evidence(
     bundle: ExplainabilityBundle, presentation
-) -> tuple[str, str, str, str]:
+) -> _TilingEvidence:
     region = bundle.region
     active_index = next(
         index
@@ -231,19 +249,23 @@ def _tiling_evidence_lines(
         raise WangSquareRenderError(
             "verification evidence does not match the recorded checker result"
         )
-    return (
-        f"active[{active_index}] = tile #{tile_id}; valid IDs are 0..{len(presentation.tile_edges) - 1}",
-        f"inactive[{inactive_index}] = TILE_NONE (JSON null; native 255)",
-        f"internal: tile #{tile_id} E={tile[1]} = tile #{right_id} W={right[3]}",
-        f"boundary: tile #{tile_id} N={tile[0]} = required N={required}",
+    return _TilingEvidence(
+        active_index=active_index,
+        inactive_index=inactive_index,
+        tile_id=tile_id,
+        right_id=right_id,
+        tile_edges=tile,
+        right_edges=right,
+        required_n=required,
+        maximum_tile_id=len(presentation.tile_edges) - 1,
     )
 
 
-def _extraction_lines(
+def _extraction_evidence(
     bundle: ExplainabilityBundle,
     presentation,
     extracted_assignment: tuple[bool, ...],
-) -> tuple[str, ...]:
+) -> tuple[_ExtractionEvidence, ...]:
     reduction = bundle.reduction
     if reduction is None or len(extracted_assignment) != bundle.formula.variable_count:
         raise WangSquareRenderError(
@@ -259,7 +281,7 @@ def _extraction_lines(
         raise WangSquareRenderError(
             "verification extraction requires one recorded variable gadget per value"
         )
-    lines: list[str] = []
+    evidence: list[_ExtractionEvidence] = []
     for variable, (gadget, value) in enumerate(
         zip(gadgets, extracted_assignment, strict=True)
     ):
@@ -279,13 +301,14 @@ def _extraction_lines(
                     "verification extraction selected an inactive source cell"
                 )
             tile_ids.append(tile_id)
-        return_value = "true" if value else "false"
-        lines.append(
-            f"x{variable} | gadget cells y={rows[0]}..{rows[-1]}: "
-            + ", ".join(f"#{tile_id}" for tile_id in tile_ids)
-            + f" | recorded {return_value}"
+        evidence.append(
+            _ExtractionEvidence(
+                variable=variable,
+                tile_ids=(tile_ids[0], tile_ids[1], tile_ids[2]),
+                value=value,
+            )
         )
-    return tuple(lines)
+    return tuple(evidence)
 
 
 def _assignment_sha256(values: tuple[bool, ...]) -> str:
@@ -514,49 +537,39 @@ def _verification_frame(
     if bundle is None or presentation is None or extracted_assignment is None:
         raise WangSquareRenderError("SAT verification frame lacks validated context")
     palette = _build_palette_from_edges(presentation.tile_edges)
-    evidence = _tiling_evidence_lines(bundle, presentation)
+    tiling = _tiling_evidence(bundle, presentation)
     draw.rounded_rectangle((30, 390, 930, 982), radius=18, fill=EXPLAIN_ACTIVE_RGB, outline=(181, 188, 199), width=2)
     draw.text((62, 416), "Tiling checker coverage", font=explain_font(48), fill=EXPLAIN_TEXT_RGB)
 
-    active_index = next(index for index, active in enumerate(bundle.region.active) if active and index % bundle.region.width + 1 < bundle.region.width and bundle.region.active[index + 1] and bundle.region.boundary[index] is not None and bundle.region.boundary[index][0] is not None)
-    inactive_index = next(
-        index for index, active in enumerate(bundle.region.active) if not active
-    )
-    tile_id = presentation.cells[active_index]
-    right_id = presentation.cells[active_index + 1]
-    assert tile_id is not None and right_id is not None
+    tile_id = tiling.tile_id
+    right_id = tiling.right_id
     tile_size = 180
-    image.paste(square_explain_tile(presentation.tile_edges[tile_id], palette, tile_size, tile_id=tile_id, edge_labels=True), (92, 500))
-    image.paste(square_explain_tile(presentation.tile_edges[right_id], palette, tile_size, tile_id=right_id, edge_labels=True), (318, 500))
-    draw.text((92, 696), f"internal: #{tile_id} E{presentation.tile_edges[tile_id][1]} = #{right_id} W{presentation.tile_edges[right_id][3]}", font=explain_font(42), fill=EXPLAIN_TEXT_RGB)
-    required = bundle.region.boundary[active_index][0]
-    draw.text((92, 756), f"boundary: #{tile_id} N{presentation.tile_edges[tile_id][0]} = required N{required}", font=explain_font(42), fill=EXPLAIN_TEXT_RGB)
+    image.paste(square_explain_tile(tiling.tile_edges, palette, tile_size, tile_id=tile_id, edge_labels=True), (92, 500))
+    image.paste(square_explain_tile(tiling.right_edges, palette, tile_size, tile_id=right_id, edge_labels=True), (318, 500))
+    draw.text((92, 696), f"internal: #{tile_id} E{tiling.tile_edges[1]} = #{right_id} W{tiling.right_edges[3]}", font=explain_font(42), fill=EXPLAIN_TEXT_RGB)
+    draw.text((92, 756), f"boundary: #{tile_id} N{tiling.tile_edges[0]} = required N{tiling.required_n}", font=explain_font(42), fill=EXPLAIN_TEXT_RGB)
     image.paste(square_inactive_tile(118), (100, 822))
     draw.text((248, 838), "TILE_NONE", font=explain_font(46), fill=EXPLAIN_TEXT_RGB)
-    draw.text((248, 894), f"inactive[{inactive_index}] = null = native 255", font=explain_font(40), fill=EXPLAIN_TEXT_RGB)
-    draw.text((560, 538), f"active[{active_index}] = tile #{tile_id}", font=explain_font(42), fill=EXPLAIN_TEXT_RGB)
-    draw.text((560, 606), f"valid IDs: 0..{len(presentation.tile_edges) - 1}", font=explain_font(42), fill=EXPLAIN_TEXT_RGB)
+    draw.text((248, 894), f"inactive[{tiling.inactive_index}] = null = native 255", font=explain_font(40), fill=EXPLAIN_TEXT_RGB)
+    draw.text((560, 538), f"active[{tiling.active_index}] = tile #{tile_id}", font=explain_font(42), fill=EXPLAIN_TEXT_RGB)
+    draw.text((560, 606), f"valid IDs: 0..{tiling.maximum_tile_id}", font=explain_font(42), fill=EXPLAIN_TEXT_RGB)
 
     draw.rounded_rectangle((960, 390, 1890, 982), radius=18, fill=EXPLAIN_ACTIVE_RGB, outline=(181, 188, 199), width=2)
     draw.text((992, 416), "Source cells -> recorded value", font=explain_font(48), fill=EXPLAIN_TEXT_RGB)
-    extraction = _extraction_lines(bundle, presentation, extracted_assignment)
-    gadgets = tuple(sorted((gadget for gadget in bundle.reduction.gadgets if gadget.kind == "variable"), key=lambda gadget: gadget.ordinal))
-    selected_indices = _bounded_variable_indices(len(gadgets))
+    extraction = _extraction_evidence(bundle, presentation, extracted_assignment)
+    selected_indices = _bounded_variable_indices(len(extraction))
     selected_extraction = tuple(
-        (variable, (gadgets[variable], extraction[variable]))
+        extraction[variable]
         for variable in selected_indices
     )
-    if len(gadgets) > len(selected_indices):
-        draw.text((1530, 432), f"{len(gadgets) - 3} omitted", font=explain_font(32), fill=EXPLAIN_MUTED_RGB)
-    for row, (variable, (gadget, _)) in enumerate(selected_extraction):
+    if len(extraction) > len(selected_indices):
+        draw.text((1530, 432), f"{len(extraction) - 3} omitted", font=explain_font(32), fill=EXPLAIN_MUTED_RGB)
+    for row, item in enumerate(selected_extraction):
         y = 500 + row * 145
-        draw.text((994, y + 34), f"x{variable}", font=explain_font(48), fill=EXPLAIN_TEXT_RGB)
-        for offset in range(3):
-            cell_index = (gadget.y_begin + offset - presentation.min_y) * presentation.width + (gadget.x_begin - presentation.min_x)
-            source_tile = presentation.cells[cell_index]
-            assert source_tile is not None
+        draw.text((994, y + 34), f"x{item.variable}", font=explain_font(48), fill=EXPLAIN_TEXT_RGB)
+        for offset, source_tile in enumerate(item.tile_ids):
             image.paste(square_explain_tile(presentation.tile_edges[source_tile], palette, 112, tile_id=source_tile, edge_labels=False), (1080 + offset * 124, y))
-        draw.text((1470, y + 6), f"recorded {'true' if extracted_assignment[variable] else 'false'}", font=explain_font(46), fill=(30, 112, 70))
+        draw.text((1470, y + 6), f"recorded {'true' if item.value else 'false'}", font=explain_font(46), fill=(30, 112, 70))
         draw.text((1470, y + 68), "checker passed", font=explain_font(36), fill=EXPLAIN_MUTED_RGB)
     draw.text((994, 946), "Displayed cells only; decoding happened upstream.", font=explain_font(32), fill=EXPLAIN_MUTED_RGB)
     return image

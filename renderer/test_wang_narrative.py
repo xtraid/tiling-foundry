@@ -157,20 +157,29 @@ def test_verification_composition_is_deterministic_for_sat_and_unsat(tmp_path):
 def test_verification_shows_checker_rules_and_copied_native_extraction(tmp_path):
     bundle = load_explainability_bundle(TRACE_MANIFEST)
     presentation = load_wang_presentation(TRACE_SOLUTION)
-    assert getattr(wang_narrative, "_tiling_evidence_lines")(
+    tiling = getattr(wang_narrative, "_tiling_evidence")(
         bundle, presentation
-    ) == (
-        "active[0] = tile #0; valid IDs are 0..22",
-        "inactive[40] = TILE_NONE (JSON null; native 255)",
-        "internal: tile #0 E=2 = tile #7 W=2",
-        "boundary: tile #0 N=0 = required N=0",
     )
-    assert getattr(wang_narrative, "_extraction_lines")(
+    assert (
+        tiling.active_index,
+        tiling.inactive_index,
+        tiling.tile_id,
+        tiling.right_id,
+        tiling.tile_edges,
+        tiling.right_edges,
+        tiling.required_n,
+        tiling.maximum_tile_id,
+    ) == (0, 40, 0, 7, (0, 2, 7, 1), (0, 2, 0, 2), 0, 22)
+    extraction = getattr(wang_narrative, "_extraction_evidence")(
         bundle, presentation, ASSIGNMENT
+    )
+    assert tuple(
+        (item.variable, item.tile_ids, item.value)
+        for item in extraction
     ) == (
-        "x0 | gadget cells y=0..2: #0, #1, #2 | recorded false",
-        "x1 | gadget cells y=4..6: #3, #3, #3 | recorded true",
-        "x2 | gadget cells y=8..10: #0, #1, #2 | recorded false",
+        (0, (0, 1, 2), False),
+        (1, (3, 3, 3), True),
+        (2, (0, 1, 2), False),
     )
 
     receipts = tmp_path / "sat.json"

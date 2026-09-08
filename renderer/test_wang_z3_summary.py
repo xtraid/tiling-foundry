@@ -70,12 +70,18 @@ def test_wang_encoding_uses_real_cell_term_tuple_boundary_and_model(tmp_path):
     summary = load_z3_encoding_summary(source)
     bundle = load_explainability_bundle(MANIFEST)
 
-    assert getattr(wang_z3_summary, "_wang_example_lines")(summary, bundle) == (
-        "active cell (0,0) -> returned tile #0",
-        "canonical tile #0 = (N=0, E=2, S=7, W=1)",
-        "shared term edge(0,0,E) = edge(1,0,W) = 2",
-        "exposed edge(0,0,N) = required boundary N=0",
+    evidence = getattr(wang_z3_summary, "_wang_example_evidence")(
+        summary, bundle
     )
+    assert (
+        evidence.x,
+        evidence.y,
+        evidence.tile_id,
+        evidence.right_id,
+        evidence.tile_edges,
+        evidence.right_edges,
+        evidence.required_n,
+    ) == (0, 0, 0, 7, (0, 2, 7, 1), (0, 2, 0, 2), 0)
 
     frame = getattr(wang_z3_summary, "_compose_wang_frame")(summary, bundle, 4)
     changed_tile = replace(
@@ -154,6 +160,32 @@ def test_oracle_fallback_core_labels_remain_readable_at_390_px():
     assert _mobile_ink_height(boolean_frame, (340, 884, 1540, 940)) >= 8
     assert _mobile_ink_height(wang_frame, (70, 770, 850, 850)) >= 8
     assert _mobile_ink_height(wang_frame, (990, 735, 1770, 860)) >= 9
+
+
+def test_wang_unsat_frame_visibly_marks_cell_and_model_as_not_applicable(tmp_path):
+    frames = {}
+    for status in ("unsat", "unknown"):
+        document = json.loads(
+            (FIXTURES / "wang-z3.json").read_text(encoding="utf-8")
+        )
+        document["status"] = status
+        document["model"]["cells"] = None
+        document["statistics"][-1]["value"] = 0
+        source = tmp_path / f"wang-{status}.json"
+        source.write_text(json.dumps(document) + "\n", encoding="utf-8")
+        output = render_wang_z3_assets(
+            source, MANIFEST, tmp_path / status
+        )
+        with Image.open(output.fallback) as fallback:
+            frames[status] = fallback.copy()
+
+    # These crops were blank in the SAT-only composition. They cover the body
+    # of the two panels where the explicit non-SAT/N/A explanation appears.
+    assert _mobile_ink_height(frames["unsat"], (110, 390, 870, 670)) >= 8
+    assert _mobile_ink_height(frames["unsat"], (1020, 390, 1780, 670)) >= 8
+    # UNKNOWN remains a distinct supported result rather than being mislabeled
+    # as UNSAT.
+    assert frames["unsat"].tobytes() != frames["unknown"].tobytes()
 
 
 def test_boolean_fallback_bounds_a_large_source_formula():

@@ -171,6 +171,30 @@ class MultiEngineDossierTests(unittest.TestCase):
             narrative["animations"]["optimized_mechanisms"]["semantic_label"],
             "didactic",
         )
+        expected_copy = {
+            "boolean_z3": (
+                "Real source clauses become occurrence-preserving exactly-one sums "
+                "before the copied assignment is shown.",
+                "Four frames place each source-order clause beside its "
+                "occurrence-preserving sum and then show the copied Boolean assignment.",
+            ),
+            "wang_z3": (
+                "A real cell shows its shared term, canonical tile tuple, boundary "
+                "equality, and returned model projection.",
+                "Five frames show adjacent canonical Wang tiles sharing an internal "
+                "edge, one exposed boundary equality, and the copied model projection.",
+            ),
+            "verification": (
+                "Six named checker receipts with concrete tiling rules and the recorded "
+                "native extraction beside its source cells.",
+                "Six frames show all checker receipts, valid tile IDs, TILE_NONE, "
+                "internal and boundary equality, and copied extracted Boolean values "
+                "beside variable-gadget cells.",
+            ),
+        }
+        for name, (caption, alt_text) in expected_copy.items():
+            self.assertEqual(narrative["animations"][name]["caption"], caption)
+            self.assertEqual(narrative["animations"][name]["alt_text"], alt_text)
         self.assertFalse((self.sat_directory / "report.tex").exists())
         self.assertFalse((self.sat_directory / "report.pdf").exists())
 
@@ -241,6 +265,36 @@ class MultiEngineDossierTests(unittest.TestCase):
         self.assertIsNone(narrative["animations"]["witness_presentation"])
         self.assertIsNotNone(narrative["statics"]["presentation_status"])
         self.assertIsNone(narrative["statics"]["home_preview"])
+        self.assertEqual(
+            narrative["animations"]["boolean_z3"]["caption"],
+            "Source clauses retain occurrence-preserving exactly-one sums; "
+            "the assignment is not applicable for this UNSAT result.",
+        )
+        self.assertEqual(
+            narrative["animations"]["boolean_z3"]["alt_text"],
+            "Four frames show source-order clauses and sums, then mark the "
+            "Boolean assignment not applicable because no SAT model was returned.",
+        )
+        self.assertEqual(
+            narrative["animations"]["wang_z3"]["caption"],
+            "The encoding is constructed, but cell, tile, boundary, and returned-model "
+            "examples are not applicable for this UNSAT result.",
+        )
+        self.assertEqual(
+            narrative["animations"]["wang_z3"]["alt_text"],
+            "Five frames end with an UNSAT panel that makes no cell, tile tuple, "
+            "boundary, model, witness, or certificate claim.",
+        )
+        self.assertEqual(
+            narrative["animations"]["verification"]["caption"],
+            "Six named checker receipts mark every witness check not applicable "
+            "because no SAT witness was returned.",
+        )
+        self.assertEqual(
+            narrative["animations"]["verification"]["alt_text"],
+            "Six frames mark every witness check not applicable and state that "
+            "no SAT witness or certificate is fabricated.",
+        )
         for solver, animation_name in (
             ("reference", "reference_trace"),
             ("optimized", "optimized_trace"),

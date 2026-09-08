@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
+from typing import NamedTuple
 
 from PIL import Image, ImageDraw
 
@@ -74,6 +75,16 @@ class Z3EncodingSummary:
     assignment: tuple[bool, ...] | None
     cells: tuple[int | None, ...] | None
     statistics: tuple[tuple[str, int], ...]
+
+
+class _WangExampleEvidence(NamedTuple):
+    x: int
+    y: int
+    tile_id: int
+    right_id: int
+    tile_edges: tuple[int, int, int, int]
+    right_edges: tuple[int, int, int, int]
+    required_n: int
 
 
 def _fail(path: str, message: str) -> None:
@@ -327,9 +338,9 @@ def _bind_oracle_inputs(
         )
 
 
-def _wang_example_lines(
+def _wang_example_evidence(
     summary: Z3EncodingSummary, bundle: ExplainabilityBundle
-) -> tuple[str, str, str, str]:
+) -> _WangExampleEvidence:
     if summary.cells is None:
         raise WangSquareRenderError("Wang SAT example requires a returned model")
     region = bundle.region
@@ -368,11 +379,14 @@ def _wang_example_lines(
         raise WangSquareRenderError("Wang example does not satisfy its exposed boundary")
     x = region.min_x + index % region.width
     y = region.min_y + index // region.width
-    return (
-        f"active cell ({x},{y}) -> returned tile #{tile_id}",
-        f"canonical tile #{tile_id} = (N={tile[0]}, E={tile[1]}, S={tile[2]}, W={tile[3]})",
-        f"shared term edge({x},{y},E) = edge({x + 1},{y},W) = {tile[1]}",
-        f"exposed edge({x},{y},N) = required boundary N={required}",
+    return _WangExampleEvidence(
+        x=x,
+        y=y,
+        tile_id=tile_id,
+        right_id=right_id,
+        tile_edges=tile,
+        right_edges=right_tile,
+        required_n=required,
     )
 
 
@@ -409,33 +423,72 @@ def _compose_wang_frame(
             font=explain_font(28),
             fill=EXPLAIN_TEXT_RGB if active else EXPLAIN_MUTED_RGB,
         )
-    facts = _wang_example_lines(summary, bundle) if summary.status == "sat" else (
-        "No returned model for this result",
-        f"canonical tile tuples: {summary.unique_tile_tuple_count}",
-        f"shared internal terms: {summary.shared_internal_edge_count}",
-        "boundary equalities remain project-owned assertions",
-    )
+    if summary.status != "sat":
+        draw.rounded_rectangle(
+            (36, 216, 1844, 968),
+            radius=18,
+            fill=(239, 242, 246),
+            outline=(180, 187, 198),
+            width=2,
+        )
+        draw.text(
+            (104, 294),
+            f"Wang Z3 result: {summary.status.upper()}",
+            font=explain_font(64),
+            fill=EXPLAIN_TEXT_RGB,
+        )
+        draw.text(
+            (104, 420),
+            "Cell / tile example: not applicable",
+            font=explain_font(52),
+            fill=EXPLAIN_TEXT_RGB,
+        )
+        draw.text(
+            (1010, 420),
+            "Returned model: not applicable",
+            font=explain_font(52),
+            fill=EXPLAIN_TEXT_RGB,
+        )
+        draw.text(
+            (104, 548),
+            "No satisfying model was returned."
+            if summary.status == "unsat"
+            else "No model was returned; no result is inferred.",
+            font=explain_font(44),
+            fill=EXPLAIN_MUTED_RGB,
+        )
+        draw.text(
+            (104, 650),
+            "No cell, tile tuple, boundary, witness, or certificate is claimed.",
+            font=explain_font(44),
+            fill=EXPLAIN_MUTED_RGB,
+        )
+        draw.text(
+            (36, 996),
+            "Project construction order only; Z3 internal search decisions are not exposed.",
+            font=explain_font(32),
+            fill=EXPLAIN_MUTED_RGB,
+        )
+        return image
+
+    evidence = _wang_example_evidence(summary, bundle)
     draw.rounded_rectangle((36, 216, 930, 968), radius=18, fill=EXPLAIN_ACTIVE_RGB, outline=(180, 187, 198), width=2)
     draw.text((72, 244), "One real cell relation", font=explain_font(48), fill=EXPLAIN_TEXT_RGB)
-    if summary.status == "sat" and summary.cells is not None:
-        region = bundle.region
-        selected = next(i for i, active in enumerate(region.active) if active and i % region.width + 1 < region.width and region.active[i + 1] and region.boundary[i] is not None and region.boundary[i][0] is not None)
-        tile_id = summary.cells[selected]
-        right_id = summary.cells[selected + 1]
-        assert tile_id is not None and right_id is not None
+    if summary.cells is not None:
+        tile_id = evidence.tile_id
+        right_id = evidence.right_id
         palette = _build_palette_from_edges(bundle.tileset.tile_edges)
-        left_edges = bundle.tileset.tile_edges[tile_id]
-        right_edges = bundle.tileset.tile_edges[right_id]
+        left_edges = evidence.tile_edges
+        right_edges = evidence.right_edges
         image.paste(square_explain_tile(left_edges, palette, 280, tile_id=tile_id, edge_labels=True), (94, 382))
         image.paste(square_explain_tile(right_edges, palette, 280, tile_id=right_id, edge_labels=True), (500, 382))
         draw.line((374, 522, 500, 522), fill=(54, 127, 169), width=12)
         draw.text((382, 456), f"E = W", font=explain_font(48), fill=EXPLAIN_TEXT_RGB)
         draw.text((404, 530), f"{left_edges[1]}", font=explain_font(56), fill=(32, 103, 148))
-        draw.text((160, 314), facts[0], font=explain_font(48), fill=EXPLAIN_TEXT_RGB)
+        draw.text((160, 314), f"active cell ({evidence.x},{evidence.y}) -> returned tile #{tile_id}", font=explain_font(48), fill=EXPLAIN_TEXT_RGB)
         draw.text((78, 704), f"tile #{tile_id}: N{left_edges[0]}  E{left_edges[1]}  S{left_edges[2]}  W{left_edges[3]}", font=explain_font(48), fill=EXPLAIN_TEXT_RGB)
         draw.text((78, 782), f"shared term: E{left_edges[1]} = W{right_edges[3]}", font=explain_font(52), fill=EXPLAIN_TEXT_RGB)
-        required = region.boundary[selected][0]
-        draw.text((78, 864), f"boundary: N{left_edges[0]} = required N{required}", font=explain_font(48), fill=EXPLAIN_TEXT_RGB)
+        draw.text((78, 864), f"boundary: N{left_edges[0]} = required N{evidence.required_n}", font=explain_font(48), fill=EXPLAIN_TEXT_RGB)
 
     draw.rounded_rectangle((960, 216, 1844, 968), radius=18, fill=EXPLAIN_ACTIVE_RGB, outline=(180, 187, 198), width=2)
     draw.text((996, 244), "Returned model projection", font=explain_font(48), fill=EXPLAIN_TEXT_RGB)
