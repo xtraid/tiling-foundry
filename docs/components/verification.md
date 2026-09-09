@@ -42,7 +42,7 @@ assignment extraction bridge before their assignments are checked.
 `verification` presents the six receipts already captured from the named
 checkers. It does not rerun or replace them.
 
-{% include narrative-animation.html asset_id="verification" animation="/assets/narrative/verification/trace.gif" fallback="/assets/narrative/verification/frame-05.png" contact_sheet="/assets/narrative/verification/contact-sheet.png" alt="Six frames report Boolean, native, and Wang Z3 witness checks without rerunning a verifier." width="960" height="500" label="observed" caption="The six named independent checker records from the captured run." source="wang-run-dossier-v2#verification" %}
+{% include narrative-animation.html asset_id="verification" animation="/assets/narrative/verification/trace.gif" fallback="/assets/narrative/verification/frame-05.png" contact_sheet="/assets/narrative/verification/contact-sheet.png" alt="Six frames show all checker receipts, valid tile IDs, TILE_NONE, internal and boundary equality, and copied extracted Boolean values beside variable-gadget cells." width="960" height="520" label="observed" caption="Six named checker receipts with concrete tiling rules and the recorded native extraction beside its source cells." source="wang-run-dossier-v2#verification" %}
 
 ## Position in the pipeline
 

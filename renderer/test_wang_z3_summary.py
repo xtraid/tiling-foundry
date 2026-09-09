@@ -225,6 +225,62 @@ def test_boolean_fallback_bounds_a_large_source_formula():
     ).tobytes()
 
 
+def test_boolean_fallback_separates_omission_note_from_heading_and_rows(
+    monkeypatch,
+):
+    bundle = load_explainability_bundle(MANIFEST)
+    clauses = tuple((variable, variable, variable) for variable in range(44))
+    large_bundle = replace(
+        bundle,
+        formula=replace(bundle.formula, variable_count=44, clauses=clauses),
+    )
+    summary = replace(
+        load_z3_encoding_summary(FIXTURES / "boolean-z3.json"),
+        variable_count=44,
+        assertion_count=44,
+        assignment=(False,) * 44,
+    )
+    text_boxes: dict[str, tuple[int, int, int, int]] = {}
+    row_tops: list[int] = []
+    original_draw = wang_z3_summary.ImageDraw.Draw
+
+    class RecordingDraw:
+        def __init__(self, image):
+            self._draw = original_draw(image)
+
+        def text(self, xy, value, **kwargs):
+            text_boxes[str(value)] = self._draw.textbbox(
+                xy,
+                value,
+                font=kwargs.get("font"),
+                anchor=kwargs.get("anchor"),
+                stroke_width=kwargs.get("stroke_width", 0),
+            )
+            return self._draw.text(xy, value, **kwargs)
+
+        def rounded_rectangle(self, xy, **kwargs):
+            if xy[0] == 72 and xy[2] == 800:
+                row_tops.append(xy[1])
+            return self._draw.rounded_rectangle(xy, **kwargs)
+
+        def __getattr__(self, name):
+            return getattr(self._draw, name)
+
+    monkeypatch.setattr(
+        wang_z3_summary.ImageDraw, "Draw", lambda image: RecordingDraw(image)
+    )
+    getattr(wang_z3_summary, "_compose_boolean_frame")(
+        summary, large_bundle, 3
+    )
+
+    heading = text_boxes["Actual sum asserted equal to one"]
+    omission = text_boxes[
+        "41 source clauses omitted between c1 and c43"
+    ]
+    assert heading[3] + 8 <= omission[1]
+    assert omission[3] + 8 <= min(row_tops)
+
+
 def test_oracle_composition_rejects_cross_source_substitution(tmp_path):
     source = FIXTURES / "boolean-z3.json"
     copied = tmp_path / "bundle"

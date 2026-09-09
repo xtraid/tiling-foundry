@@ -28,7 +28,7 @@
       "caption": "One validated v2 capture in fixed component order.",
       "alt_text": "The captured formula moves through Boolean Z3, Yang-Zhang reduction, both native solvers, Wang Z3, verification, and presentation.",
       "source_contract": "wang-run-dossier-v2#named-components",
-      "source_sha256": "197f9a2d1b55722b1680c3b04443c1ea183ad37340cfeacce4aadb5d867d8b18",
+      "source_sha256": "2a2a1c54008b554e064ed8b692255303e8085848a9b9b6e28bf0c89cad3bf7e5",
       "producer": "dossier.narrative_assets",
       "validator": "formats.run_dossier_v2_bundle.load_run_dossier_v2",
       "compositor": "renderer.wang_narrative.render_overview_assets",
@@ -39,17 +39,17 @@
       },
       "animation": {
         "path": "pipeline-overview/trace.gif",
-        "sha256": "a6bfed665e4f2861b4755ddbd86d6a388c33c83355cfe54e92c1ad6df71e6b08",
+        "sha256": "00c0f4681796b570f84e06e3bd95b8c1a1970e991534c744cf06ab56f9d9dad4",
         "media_type": "image/gif"
       },
       "fallback": {
         "path": "pipeline-overview/frame-07.png",
-        "sha256": "a7199a7372405572d5b1aca0c36ca8a4258bdd610d9fb3ecf88ba7acd07c05d9",
+        "sha256": "64dad3808af1eea35e2c9cd0c215ef29f233e85302ede9ff7d84a76c12e98b89",
         "media_type": "image/png"
       },
       "contact_sheet": {
         "path": "pipeline-overview/contact-sheet.png",
-        "sha256": "f57d90bb9f66511d4217a5ac9599e0f2d8b414f69ae4b9dbbf2c680b30083031",
+        "sha256": "30a3386b19ab61db925c9112bd4b532c37f3f295abbe2fbd0448fdf5cf75491f",
         "media_type": "image/png"
       },
       "frames": [
@@ -60,37 +60,37 @@
         },
         {
           "path": "pipeline-overview/frame-01.png",
-          "sha256": "5ce0045655044abffdc093f43fc0bcefc25245baa74a36d6a845d5bf18e78151",
+          "sha256": "fe7eaa84ded05e5533ea25b4eaadafd31091f5681328fecb6d30e8ae2858483e",
           "media_type": "image/png"
         },
         {
           "path": "pipeline-overview/frame-02.png",
-          "sha256": "9ba1499f598142daf6e102c8d98a59b106116fbd9418e8252aeb67d8a2e52592",
+          "sha256": "029e39336d3d260a79678af335ce54057ef17c5a5b2f24046b04ef9d551c3a4a",
           "media_type": "image/png"
         },
         {
           "path": "pipeline-overview/frame-03.png",
-          "sha256": "290d4663c000298f68583ccf7952109fd9784d8ea91771cd41edb1090eb58885",
+          "sha256": "25385a460ccde9b56ac811a63797d589aa65a4e4f58278e47aebbaaa58086d56",
           "media_type": "image/png"
         },
         {
           "path": "pipeline-overview/frame-04.png",
-          "sha256": "5981d818629ea64b4742c76da2caf20bff4c59b03ea91986c49058f42cdd0a5e",
+          "sha256": "01d9e048e5ae2d98a1cc71abb6b2881c94fbf5e07e035617d28756ec2c114419",
           "media_type": "image/png"
         },
         {
           "path": "pipeline-overview/frame-05.png",
-          "sha256": "a20b6e761b9e8dc09db2a50cf37ce3579717f90c61151cf378ee2ab4fc5ae857",
+          "sha256": "32cdce895826db4fa70e9c61c7f0fcf46dbfb26ae1551893cbe108e3c030a927",
           "media_type": "image/png"
         },
         {
           "path": "pipeline-overview/frame-06.png",
-          "sha256": "9f5e7f2b1beb929ce0a0451e015018a5aaf54456378d752553f7ff78eb3c1cfe",
+          "sha256": "4305a3ad57f955e9fbecdc26e26ae84f16629c1e562b9fcbe309d4f2057bc52a",
           "media_type": "image/png"
         },
         {
           "path": "pipeline-overview/frame-07.png",
-          "sha256": "a7199a7372405572d5b1aca0c36ca8a4258bdd610d9fb3ecf88ba7acd07c05d9",
+          "sha256": "64dad3808af1eea35e2c9cd0c215ef29f233e85302ede9ff7d84a76c12e98b89",
           "media_type": "image/png"
         }
       ]
@@ -98,12 +98,12 @@
     "boolean_z3": {
       "owner": "/components/boolean-z3/",
       "semantic_label": "encoding-order",
-      "caption": "Project-owned Boolean constraint construction and returned assignment.",
-      "alt_text": "Four frames add Boolean variables and source-order exactly-one clauses before showing the copied result.",
-      "source_contract": "z3-encoding-summary-v1",
-      "source_sha256": "c0213b57faade9f61c7b0f31813f0b91322a7484d383d7971e3f554dbc4ae214",
+      "caption": "Real source clauses become occurrence-preserving exactly-one sums before the copied assignment is shown.",
+      "alt_text": "Four frames place each source-order clause beside its occurrence-preserving sum and then show the copied Boolean assignment.",
+      "source_contract": "z3-encoding-summary-v1+cm13-formula-snapshot-v1",
+      "source_sha256": "443107cf841a421b27105e73a195923f7f090cf3a2856eb46a136bbb4bad9130",
       "producer": "formats.z3_encoding_summary.build_boolean_z3_summary",
-      "validator": "renderer.wang_z3_summary.load_z3_encoding_summary",
+      "validator": "renderer.wang_z3_summary.load_z3_encoding_summary+renderer.wang_snapshot.load_explainability_bundle",
       "compositor": "renderer.wang_z3_summary.render_boolean_z3_assets",
       "scope": {
         "complete": true,
@@ -112,38 +112,38 @@
       },
       "animation": {
         "path": "boolean-z3/trace.gif",
-        "sha256": "724aeb4c06babd8fd14e5b541198e0d6a7edbbb27f2376f6b5cd4db9c279ac71",
+        "sha256": "290ad9c63b64415e1f83ffefb97d9d8593654dc529d68853ce40a10e85888b39",
         "media_type": "image/gif"
       },
       "fallback": {
-        "path": "boolean-z3/frame-02.png",
-        "sha256": "a2991b1e2781d51192347e3fd76f3264527ae7ceafb644ed81805e2ea08f2a44",
+        "path": "boolean-z3/frame-03.png",
+        "sha256": "060ee65fcef35b18dc49192a0ae0f433fa5c30db378f49acf0f15a8bd6ce24db",
         "media_type": "image/png"
       },
       "contact_sheet": {
         "path": "boolean-z3/contact-sheet.png",
-        "sha256": "acd7b8cf0fb8769adcc2c743edc41bfa2eb87f2f38f1327b10691cb7ddfc9800",
+        "sha256": "2d330793fb4d546a01b0f29f601642f91cc4c577142be2d6fa1af0a3f2c73c36",
         "media_type": "image/png"
       },
       "frames": [
         {
           "path": "boolean-z3/frame-00.png",
-          "sha256": "ff9f45064c479dbd4e77482af090201af9786a5d4202738077201db733f47de0",
+          "sha256": "739820cf4d523e9ed6841c3725ba08feaba69c534c5781c02c325e303e6102d4",
           "media_type": "image/png"
         },
         {
           "path": "boolean-z3/frame-01.png",
-          "sha256": "c1ffee1bc549c7d9a739ad3a894f5cec5c3af77baa57f81d2a56dfc210a78125",
+          "sha256": "11b0b649664579804342c110804af54355caa04edc4400e2c2b1a58647654ec4",
           "media_type": "image/png"
         },
         {
           "path": "boolean-z3/frame-02.png",
-          "sha256": "a2991b1e2781d51192347e3fd76f3264527ae7ceafb644ed81805e2ea08f2a44",
+          "sha256": "c820feeb9158ae92853b5b0a4ed528d249e19af88e50ea740527604deb049688",
           "media_type": "image/png"
         },
         {
           "path": "boolean-z3/frame-03.png",
-          "sha256": "8f742d1e90d4eb554d9cd485860fb107afabda9282845a71c1f8505fa4e069af",
+          "sha256": "060ee65fcef35b18dc49192a0ae0f433fa5c30db378f49acf0f15a8bd6ce24db",
           "media_type": "image/png"
         }
       ]
@@ -165,48 +165,48 @@
       },
       "animation": {
         "path": "region-construction/trace.gif",
-        "sha256": "7a5e3938527a3d2ed4a1e90d0ae01cd694d5e632f0f637ca5c76b2693d7edf64",
+        "sha256": "a6b613caa9dd2e03f3f54eebca68afb9702abb0385264dbec38dbc6ea875c096",
         "media_type": "image/gif"
       },
       "fallback": {
-        "path": "region-construction/frame-04.png",
-        "sha256": "ba4c03ddb50f4cf2a3bfe492b23f1c95a4ceed62cf40764bbb55a82272a9f5ab",
+        "path": "region-construction/frame-05.png",
+        "sha256": "02f7533d2eec1db663cf6fc56edac6f2878db7d60f507e037a269030f74a9af4",
         "media_type": "image/png"
       },
       "contact_sheet": {
         "path": "region-construction/contact-sheet.png",
-        "sha256": "b00710859c6f96efc972d1a999c867465b91a5e6903d120cc776e0a0048c1a96",
+        "sha256": "5277088651813aa1d613bbfa6f2453fa11dd3563ea9e2f92cf40c9ed76569f33",
         "media_type": "image/png"
       },
       "frames": [
         {
           "path": "region-construction/frame-00.png",
-          "sha256": "8dfb4ca866b5503375fe9dad3611522d8ff8b5e5b997033f8116d8439b383a71",
+          "sha256": "d2bc3a4c1290cfa06301ea2abd894392589f5c2709ff2a9fb64fdd9b6d83c12d",
           "media_type": "image/png"
         },
         {
           "path": "region-construction/frame-01.png",
-          "sha256": "9181341338b5bc21798d1715ecce20c799def0a62f9c7115e6edc1d0cfe89cb1",
+          "sha256": "ee53f7d0a6a72240d00b7373ca3ac1a5b539be6b924ee9762585c3f1dab91d06",
           "media_type": "image/png"
         },
         {
           "path": "region-construction/frame-02.png",
-          "sha256": "d95745a1d26f63679f3ae5b416ed3371bc9ee96c7571ce2909cea57739903d96",
+          "sha256": "550d15195c87c0274e557e59d900efb48f249dcab00f1fda7977aa90fadad09a",
           "media_type": "image/png"
         },
         {
           "path": "region-construction/frame-03.png",
-          "sha256": "b355cf3531374a02ea0812aa80847d339090b6a88da1657789e17143fe250d3b",
+          "sha256": "2293e1dbdf6725d46068d25b9027a19d3364cb53882af12a102899ac5f56532c",
           "media_type": "image/png"
         },
         {
           "path": "region-construction/frame-04.png",
-          "sha256": "ba4c03ddb50f4cf2a3bfe492b23f1c95a4ceed62cf40764bbb55a82272a9f5ab",
+          "sha256": "546a8e3dcc444dc2f6352c3ee929f9595b0e7132f225f31b3019e0fb4f0c7248",
           "media_type": "image/png"
         },
         {
           "path": "region-construction/frame-05.png",
-          "sha256": "4e700c2bdefa0315b177e225b4d069058b38815c0cf57980f45303323a662829",
+          "sha256": "02f7533d2eec1db663cf6fc56edac6f2878db7d60f507e037a269030f74a9af4",
           "media_type": "image/png"
         }
       ]
@@ -228,68 +228,68 @@
       },
       "animation": {
         "path": "reference-trace/trace.gif",
-        "sha256": "bd9b88a90a41f079987ba3de6d3982f7eef2fb3823e0f5e30f69979d079b7ce3",
+        "sha256": "3b76531c890d77276b264090c3a033c8f612198026ac9fa842bf5f8d8dc220af",
         "media_type": "image/gif"
       },
       "fallback": {
         "path": "reference-trace/frame-002517.png",
-        "sha256": "a0e5619938a6ce5a370935420b66bb2dda997e898a4c0b9d8edcc648f0f40e62",
+        "sha256": "02e56bb73f7e471a68b17b9aab7cca90b7f59549e81db667472356aa62474e42",
         "media_type": "image/png"
       },
       "contact_sheet": {
         "path": "reference-trace/contact-sheet.png",
-        "sha256": "6e54fc956d2f750e49ef31e6b01312d377c1de2a845cf0fcd29907b52b02b236",
+        "sha256": "a01abf57d04e10c3cb3fb290fac6ccd454836d92772fafa8a51eadd357a7df42",
         "media_type": "image/png"
       },
       "frames": [
         {
           "path": "reference-trace/frame-000000.png",
-          "sha256": "38cc17f0f06068f2c19aafc43b53bb877e03140c7dc362ed2e9149e62405c8cc",
+          "sha256": "70af813fd336d1b0147c5e75dc23a35db9a2824d2fd280b65dd5ccc286e07db2",
           "media_type": "image/png"
         },
         {
           "path": "reference-trace/frame-000001.png",
-          "sha256": "6c1dcde135d552722b1a5983502b739c192227b601b4592869d36733347cd4fd",
+          "sha256": "582d40c0bf9549e3cc059d269c827d93d28d5faafe71945c687e19d52e234908",
           "media_type": "image/png"
         },
         {
           "path": "reference-trace/frame-001258.png",
-          "sha256": "fb8ae6449ddcf336d4116c13e01734d2426f661210a854014a8c7847391cbddd",
-          "media_type": "image/png"
-        },
-        {
-          "path": "reference-trace/frame-001887.png",
-          "sha256": "863753a075613f19948d2195f67a4c45c327e665fea23b611848f1d10d5bf3f3",
+          "sha256": "9e51b3fb61137ea4c7c8dad0ea5ab8d76a77abc8c047e69a87856d9ce1d4b33c",
           "media_type": "image/png"
         },
         {
           "path": "reference-trace/frame-002516.png",
-          "sha256": "5587f030f1655a84bf7a0170ed6e2843cd019989742630d4f7ce086f29e17cb2",
+          "sha256": "d26026ece1b2704c85f1841f5ecb17f23f6ae91d78e6f62ca7a9cdc543ddefc9",
           "media_type": "image/png"
         },
         {
           "path": "reference-trace/frame-002517.png",
-          "sha256": "a0e5619938a6ce5a370935420b66bb2dda997e898a4c0b9d8edcc648f0f40e62",
+          "sha256": "02e56bb73f7e471a68b17b9aab7cca90b7f59549e81db667472356aa62474e42",
           "media_type": "image/png"
         },
         {
           "path": "reference-trace/frame-002518.png",
-          "sha256": "63ef43ee6d99ea6250196a52d657c71dc1421fef278f275a92d6b4f0d2370e75",
+          "sha256": "06c8086922cf55b323747d137b9b77a9f723fc49555ae21399fffbca39f49090",
+          "media_type": "image/png"
+        },
+        {
+          "path": "reference-trace/frame-002519.png",
+          "sha256": "ca4a9846d80808c49f627e73bc6c92cbacd5eee889f7169043906e102d3079d6",
           "media_type": "image/png"
         },
         {
           "path": "reference-trace/frame-002893.png",
-          "sha256": "25337a3aa0bd9bc9a054e176e526c621587356588395960da03c69d98777fcd1",
+          "sha256": "75ae40691fd22486ac5ce6eeaf38008154d25a9da94b7588039984f68b46e463",
           "media_type": "image/png"
         },
         {
           "path": "reference-trace/frame-002894.png",
-          "sha256": "d83f134bae8c463108457486886979c749e231ff0624bf807eeed5126beb2414",
+          "sha256": "aa2f00e31c6a48aa0e634217cd4ebf2b0371f8aeda65e7fce96528c2749a4fe6",
           "media_type": "image/png"
         },
         {
           "path": "reference-trace/frame-002895.png",
-          "sha256": "abcdb03dd746ee8e7588a4d9c0341a2958e5a81e0ee35cde005e9add2f3ec0ea",
+          "sha256": "bea7dae9cd8ccc445d8c0c68ebc5cab90b179bdd3dd37231d6574c727bae01aa",
           "media_type": "image/png"
         }
       ]
@@ -311,68 +311,68 @@
       },
       "animation": {
         "path": "optimized-trace/trace.gif",
-        "sha256": "e65aabffac9f8e72458bdd1bbebf57cf3a6c96763f1229997ef72ded5d456620",
+        "sha256": "1cb69f87ac4116ed03e63503a8de962683144bb5f3e2c73d51935249e51b1245",
         "media_type": "image/gif"
       },
       "fallback": {
         "path": "optimized-trace/frame-002562.png",
-        "sha256": "ad118624dc3350d399c8ff84924dd49754e03c1a554dc1c862057c05c98ab79f",
+        "sha256": "f69f64ef5cfcda039a95f316cc254a8492ae6470d85d1d37744c411e198e70c8",
         "media_type": "image/png"
       },
       "contact_sheet": {
         "path": "optimized-trace/contact-sheet.png",
-        "sha256": "4fbf79fad2e8226ae14b7bb6c6c2b7b8e66890420b3aad5a712ba70e8ee78922",
+        "sha256": "5f4771ead510b9647f993202cb9454552a700a684a5d73c4869d737fc83943d4",
         "media_type": "image/png"
       },
       "frames": [
         {
           "path": "optimized-trace/frame-000000.png",
-          "sha256": "bd190ac15f769b666215f6c88071ebea8be864bf53ee794a31caa086f26e3eb6",
+          "sha256": "a0c053db834ce837c360396254ed67cb4a989f28ca79b464574e25a1f97c8573",
           "media_type": "image/png"
         },
         {
           "path": "optimized-trace/frame-000001.png",
-          "sha256": "d8a852c029d862b7f9e50a02a137033d07fc94f67e39519007c6fd7b3ae79505",
-          "media_type": "image/png"
-        },
-        {
-          "path": "optimized-trace/frame-000641.png",
-          "sha256": "4573fb517160ac2d415eddd1d332880b984be7f699696870de1081ca6c38c887",
+          "sha256": "8f7d3e8240de5573c0c357ad144514511bb984d4466ff7115a692290eabae679",
           "media_type": "image/png"
         },
         {
           "path": "optimized-trace/frame-001281.png",
-          "sha256": "49d370ff9376595252f1aae7b936c57dbeb407a4cba26de49403972181a5cb5d",
+          "sha256": "e6bf99bda8c659b878923e805805ced14858381e75173d6f9d177db6b7a6c397",
           "media_type": "image/png"
         },
         {
           "path": "optimized-trace/frame-002561.png",
-          "sha256": "832884d407c0463e32365d8741b2c834a7525d6b8d5c65a3a74f0a43d5083ca8",
+          "sha256": "54aadf70edba02f29677e41f38482d5aea2b3e563bd9c19f7a1f858a6d525dea",
           "media_type": "image/png"
         },
         {
           "path": "optimized-trace/frame-002562.png",
-          "sha256": "ad118624dc3350d399c8ff84924dd49754e03c1a554dc1c862057c05c98ab79f",
+          "sha256": "f69f64ef5cfcda039a95f316cc254a8492ae6470d85d1d37744c411e198e70c8",
           "media_type": "image/png"
         },
         {
           "path": "optimized-trace/frame-002563.png",
-          "sha256": "44298474500d368c92d9286c55f409ec82885f8c466b50641800a9b95bce9483",
+          "sha256": "cf35cf6381fecb7197452f939583869e3ddc20578560b582638e4aed17ae764f",
+          "media_type": "image/png"
+        },
+        {
+          "path": "optimized-trace/frame-002564.png",
+          "sha256": "cbdc6623aacfb77231d2036e4712fc2bb4de39e581a70112a916819bfac60f57",
           "media_type": "image/png"
         },
         {
           "path": "optimized-trace/frame-002938.png",
-          "sha256": "d28144f3f7f1949584b8c62ab7602bdf9ebbe419e338be4996a0a2c1548b51b6",
+          "sha256": "3e01b52b7c8ed41ddcd1dad5a4f3e29888a865b06ddb2cc34289aaf317c8bb18",
           "media_type": "image/png"
         },
         {
           "path": "optimized-trace/frame-002939.png",
-          "sha256": "843345eb090bf4b2530a765e9fbbcd01d38acb880c28d7f10a05e0e910fafff0",
+          "sha256": "fefcc7f6544266dc29c47798c5fff5ce204182f9acbdccf1fe0ac709ec3263b7",
           "media_type": "image/png"
         },
         {
           "path": "optimized-trace/frame-002940.png",
-          "sha256": "ce8fa205d52a9185a54f8e978e1da989774448e09ea8d28a72b775be3c8cf2ee",
+          "sha256": "35a279477066232120455d1a46dd97717463cc4ab60126d456b6441c1882b2c4",
           "media_type": "image/png"
         }
       ]
@@ -380,12 +380,12 @@
     "wang_z3": {
       "owner": "/components/wang-z3/",
       "semantic_label": "encoding-order",
-      "caption": "Project-owned Wang edge-term construction and returned model.",
-      "alt_text": "Five frames add edge terms, shared internal edges, tile relations, boundaries, and the copied result.",
-      "source_contract": "z3-encoding-summary-v1",
-      "source_sha256": "a150dc76e2193d9ae65e165b8555df4b269afcbe572c6d55026a97d0765fb62b",
+      "caption": "A real cell shows its shared term, canonical tile tuple, boundary equality, and returned model projection.",
+      "alt_text": "Five frames show adjacent canonical Wang tiles sharing an internal edge, one exposed boundary equality, and the copied model projection.",
+      "source_contract": "z3-encoding-summary-v1+wang-tileset-snapshot-v1+wang-region-snapshot-v1",
+      "source_sha256": "20ee144c6d2fdd3073268493962ab26fa77352ffd933edcb8ae5883a2da30a60",
       "producer": "formats.z3_encoding_summary.build_wang_z3_summary",
-      "validator": "renderer.wang_z3_summary.load_z3_encoding_summary",
+      "validator": "renderer.wang_z3_summary.load_z3_encoding_summary+renderer.wang_snapshot.load_explainability_bundle",
       "compositor": "renderer.wang_z3_summary.render_wang_z3_assets",
       "scope": {
         "complete": true,
@@ -394,43 +394,43 @@
       },
       "animation": {
         "path": "wang-z3/trace.gif",
-        "sha256": "f6c93f5ee0914113b188d659012b92c4bb3f094c3a1f7f93c6b16c7e09e2d06c",
+        "sha256": "c1500fcb6d10a57d2ebfd06d1ff3706ef43515c17e87f1eae17c05504c3fcc95",
         "media_type": "image/gif"
       },
       "fallback": {
-        "path": "wang-z3/frame-03.png",
-        "sha256": "48a850e4f5d335bc6562e37563d345de83ec838941aa9990ca61da5d08d672b4",
+        "path": "wang-z3/frame-04.png",
+        "sha256": "3ace3dfb03fcf59a9efcd7144a578a1829063aece843afd788d14c4a2683e8d6",
         "media_type": "image/png"
       },
       "contact_sheet": {
         "path": "wang-z3/contact-sheet.png",
-        "sha256": "a8a93a04a0df6558874086a7766d79422799d5782395843f61758b5889815606",
+        "sha256": "636331cc6eb7e95860940163bed16b4511a295acaa04c7bfeacb1472fbdd2797",
         "media_type": "image/png"
       },
       "frames": [
         {
           "path": "wang-z3/frame-00.png",
-          "sha256": "74e6ffcf5e70386304af308cf6587491ff128d93d96f1caeba810f30e7dd3868",
+          "sha256": "9278d4b8ae494d5c0209255ed97accf9a837c938f17209faca4934a31a9600c4",
           "media_type": "image/png"
         },
         {
           "path": "wang-z3/frame-01.png",
-          "sha256": "dc6d7e04cd37bf313a5be866e62b653cc45cb07ad65567294db28a8ad7f946db",
+          "sha256": "0e288b1dfaf23ab02efd279fc0f1cd099d563b54cab8661da597f1daa90c5206",
           "media_type": "image/png"
         },
         {
           "path": "wang-z3/frame-02.png",
-          "sha256": "5ea43effac89a4b4b7d235c841abc8301562a9b29bd720951394f812a2abb970",
+          "sha256": "a2764408118c1a689fb6120227ebf65c98a4b0fe2199df9b1e9cbaea5084231a",
           "media_type": "image/png"
         },
         {
           "path": "wang-z3/frame-03.png",
-          "sha256": "48a850e4f5d335bc6562e37563d345de83ec838941aa9990ca61da5d08d672b4",
+          "sha256": "4a40037a52e2a1f566210691d2631e98ec48c5a65a9590eb8d057e1b58bf524c",
           "media_type": "image/png"
         },
         {
           "path": "wang-z3/frame-04.png",
-          "sha256": "1414ec4028027935cb36c2db02afd97d2b87b61196d9c4d7dff236710adb3509",
+          "sha256": "3ace3dfb03fcf59a9efcd7144a578a1829063aece843afd788d14c4a2683e8d6",
           "media_type": "image/png"
         }
       ]
@@ -438,12 +438,12 @@
     "verification": {
       "owner": "/components/verification/",
       "semantic_label": "observed",
-      "caption": "The six named independent checker records from the captured run.",
-      "alt_text": "Six frames report Boolean, native, and Wang Z3 witness checks without rerunning a verifier.",
+      "caption": "Six named checker receipts with concrete tiling rules and the recorded native extraction beside its source cells.",
+      "alt_text": "Six frames show all checker receipts, valid tile IDs, TILE_NONE, internal and boundary equality, and copied extracted Boolean values beside variable-gadget cells.",
       "source_contract": "wang-run-dossier-v2#verification",
-      "source_sha256": "a47f7172f07dd65be697be97dab5ab608b07f4d0fb139e10ebc3a1a621da17e3",
+      "source_sha256": "0db020dc7688a9705b9167bc1c8f248cf7d96aaa14b0378a9cb1afa192280f77",
       "producer": "formats.run_dossier_v2_builder.build_run_dossier_v2",
-      "validator": "formats.run_dossier_v2.validate_run_dossier_v2+renderer.wang_narrative._load_verification",
+      "validator": "formats.run_dossier_v2.validate_run_dossier_v2+renderer.wang_snapshot.load_explainability_bundle+renderer.wang_square.load_wang_presentation+renderer.wang_narrative._load_verification",
       "compositor": "renderer.wang_narrative.render_verification_assets",
       "scope": {
         "complete": true,
@@ -452,48 +452,48 @@
       },
       "animation": {
         "path": "verification/trace.gif",
-        "sha256": "04f4ed56ed1da0ca40b60b964732647a81c42746841965f422ba4438e241e76f",
+        "sha256": "17e5315e406f3fc8e038745ffc812595a4f3de9af5fb471e6ced26771f67b097",
         "media_type": "image/gif"
       },
       "fallback": {
         "path": "verification/frame-05.png",
-        "sha256": "98edd0a7e37c2ac38e4b9ee853607a3ed003d5be3df50beb3dea1ab7101d246d",
+        "sha256": "121e3cb762a91cc2404528697a7bb2927c1a0d905687f879353cc898a638f08d",
         "media_type": "image/png"
       },
       "contact_sheet": {
         "path": "verification/contact-sheet.png",
-        "sha256": "de396acac387952b1591329d040d31150375bbcb043810f1fa9aa8b8b938335f",
+        "sha256": "1cd81f5c081dfebd4bfea97b2bb101596013ecd084f1b9d488fcb3a261ec0661",
         "media_type": "image/png"
       },
       "frames": [
         {
           "path": "verification/frame-00.png",
-          "sha256": "13fa18831f69137ee961a8f1d2b5f88a9429fa4057747dae51ed28001500cd6f",
+          "sha256": "944a39c26c2700f9f716e040330d32dd7d0ca7784f5302501dbd082189d8a31d",
           "media_type": "image/png"
         },
         {
           "path": "verification/frame-01.png",
-          "sha256": "8ca06c4f98766b88a47a7eb39c385ad2e746d146179bf280e89cb3d559f532a0",
+          "sha256": "f1dd42d52f589802e8a922fb7a48d14440625c3a1954cdac61ce4c53cc91af2b",
           "media_type": "image/png"
         },
         {
           "path": "verification/frame-02.png",
-          "sha256": "5b6f321887b36fab1989bf6b9b42373c56d6f6c24c0f59e42037d02e9dd749b2",
+          "sha256": "e59d927f8cde58643b96796df0750a4eb2311037d89c011c2dcd73a108dd225a",
           "media_type": "image/png"
         },
         {
           "path": "verification/frame-03.png",
-          "sha256": "48dd44e40082bcd220b22ab255fb228b6398fbe58a338499d5595676027889f8",
+          "sha256": "46be248236b557ed7bf6d95add80743a3781b0041bd62fe31145cc864848513d",
           "media_type": "image/png"
         },
         {
           "path": "verification/frame-04.png",
-          "sha256": "2b29f63fcac42416a2fcf02f2ee098ee1c54d99f260a684f97607d68488dacb3",
+          "sha256": "2facd8bd6ef82b4ca1978e79ecde3926b0da0bd032509c40ae76bf793a9b5a63",
           "media_type": "image/png"
         },
         {
           "path": "verification/frame-05.png",
-          "sha256": "98edd0a7e37c2ac38e4b9ee853607a3ed003d5be3df50beb3dea1ab7101d246d",
+          "sha256": "121e3cb762a91cc2404528697a7bb2927c1a0d905687f879353cc898a638f08d",
           "media_type": "image/png"
         }
       ]
@@ -515,38 +515,38 @@
       },
       "animation": {
         "path": "presentation/trace.gif",
-        "sha256": "fd23bfddb27ca4e74de58e9ae5adbffbcc66d01b0fd086cb1564dc99c3ccf42f",
+        "sha256": "3970c8041433a5890abab123ea798958ad2a5585c120ec55d5ea5ea39e01bea3",
         "media_type": "image/gif"
       },
       "fallback": {
         "path": "presentation/frame-03.png",
-        "sha256": "52d75fecd13738c85d10a8179a77ba976ea2a2a26cc0e691e2388c26c57e16bd",
+        "sha256": "5ed4f7caf4a7861bee2491d731a920a3b57e290f95160a6cb89b43726898895d",
         "media_type": "image/png"
       },
       "contact_sheet": {
         "path": "presentation/contact-sheet.png",
-        "sha256": "1b5b6d177f8ad99765bc2aa86cf36a028bd6fc0785b61ed9014ffd439ce4fd11",
+        "sha256": "629ba185b848736233fe94bb7aaaacc732d5951275e49e033a481fbfae5e9b2e",
         "media_type": "image/png"
       },
       "frames": [
         {
           "path": "presentation/frame-00.png",
-          "sha256": "c7fb208c02038fc6a8f9c6b7b75447c1abab14de90a27288b6eff09c3a349719",
+          "sha256": "6477ff5949fbca64bbd7a1bfd0bbdddd7b70b5d49bb0a38cb66fda42fa8ca404",
           "media_type": "image/png"
         },
         {
           "path": "presentation/frame-01.png",
-          "sha256": "13845f481415f3b0a8b8920578d6068f7a4b3ab1822ae09e346bb8556b48c3e2",
+          "sha256": "99ae1ad713a145b30584ae6a4c633ab7fec628c9584a82a4606dc3569fd79392",
           "media_type": "image/png"
         },
         {
           "path": "presentation/frame-02.png",
-          "sha256": "5b37808d37f863385be683950a6262cf9cab4974fbd107f40036f810b37d9507",
+          "sha256": "66ac9205f335945d4b33d38f04d681e868c6e6787fd85609c94ad98afd8b2ba1",
           "media_type": "image/png"
         },
         {
           "path": "presentation/frame-03.png",
-          "sha256": "52d75fecd13738c85d10a8179a77ba976ea2a2a26cc0e691e2388c26c57e16bd",
+          "sha256": "5ed4f7caf4a7861bee2491d731a920a3b57e290f95160a6cb89b43726898895d",
           "media_type": "image/png"
         }
       ]
@@ -554,8 +554,8 @@
     "optimized_mechanisms": {
       "owner": "/components/optimized-solver/",
       "semantic_label": "didactic",
-      "caption": "The six retained serial mechanisms, including the lazy MRV index.",
-      "alt_text": "Seven didactic frames contrast the reference baseline with six measured optimized mechanisms.",
+      "caption": "Six concrete panels show the retained serial mechanisms and their private state changes.",
+      "alt_text": "Seven didactic frames show stack, trail, ownership, byte-support, queue, and lazy-MRV state, ending with a static summary.",
       "source_contract": "wang-optimized-mechanisms-v1",
       "source_sha256": "5f0c6e1f80601f6112ae8e358fe8029fa3d94fd260693edf0b37ea474419f212",
       "producer": "renderer/data/optimized-mechanisms-v1.json",
@@ -568,53 +568,53 @@
       },
       "animation": {
         "path": "optimized-mechanisms/trace.gif",
-        "sha256": "148f55b4796e04dc4fb3fb020608879422d8448095115f93154449351ebe9fd3",
+        "sha256": "38900fb618a515356dea06f49d9ee2979dc4f9c5a1b6babe50bea826cfb160dc",
         "media_type": "image/gif"
       },
       "fallback": {
         "path": "optimized-mechanisms/frame-06.png",
-        "sha256": "1335f54b894100393d7bcbaf68558a879c60169dbb590c87014db496fbc33e83",
+        "sha256": "ae75b855e86226425029e47ee8181422055aba3090780b77971c4dfa0c08f3b4",
         "media_type": "image/png"
       },
       "contact_sheet": {
         "path": "optimized-mechanisms/contact-sheet.png",
-        "sha256": "789efc596c7e0b853ee3d057f39b48595d9a8230ef9635fedaafc7ff75e30664",
+        "sha256": "0c666b14cf833667d909ca0fc5b90d6b645965c07a13edd4b985a4e25e999562",
         "media_type": "image/png"
       },
       "frames": [
         {
           "path": "optimized-mechanisms/frame-00.png",
-          "sha256": "3c25541c2b85ea2785f2d58e02cf1afb9f2d301e3ea35e3ea51b721afeeba906",
+          "sha256": "8748a66f41eae4555c33a8cf9d9faba66cd03a16b4f699eac4573465ce2c6e9d",
           "media_type": "image/png"
         },
         {
           "path": "optimized-mechanisms/frame-01.png",
-          "sha256": "49cf477983620cc0f0c1faf5efb67ba7098ff07b0664cb39efa21cb5be3d5ceb",
+          "sha256": "9b6fb67517ea898f50834df7a454bdbcea861edfa37f8b4e78f5b214f468fb07",
           "media_type": "image/png"
         },
         {
           "path": "optimized-mechanisms/frame-02.png",
-          "sha256": "80fdfa6e029b2f5165d1ea499ba27e33b3d18d315fc97dc19c1b8f6be46ac3b5",
+          "sha256": "f6b593a65672250c4cac9245b01fd67a6b4f4899a68bf84de425ee2e9e7bfa65",
           "media_type": "image/png"
         },
         {
           "path": "optimized-mechanisms/frame-03.png",
-          "sha256": "6fabbde7c8ca8543bfc6ce41ae2724ad59037d85516f2b12f4d2ae6f7d5eeb49",
+          "sha256": "918836e1819f0ad01cbff69c1ec24807f411aa127fa27d90810ce1900d9f668a",
           "media_type": "image/png"
         },
         {
           "path": "optimized-mechanisms/frame-04.png",
-          "sha256": "b3deccba1235538143021207c332c19377142d47326215cdd2f6a68a1483225d",
+          "sha256": "9405f7ab37e6d0afa7d160a0466ff418aeae9ddb1c4e54c48e5455a504c87b24",
           "media_type": "image/png"
         },
         {
           "path": "optimized-mechanisms/frame-05.png",
-          "sha256": "ee34b6de2c6d72a3c465423a18302295c1921d300fe0c2501522756e69a2f9ab",
+          "sha256": "95782f84c20ca407d1f97a14904a416580efd37f4f2e4523d0d81e94135423a2",
           "media_type": "image/png"
         },
         {
           "path": "optimized-mechanisms/frame-06.png",
-          "sha256": "1335f54b894100393d7bcbaf68558a879c60169dbb590c87014db496fbc33e83",
+          "sha256": "ae75b855e86226425029e47ee8181422055aba3090780b77971c4dfa0c08f3b4",
           "media_type": "image/png"
         }
       ]
@@ -633,23 +633,23 @@
       "compositor": "renderer.wang_narrative.render_overview_assets",
       "artifact": {
         "path": "pipeline-overview/home-preview.png",
-        "sha256": "84d555657f7d8977a4ba6ccbeab99eb769c0404698e4aec7eaea1a2ce90ae05f",
+        "sha256": "e16227c5346e68c4234a58a1e510e60ed916a81f81314cc12d752f2cd550a7ec",
         "media_type": "image/png"
       }
     },
     "worked_example": {
       "owner": "/worked-example/",
       "semantic_label": "observed",
-      "caption": "Static t0 through tn component milestones for one SAT run.",
-      "alt_text": "Eight static panels follow the captured source from formula to checked presentation.",
+      "caption": "Eight-stage overview with readable decision, construction, verification, square-witness, and checked-hex details.",
+      "alt_text": "An eight-stage overview followed by enlarged Boolean decision, Yang-Zhang construction, six verification receipts, verified square witness, and checked hex presentation panels.",
       "source_contract": "wang-run-dossier-v2#named-components",
-      "source_sha256": "197f9a2d1b55722b1680c3b04443c1ea183ad37340cfeacce4aadb5d867d8b18",
+      "source_sha256": "2a2a1c54008b554e064ed8b692255303e8085848a9b9b6e28bf0c89cad3bf7e5",
       "producer": "dossier.narrative_assets",
       "validator": "formats.run_dossier_v2_bundle.load_run_dossier_v2",
       "compositor": "renderer.wang_narrative.render_overview_assets",
       "artifact": {
         "path": "pipeline-overview/worked-example.png",
-        "sha256": "8f56f45967a9c68aa0f42e6478a9953b8c1ae6b418d09080c9fd52ebe2b8c1af",
+        "sha256": "3128491828307934c63546fcc9e42c2538293eb1027fdcd53ba1b97cd039519d",
         "media_type": "image/png"
       }
     },
@@ -697,7 +697,7 @@
       "compositor": "renderer.wang_narrative.render_generalized_assets",
       "artifact": {
         "path": "generalized-tiles/atomic-legend.png",
-        "sha256": "e93c587b15ba9810b610688e614ecf4b51cc46be25ab677dc44a6e71b3e2b315",
+        "sha256": "1ab2b18cc270ecbcfe87d899192ed618670607153ca648cd32fad9ce16390bea",
         "media_type": "image/png"
       }
     },
@@ -765,10 +765,10 @@
       "reference-trace/frame-000000.png",
       "reference-trace/frame-000001.png",
       "reference-trace/frame-001258.png",
-      "reference-trace/frame-001887.png",
       "reference-trace/frame-002516.png",
       "reference-trace/frame-002517.png",
       "reference-trace/frame-002518.png",
+      "reference-trace/frame-002519.png",
       "reference-trace/frame-002893.png",
       "reference-trace/frame-002894.png",
       "reference-trace/frame-002895.png"
@@ -776,11 +776,11 @@
     "optimized_trace": [
       "optimized-trace/frame-000000.png",
       "optimized-trace/frame-000001.png",
-      "optimized-trace/frame-000641.png",
       "optimized-trace/frame-001281.png",
       "optimized-trace/frame-002561.png",
       "optimized-trace/frame-002562.png",
       "optimized-trace/frame-002563.png",
+      "optimized-trace/frame-002564.png",
       "optimized-trace/frame-002938.png",
       "optimized-trace/frame-002939.png",
       "optimized-trace/frame-002940.png"

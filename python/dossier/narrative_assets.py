@@ -391,8 +391,15 @@ def _static_metadata(
         "worked_example": _metadata(
             owner="/worked-example/",
             semantic_label="observed",
-            caption="Static t0 through tn component milestones for one SAT run.",
-            alt_text="Eight static panels follow the captured source from formula to checked presentation.",
+            caption=(
+                "Eight-stage overview with readable decision, construction, "
+                "verification, square-witness, and checked-hex details."
+            ),
+            alt_text=(
+                "An eight-stage overview followed by enlarged Boolean decision, "
+                "Yang-Zhang construction, six verification receipts, verified "
+                "square witness, and checked hex presentation panels."
+            ),
             source_contract="wang-run-dossier-v2#named-components",
             source_sha256=pipeline_source_sha256(identities, run),
             validator="formats.run_dossier_v2_bundle.load_run_dossier_v2",

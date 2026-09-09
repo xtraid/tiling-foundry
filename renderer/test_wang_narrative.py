@@ -282,6 +282,49 @@ def test_verification_bounds_a_larger_copied_assignment(tmp_path):
     assert _mobile_ink_height(frame, (1470, 790, 1860, 890)) >= 8
 
 
+def test_unsat_summary_starts_below_all_receipt_labels(monkeypatch):
+    records = tuple(_run_record("unsat")["verification"].values())
+    state_boxes: list[tuple[int, int, int, int]] = []
+    summary_boxes: list[tuple[int, int, int, int]] = []
+    original_draw = wang_narrative.ImageDraw.Draw
+
+    class RecordingDraw:
+        def __init__(self, image):
+            self._draw = original_draw(image)
+
+        def text(self, xy, value, **kwargs):
+            if value == "not applicable: no SAT witness":
+                state_boxes.append(
+                    self._draw.textbbox(
+                        xy,
+                        value,
+                        font=kwargs.get("font"),
+                        anchor=kwargs.get("anchor"),
+                        stroke_width=kwargs.get("stroke_width", 0),
+                    )
+                )
+            return self._draw.text(xy, value, **kwargs)
+
+        def rounded_rectangle(self, xy, **kwargs):
+            if xy[0] == 170 and xy[2] == 1750:
+                summary_boxes.append(tuple(xy))
+            return self._draw.rounded_rectangle(xy, **kwargs)
+
+        def __getattr__(self, name):
+            return getattr(self._draw, name)
+
+    monkeypatch.setattr(
+        wang_narrative.ImageDraw, "Draw", lambda image: RecordingDraw(image)
+    )
+    getattr(wang_narrative, "_verification_frame")(
+        "unsat", records, 5, None, None, None
+    )
+
+    assert len(state_boxes) == 6
+    assert len(summary_boxes) == 1
+    assert max(box[3] for box in state_boxes) + 24 <= summary_boxes[0][1]
+
+
 def test_verification_composition_rejects_partial_or_forged_receipts(tmp_path):
     source = tmp_path / "forged.json"
     document = _run_record("sat")
@@ -368,6 +411,58 @@ def test_atomic_vocabulary_remains_readable_at_390_px(tmp_path):
                 else:
                     runs[-1].append(row)
             assert max((len(run) for run in runs), default=0) >= 8
+
+
+def test_worked_example_keeps_overview_and_expands_selected_case_panels(
+    tmp_path,
+):
+    colors = (
+        (180, 30, 60),
+        (30, 160, 70),
+        (50, 80, 190),
+        (200, 120, 20),
+        (130, 50, 180),
+        (20, 150, 160),
+        (220, 70, 30),
+        (90, 120, 40),
+    )
+    source_paths = []
+    for index, color in enumerate(colors):
+        path = tmp_path / f"source-{index}.png"
+        Image.new("RGB", (1920, 1040), color).save(path)
+        source_paths.append(path)
+    square_color = (40, 120, 220)
+    square = tmp_path / "square.png"
+    Image.new("RGB", (1538, 422), square_color).save(square)
+
+    outputs = render_overview_assets(
+        tuple(source_paths), square, tmp_path / "overview"
+    )
+    assert outputs.worked_example is not None
+    with Image.open(outputs.worked_example) as source:
+        mobile = source.resize(
+            (390, round(source.height * 390 / source.width)),
+            Image.Resampling.LANCZOS,
+        )
+
+    def color_span(color):
+        columns = [
+            x
+            for y in range(mobile.height)
+            for x in range(mobile.width)
+            if all(
+                abs(channel - expected) <= 2
+                for channel, expected in zip(mobile.getpixel((x, y)), color)
+            )
+        ]
+        return max(columns) - min(columns) + 1 if columns else 0
+
+    # Every source remains in the compact eight-stage overview. The selected
+    # decision, construction, checker, square, and final-presentation panels
+    # additionally occupy nearly the full mobile width.
+    assert all(color_span(color) > 0 for color in colors)
+    for color in (colors[1], colors[2], colors[6], square_color, colors[7]):
+        assert color_span(color) >= 350
 
 
 def test_overview_and_unsat_status_are_static_fallback_safe(tmp_path):

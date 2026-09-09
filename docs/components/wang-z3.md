@@ -42,7 +42,7 @@ thread and a fixed random seed.
 `wang_z3` shows the project's edge-term construction and returned result, not
 the solver engine's internal search.
 
-{% include narrative-animation.html asset_id="wang_z3" animation="/assets/narrative/wang-z3/trace.gif" fallback="/assets/narrative/wang-z3/frame-03.png" contact_sheet="/assets/narrative/wang-z3/contact-sheet.png" alt="Five frames add edge terms, shared internal edges, tile relations, boundaries, and the copied result." width="940" height="430" label="encoding-order" caption="Project-owned Wang edge-term construction and returned model." source="z3-encoding-summary-v1" %}
+{% include narrative-animation.html asset_id="wang_z3" animation="/assets/narrative/wang-z3/trace.gif" fallback="/assets/narrative/wang-z3/frame-04.png" contact_sheet="/assets/narrative/wang-z3/contact-sheet.png" alt="Five frames show adjacent canonical Wang tiles sharing an internal edge, one exposed boundary equality, and the copied model projection." width="940" height="520" label="encoding-order" caption="A real cell shows its shared term, canonical tile tuple, boundary equality, and returned model projection." source="z3-encoding-summary-v1+wang-tileset-snapshot-v1+wang-region-snapshot-v1" %}
 
 ## Position in the pipeline
 

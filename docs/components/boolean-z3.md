@@ -41,7 +41,7 @@ configuration uses one thread and a fixed random seed.
 
 `boolean_z3` shows only project-owned encoding order and the returned result.
 
-{% include narrative-animation.html asset_id="boolean_z3" animation="/assets/narrative/boolean-z3/trace.gif" fallback="/assets/narrative/boolean-z3/frame-02.png" contact_sheet="/assets/narrative/boolean-z3/contact-sheet.png" alt="Four frames add Boolean variables and source-order exactly-one clauses before showing the copied result." width="940" height="430" label="encoding-order" caption="Project-owned Boolean constraint construction and returned assignment." source="z3-encoding-summary-v1" %}
+{% include narrative-animation.html asset_id="boolean_z3" animation="/assets/narrative/boolean-z3/trace.gif" fallback="/assets/narrative/boolean-z3/frame-03.png" contact_sheet="/assets/narrative/boolean-z3/contact-sheet.png" alt="Four frames place each source-order clause beside its occurrence-preserving sum and then show the copied Boolean assignment." width="940" height="520" label="encoding-order" caption="Real source clauses become occurrence-preserving exactly-one sums before the copied assignment is shown." source="z3-encoding-summary-v1+cm13-formula-snapshot-v1" %}
 
 ## Position in the pipeline
 

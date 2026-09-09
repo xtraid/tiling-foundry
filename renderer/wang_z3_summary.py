@@ -563,7 +563,7 @@ def _compose_boolean_frame(
     draw.text((72, 244), "Source positions", font=explain_font(40), fill=EXPLAIN_TEXT_RGB)
     draw.text((1040, 244), "Actual sum asserted equal to one", font=explain_font(40), fill=EXPLAIN_TEXT_RGB)
     if omission is not None:
-        draw.text((620, 250), omission, font=explain_font(28), fill=EXPLAIN_MUTED_RGB)
+        draw.text((72, 291), omission, font=explain_font(28), fill=EXPLAIN_MUTED_RGB)
     for row, (clause_id, (_, equation)) in enumerate(selected):
         y = 330 + row * 176
         visible = stage >= 2

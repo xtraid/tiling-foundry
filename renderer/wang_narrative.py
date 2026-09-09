@@ -528,7 +528,7 @@ def _verification_frame(
             fill=EXPLAIN_TEXT_RGB if visible else EXPLAIN_MUTED_RGB,
         )
     if status == "unsat":
-        draw.rounded_rectangle((170, 330, 1750, 850), radius=24, fill=(239, 242, 246), outline=(181, 188, 199), width=3)
+        draw.rounded_rectangle((170, 390, 1750, 850), radius=24, fill=(239, 242, 246), outline=(181, 188, 199), width=3)
         draw.text((490, 470), "No SAT witness was returned", font=explain_font(48), fill=EXPLAIN_TEXT_RGB)
         draw.text((360, 565), "Six witness checks are not applicable; no certificate is fabricated.", font=explain_font(34), fill=EXPLAIN_MUTED_RGB)
         draw.text((460, 650), "Observed search traces remain diagnostics only.", font=explain_font(34), fill=EXPLAIN_MUTED_RGB)
@@ -933,8 +933,30 @@ def _home_preview(square: Image.Image) -> Image.Image:
     return image
 
 
-def _worked_example(sources: tuple[Image.Image, ...]) -> Image.Image:
-    image = Image.new("RGB", (1080, 940), EXPLAIN_PANEL_RGB)
+def _worked_example(
+    sources: tuple[Image.Image, ...], square: Image.Image
+) -> Image.Image:
+    detail_sources = (
+        ("Decision | copied Boolean result", sources[1]),
+        ("Construction | canonical Yang-Zhang region", sources[2]),
+        ("Check interpretation | six independent receipts", sources[6]),
+        ("Verified witness | square source", square),
+        ("Final presentation | checked hex port", sources[7]),
+    )
+    details = tuple(
+        (label, _fit(source, (1012, 560)))
+        for label, source in detail_sources
+    )
+    details_top = 958
+    detail_gap = 18
+    detail_heights = tuple(detail.height + 70 for _, detail in details)
+    image_height = (
+        details_top
+        + sum(detail_heights)
+        + detail_gap * (len(details) - 1)
+        + 54
+    )
+    image = Image.new("RGB", (1080, image_height), EXPLAIN_PANEL_RGB)
     draw = ImageDraw.Draw(image)
     draw_explain_heading(
         draw,
@@ -960,6 +982,30 @@ def _worked_example(sources: tuple[Image.Image, ...]) -> Image.Image:
     draw.text(
         (18, 918),
         "Milestones are semantic selections, not uniformly sampled time points.",
+        font=explain_font(9),
+        fill=EXPLAIN_MUTED_RGB,
+    )
+    y = details_top
+    for (label, detail), card_height in zip(
+        details, detail_heights, strict=True
+    ):
+        draw.rounded_rectangle(
+            (18, y, 1062, y + card_height),
+            radius=9,
+            fill=EXPLAIN_ACTIVE_RGB,
+            outline=(181, 188, 199),
+        )
+        draw.text(
+            (34, y + 14),
+            label,
+            font=explain_font(24),
+            fill=EXPLAIN_TEXT_RGB,
+        )
+        image.paste(detail, ((1080 - detail.width) // 2, y + 54))
+        y += card_height + detail_gap
+    draw.text(
+        (18, image.height - 32),
+        "Selected panels retain source detail; the component pages own the full explanations.",
         font=explain_font(9),
         fill=EXPLAIN_MUTED_RGB,
     )
@@ -994,7 +1040,7 @@ def render_overview_assets(
         home_preview = destination / "home-preview.png"
         worked_example = destination / "worked-example.png"
         _save_image(_home_preview(home_image), home_preview)
-        _save_image(_worked_example(sources), worked_example)
+        _save_image(_worked_example(sources, home_image), worked_example)
     return OverviewOutputs(animation, home_preview, worked_example)
 
 
