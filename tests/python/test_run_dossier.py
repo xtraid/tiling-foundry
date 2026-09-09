@@ -55,6 +55,83 @@ def _artifacts() -> dict[str, dict[str, str]]:
 
 
 class RunDossierTests(unittest.TestCase):
+    def test_shared_tex_compiler_translates_private_home_setup_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, patch(
+            "dossier.tex_compile.shutil.which",
+            return_value="/usr/bin/pdflatex",
+        ), patch(
+            "dossier.tex_compile.Path.mkdir",
+            side_effect=OSError("setup denied"),
+        ):
+            with self.assertRaisesRegex(TexCompileError, "setup denied"):
+                compile_tex_pdf(
+                    Path(directory),
+                    "pdflatex",
+                    datetime(2026, 8, 27, tzinfo=timezone.utc),
+                )
+
+    def test_shared_tex_compiler_does_not_remove_preexisting_private_home(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, patch(
+            "dossier.tex_compile.shutil.which",
+            return_value="/usr/bin/pdflatex",
+        ):
+            dossier = Path(directory)
+            tex_home = dossier / ".tex-home"
+            tex_home.mkdir()
+            sentinel = tex_home / "caller-owned"
+            sentinel.write_text("preserve", encoding="utf-8")
+
+            with self.assertRaises(TexCompileError):
+                compile_tex_pdf(
+                    dossier,
+                    "pdflatex",
+                    datetime(2026, 8, 27, tzinfo=timezone.utc),
+                )
+
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "preserve")
+
+    def test_shared_tex_compiler_translates_cleanup_failure_after_success(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, patch(
+            "dossier.tex_compile.shutil.which",
+            return_value="/usr/bin/pdflatex",
+        ), patch(
+            "dossier.tex_compile.subprocess.run",
+        ), patch(
+            "dossier.tex_compile.shutil.rmtree",
+            side_effect=OSError("cleanup denied"),
+        ):
+            dossier = Path(directory)
+            (dossier / "report.pdf").write_bytes(b"%PDF-" + b"0" * 100)
+
+            with self.assertRaisesRegex(TexCompileError, "cleanup denied"):
+                compile_tex_pdf(
+                    dossier,
+                    "pdflatex",
+                    datetime(2026, 8, 27, tzinfo=timezone.utc),
+                )
+
+    def test_shared_tex_compiler_keeps_primary_error_when_cleanup_also_fails(self) -> None:
+        primary = TexCompileError("primary compile failure")
+        with tempfile.TemporaryDirectory() as directory, patch(
+            "dossier.tex_compile.shutil.which",
+            return_value="/usr/bin/pdflatex",
+        ), patch(
+            "dossier.tex_compile.subprocess.run",
+            side_effect=primary,
+        ), patch(
+            "dossier.tex_compile.shutil.rmtree",
+            side_effect=OSError("secondary cleanup failure"),
+        ) as remove_private_home:
+            with self.assertRaises(TexCompileError) as raised:
+                compile_tex_pdf(
+                    Path(directory),
+                    "pdflatex",
+                    datetime(2026, 8, 27, tzinfo=timezone.utc),
+                )
+
+            self.assertIs(raised.exception, primary)
+            remove_private_home.assert_called_once()
+
     @unittest.skipUnless(shutil.which("pdflatex"), "pdflatex is optional")
     def test_shared_tex_compiler_is_deterministic_and_rejects_shell_escape(self) -> None:
         captured_at = datetime(2026, 8, 27, 20, 0, 0, tzinfo=timezone.utc)
