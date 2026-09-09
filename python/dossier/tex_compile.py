@@ -8,7 +8,6 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
-import sys
 
 
 class TexCompileError(RuntimeError):
@@ -23,6 +22,7 @@ def compile_tex_pdf(
     """Compile report.tex twice in an isolated TeX home without shell escape."""
     tex_home = dossier_root / ".tex-home"
     private_home_created = False
+    compilation_completed = False
     try:
         try:
             executable = shutil.which(tex_engine)
@@ -91,6 +91,7 @@ def compile_tex_pdf(
                     auxiliary.unlink()
                 except FileNotFoundError:
                     pass
+            compilation_completed = True
         except TexCompileError:
             raise
         except OSError as error:
@@ -99,11 +100,10 @@ def compile_tex_pdf(
             ) from error
     finally:
         if private_home_created:
-            primary_error = sys.exception()
             try:
                 shutil.rmtree(tex_home)
             except OSError as error:
-                if primary_error is None:
+                if compilation_completed:
                     raise TexCompileError(
                         f"cannot remove private TeX home: {error}"
                     ) from error

@@ -110,6 +110,32 @@ class RunDossierTests(unittest.TestCase):
                     datetime(2026, 8, 27, tzinfo=timezone.utc),
                 )
 
+    def test_shared_tex_compiler_reports_cleanup_failure_inside_caller_except(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, patch(
+            "dossier.tex_compile.shutil.which",
+            return_value="/usr/bin/pdflatex",
+        ), patch(
+            "dossier.tex_compile.subprocess.run",
+        ), patch(
+            "dossier.tex_compile.shutil.rmtree",
+            side_effect=OSError("cleanup denied in caller except"),
+        ):
+            dossier = Path(directory)
+            (dossier / "report.pdf").write_bytes(b"%PDF-" + b"0" * 100)
+
+            try:
+                raise ValueError("unrelated caller error")
+            except ValueError:
+                with self.assertRaisesRegex(
+                    TexCompileError,
+                    "cleanup denied in caller except",
+                ):
+                    compile_tex_pdf(
+                        dossier,
+                        "pdflatex",
+                        datetime(2026, 8, 27, tzinfo=timezone.utc),
+                    )
+
     def test_shared_tex_compiler_keeps_primary_error_when_cleanup_also_fails(self) -> None:
         primary = TexCompileError("primary compile failure")
         with tempfile.TemporaryDirectory() as directory, patch(
