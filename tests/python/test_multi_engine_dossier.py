@@ -14,6 +14,7 @@ from unittest.mock import patch
 
 from dossier import multi_engine
 from dossier import narrative_assets as narrative_generator
+from dossier.tex_compile import TexCompileError
 from formats.pipeline_snapshot import PipelineSnapshotError
 from formats.narrative_assets import (
     boolean_z3_source_sha256,
@@ -30,6 +31,7 @@ from formats.run_dossier_v2 import (
     validate_run_dossier_v2,
 )
 from formats.run_dossier_v2_bundle import load_run_dossier_v2
+from formats.run_report_v2_tex import render_run_report_v2_tex
 from native import multi_engine_pipeline
 from native.multi_engine_pipeline import (
     TraceCaptureOptions,
@@ -42,6 +44,7 @@ from tools import generate_run_dossier as public_generator
 ROOT = Path(__file__).resolve().parents[2]
 SAT_CASE = ROOT / "examples/run-cases-v2/pipeline-sat.json"
 UNSAT_CASE = ROOT / "examples/run-cases-v2/pipeline-unsat-search.json"
+V2_TEMPLATE = ROOT / "templates/run-report-v2.tex"
 
 
 class MultiEngineDossierTests(unittest.TestCase):
@@ -197,6 +200,111 @@ class MultiEngineDossierTests(unittest.TestCase):
             self.assertEqual(narrative["animations"][name]["alt_text"], alt_text)
         self.assertFalse((self.sat_directory / "report.tex").exists())
         self.assertFalse((self.sat_directory / "report.pdf").exists())
+
+    def test_v2_sat_report_follows_pipeline_and_uses_static_milestones(self) -> None:
+        narrative = load_narrative_assets(
+            self.sat_directory / "assets/narrative/manifest.json",
+            self.sat_document,
+        )
+        tex = render_run_report_v2_tex(
+            self.sat_document,
+            narrative,
+            V2_TEMPLATE.read_text(encoding="utf-8"),
+        )
+        headings = (
+            r"\section{Summary}",
+            r"\section{Source instance}",
+            r"\section{Boolean Z3}",
+            r"\section{Yang--Zhang reduction}",
+            r"\section{Reference solver}",
+            r"\section{Optimized solver}",
+            r"\section{Wang Z3}",
+            r"\section{Verification and presentation}",
+            r"\section{Reproducibility appendix}",
+        )
+        offsets = tuple(tex.index(heading) for heading in headings)
+        self.assertEqual(offsets, tuple(sorted(offsets)))
+        self.assertIn(
+            r"\verbatiminput{assets/data/pipeline_sat.cm13}",
+            tex,
+        )
+        for group in (
+            "region_construction",
+            "reference_trace",
+            "optimized_trace",
+        ):
+            for path in narrative["pdf_milestones"][group]:
+                self.assertIn(path, tex)
+        self.assertNotIn("contact-sheet.png", tex)
+        self.assertNotIn(".gif", tex)
+        for name in ("square", "generalized", "hex"):
+            path = narrative["statics"][f"{name}_presentation"]["artifact"]["path"]
+            self.assertIn(
+                r"\includegraphics[width=\textwidth,height=0.48\textheight,keepaspectratio]"
+                rf"{{assets/narrative/{path}}}",
+                tex,
+            )
+        sheet_path = narrative["statics"]["generalized_sheet"]["artifact"]["path"]
+        self.assertIn(
+            r"\includegraphics[width=0.82\textwidth,height=0.64\textheight,keepaspectratio]"
+            rf"{{assets/narrative/{sheet_path}}}",
+            tex,
+        )
+        legend_path = narrative["statics"]["atomic_legend"]["artifact"]["path"]
+        self.assertEqual(tex.count(f"{{assets/narrative/{legend_path}}}"), 2)
+        self.assertIn("viewport=0 2092 1732 4184,clip,width=0.92", tex)
+        self.assertIn("viewport=0 0 1732 2092,clip,width=0.92", tex)
+
+    def test_v2_unsat_report_marks_witness_only_content_not_applicable(self) -> None:
+        narrative = load_narrative_assets(
+            self.unsat_directory / "assets/narrative/manifest.json",
+            self.unsat_document,
+        )
+        tex = render_run_report_v2_tex(
+            self.unsat_document,
+            narrative,
+            V2_TEMPLATE.read_text(encoding="utf-8"),
+        )
+        self.assertIn("Assignment: not applicable for this UNSAT result", tex)
+        self.assertIn("Witness verification: not applicable", tex)
+        self.assertIn("Witness presentations: not applicable", tex)
+        self.assertIn("No UNSAT certificate is claimed", tex)
+        self.assertIn(
+            narrative["statics"]["presentation_status"]["artifact"]["path"],
+            tex,
+        )
+        presentation_status = narrative["statics"]["presentation_status"]
+        status_path = presentation_status["artifact"]["path"]
+        self.assertIn(
+            r"\includegraphics[width=0.72\textwidth,height=0.30\textheight,keepaspectratio]"
+            rf"{{assets/narrative/{status_path}}}",
+            tex,
+        )
+        self.assertNotIn("contact-sheet.png", tex)
+        self.assertNotIn(".gif", tex)
+        for name in (
+            "home_preview",
+            "worked_example",
+            "square_presentation",
+            "generalized_presentation",
+            "hex_presentation",
+        ):
+            self.assertIsNone(narrative["statics"][name])
+
+    def test_v2_formatter_is_pure_after_caller_validation(self) -> None:
+        narrative = load_narrative_assets(
+            self.sat_directory / "assets/narrative/manifest.json",
+            self.sat_document,
+        )
+        with patch("builtins.open", side_effect=AssertionError("formatter I/O")), patch(
+            "io.open", side_effect=AssertionError("formatter I/O")
+        ):
+            tex = render_run_report_v2_tex(
+                self.sat_document,
+                narrative,
+                "@@TITLE@@\n@@BODY@@\n",
+            )
+        self.assertIn(r"\section{Summary}", tex)
 
     def test_narrative_source_hashes_cover_every_consumed_identity(self) -> None:
         run = self.sat_document
@@ -399,7 +507,17 @@ class MultiEngineDossierTests(unittest.TestCase):
                 tex_engine="pdflatex",
             )
         self.assertEqual(v2_actual, v2_expected)
-        generate_v2.assert_called_once_with(SAT_CASE, v2_expected)
+        generate_v2.assert_called_once_with(SAT_CASE, v2_expected, include_pdf=False)
+        with self.assertRaisesRegex(
+            public_generator.DossierGenerationError,
+            "v2-only",
+        ):
+            public_generator.generate_run_dossier(
+                v1_case,
+                expected,
+                tex_engine="pdflatex",
+                include_pdf=True,
+            )
         with self.assertRaisesRegex(
             public_generator.DossierGenerationError,
             "v1-only",
@@ -457,6 +575,24 @@ class MultiEngineDossierTests(unittest.TestCase):
                     "import sys; import formats.run_dossier_v2_bundle; "
                     "assert 'dossier.multi_engine' not in sys.modules; "
                     "assert 'native.multi_engine_pipeline' not in sys.modules"
+                ),
+            ],
+            cwd=ROOT,
+            env={**os.environ, "PYTHONPATH": "python"},
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import sys; import dossier.multi_engine; "
+                    "assert 'formats.run_report_v2_tex' not in sys.modules; "
+                    "assert 'dossier.tex_compile' not in sys.modules"
                 ),
             ],
             cwd=ROOT,
@@ -749,6 +885,25 @@ class MultiEngineDossierTests(unittest.TestCase):
         self.assertEqual(wang.call_count, 1)
         self.assertFalse(destination.exists())
         self.assertEqual(set(self.root.glob(".replace-failed.*")), before)
+
+    def test_v2_pdf_compile_failure_leaves_no_partial_destination(self) -> None:
+        destination = self.root / "pdf-compile-failed"
+        before = set(self.root.glob(".pdf-compile-failed.*"))
+        with patch(
+            "dossier.tex_compile.compile_tex_pdf",
+            side_effect=TexCompileError("forced controlled compile failure"),
+        ):
+            with self.assertRaisesRegex(
+                multi_engine.MultiEngineDossierError,
+                "forced controlled compile failure",
+            ):
+                multi_engine.generate_multi_engine_dossier(
+                    SAT_CASE,
+                    destination,
+                    include_pdf=True,
+                )
+        self.assertFalse(destination.exists())
+        self.assertEqual(set(self.root.glob(".pdf-compile-failed.*")), before)
 
     def test_v2_schemas_are_closed_draft_2020_12_documents(self) -> None:
         for name, expected in (

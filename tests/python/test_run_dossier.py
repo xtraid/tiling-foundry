@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import copy
 from dataclasses import replace
+from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
+import shutil
+import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from formats.pipeline_snapshot import PipelineSnapshotError
 from formats.run_dossier import (
@@ -18,6 +22,8 @@ from formats.run_dossier import (
     validate_run_dossier,
 )
 from formats.run_report_tex import render_run_report_tex
+from dossier.tex_compile import TexCompileError, compile_tex_pdf
+from tools import generate_run_dossier as public_generator
 from native.trace_pipeline import capture_native_pipeline_trace
 
 
@@ -49,6 +55,54 @@ def _artifacts() -> dict[str, dict[str, str]]:
 
 
 class RunDossierTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("pdflatex"), "pdflatex is optional")
+    def test_shared_tex_compiler_is_deterministic_and_rejects_shell_escape(self) -> None:
+        captured_at = datetime(2026, 8, 27, 20, 0, 0, tzinfo=timezone.utc)
+        source = (ROOT / "templates/run-report.tex").read_text(encoding="utf-8")
+        source = source.replace("@@TITLE@@", "Compile boundary test").replace(
+            "@@BODY@@", "Deterministic body."
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            outputs: list[bytes] = []
+            for name in ("one", "two"):
+                dossier = root / name
+                dossier.mkdir()
+                (dossier / "report.tex").write_text(source, encoding="utf-8")
+                commands: list[list[str]] = []
+                actual_run = subprocess.run
+
+                def checked_run(command: list[str], **kwargs: object) -> object:
+                    commands.append(command)
+                    return actual_run(command, **kwargs)
+
+                with patch("dossier.tex_compile.subprocess.run", side_effect=checked_run):
+                    compile_tex_pdf(dossier, "pdflatex", captured_at)
+                self.assertEqual(len(commands), 2)
+                self.assertTrue(all("-no-shell-escape" in command for command in commands))
+                self.assertFalse((dossier / ".tex-home").exists())
+                self.assertEqual(
+                    sorted(path.name for path in dossier.iterdir()),
+                    ["report.pdf", "report.tex"],
+                )
+                outputs.append((dossier / "report.pdf").read_bytes())
+            self.assertEqual(outputs[0], outputs[1])
+
+    def test_v1_caller_translates_the_shared_compile_error(self) -> None:
+        with patch(
+            "tools.generate_run_dossier.compile_tex_pdf",
+            side_effect=TexCompileError("controlled failure"),
+        ):
+            with self.assertRaisesRegex(
+                public_generator.DossierGenerationError,
+                "controlled failure",
+            ):
+                public_generator._compile_pdf(
+                    Path("unused"),
+                    "pdflatex",
+                    datetime(2026, 8, 27, tzinfo=timezone.utc),
+                )
+
     def test_versioned_cases_match_distinct_complete_observed_runs(self) -> None:
         summaries: dict[str, tuple[str, int, int]] = {}
         for case_path in sorted(CASES.glob("*.json")):
