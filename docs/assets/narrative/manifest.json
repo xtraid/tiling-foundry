@@ -633,7 +633,7 @@
       "compositor": "renderer.wang_narrative.render_overview_assets",
       "artifact": {
         "path": "pipeline-overview/home-preview.png",
-        "sha256": "e16227c5346e68c4234a58a1e510e60ed916a81f81314cc12d752f2cd550a7ec",
+        "sha256": "9bfa6d1fa0113ef57f6fc5ba927cfdf29a1484a2c5a17e7993dc7b2ecd4c8415",
         "media_type": "image/png"
       }
     },

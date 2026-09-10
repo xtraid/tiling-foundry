@@ -149,6 +149,7 @@ The renderer is an isolated locked Python project and has its own suite:
 ```sh
 cd renderer
 uv run --locked pytest -q
+cd ..
 ```
 
 Useful focused targets include `make c-check`, `make python-check`,

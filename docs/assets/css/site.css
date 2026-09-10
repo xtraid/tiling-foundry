@@ -370,6 +370,10 @@ figure {
   height: auto;
 }
 
+.narrative-asset[data-asset-id="home_preview"] {
+  max-width: 760px;
+}
+
 .narrative-asset figcaption {
   margin: 0;
   padding: 1rem 1.15rem;

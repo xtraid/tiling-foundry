@@ -4,9 +4,10 @@ from dataclasses import replace
 import hashlib
 import json
 from pathlib import Path
+import re
 import sys
 
-from PIL import Image
+from PIL import Image, ImageDraw
 import pytest
 
 import wang_narrative
@@ -411,6 +412,44 @@ def test_atomic_vocabulary_remains_readable_at_390_px(tmp_path):
                 else:
                     runs[-1].append(row)
             assert max((len(run) for run in runs), default=0) >= 8
+
+
+def test_home_preview_retains_native_detail_at_twice_its_pages_display_width():
+    css = (ROOT / "docs/assets/css/site.css").read_text(encoding="utf-8")
+    home_rule = re.search(
+        r'\.narrative-asset\[data-asset-id="home_preview"\]\s*\{([^}]+)\}',
+        css,
+    )
+    assert home_rule is not None
+    display_limit = re.search(r"max-width:\s*(\d+)px", home_rule.group(1))
+    assert display_limit is not None
+    display_width = int(display_limit.group(1))
+
+    # Match the actual validated square source dimensions. Fine color detail
+    # exposes a low-resolution intermediate enlarged into a bigger canvas.
+    square = Image.new("RGB", (1538, 422))
+    draw = ImageDraw.Draw(square)
+    for x in range(square.width):
+        draw.line(
+            (x, 0, x, square.height - 1),
+            fill=((x * 73) % 256, (x * 29) % 256, (x * 13) % 256),
+        )
+    preview = wang_narrative._home_preview(square)
+    assert preview.width >= 2 * display_width
+
+    # The witness spans the display minus 20 px of margin on each side, at
+    # two source pixels per CSS pixel. Compare those pixels with a direct
+    # high-quality downsample, so upscaling the old 720 px witness cannot pass.
+    expected = square.copy()
+    expected.thumbnail(
+        (2 * (display_width - 40), square.height),
+        resample=Image.Resampling.LANCZOS,
+    )
+    left = (preview.width - expected.width) // 2
+    top = 164
+    assert preview.crop(
+        (left, top, left + expected.width, top + expected.height)
+    ).tobytes() == expected.tobytes()
 
 
 def test_worked_example_keeps_overview_and_expands_selected_case_panels(

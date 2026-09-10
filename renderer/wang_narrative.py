@@ -914,20 +914,22 @@ def _pipeline_frame(sources: tuple[Image.Image, ...], stage: int) -> Image.Image
 
 
 def _home_preview(square: Image.Image) -> Image.Image:
-    image = Image.new("RGB", (760, 430), EXPLAIN_PANEL_RGB)
+    scale = 2
+    image = Image.new("RGB", (760 * scale, 430 * scale), EXPLAIN_PANEL_RGB)
     draw = ImageDraw.Draw(image)
     draw_explain_heading(
         draw,
-        (18, 16),
+        (18 * scale, 16 * scale),
         title="Verified SAT witness",
         subtitle="observed | captured SAT source | square presentation",
+        scale=scale,
     )
-    fitted = _fit(square, (720, 320))
-    image.paste(fitted, ((760 - fitted.width) // 2, 82))
+    fitted = _fit(square, (720 * scale, 320 * scale))
+    image.paste(fitted, ((image.width - fitted.width) // 2, 82 * scale))
     draw.text(
-        (18, 407),
+        (18 * scale, 407 * scale),
         "Preview only; the worked example retains the full source and trust boundary.",
-        font=explain_font(9),
+        font=explain_font(9 * scale),
         fill=EXPLAIN_MUTED_RGB,
     )
     return image
