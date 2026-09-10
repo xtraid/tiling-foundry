@@ -306,6 +306,37 @@ class MultiEngineDossierTests(unittest.TestCase):
             )
         self.assertIn(r"\section{Summary}", tex)
 
+    def test_v2_reports_each_oracle_timing_in_its_own_section(self) -> None:
+        for directory, document in (
+            (self.sat_directory, self.sat_document),
+            (self.unsat_directory, self.unsat_document),
+        ):
+            with self.subTest(status=document["case"]["expected_status"]):
+                narrative = load_narrative_assets(
+                    directory / "assets/narrative/manifest.json", document
+                )
+                tex = render_run_report_v2_tex(
+                    document, narrative, V2_TEMPLATE.read_text(encoding="utf-8")
+                )
+                appendix = tex.split(
+                    r"\section{Reproducibility appendix}", 1
+                )[1]
+                for heading, timing_name in (
+                    ("Boolean Z3", "boolean_z3_ns"),
+                    ("Wang Z3", "wang_z3_ns"),
+                ):
+                    elapsed_ns = document["timings"][timing_name]
+                    expected = (
+                        f"{elapsed_ns / 1_000_000:.3f} ms ({elapsed_ns} ns)"
+                    )
+                    section = tex.split(rf"\section{{{heading}}}", 1)[1].split(
+                        r"\section{", 1
+                    )[0]
+                    self.assertIn(expected, section)
+                    self.assertIn("run-specific", section.lower())
+                    self.assertIn("not a benchmark", section.lower())
+                    self.assertIn(expected, appendix)
+
     def test_narrative_source_hashes_cover_every_consumed_identity(self) -> None:
         run = self.sat_document
         verification_digest = verification_source_sha256(run)

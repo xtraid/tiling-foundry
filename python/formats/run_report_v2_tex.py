@@ -333,6 +333,10 @@ def render_run_report_v2_tex(
             r"\section{Boolean Z3}",
             rf"Status: {_tex(boolean_z3['status'])}. Random seed: {_tex(boolean_z3['configuration']['random_seed'])}. Threads: {_tex(boolean_z3['configuration']['threads'])}.",
             (
+                rf"\par Recorded elapsed time: {_tex(_elapsed(timings['boolean_z3_ns']))}. "
+                r"This run-specific observation is not a benchmark.\par"
+            ),
+            (
                 "Source variables are written 1-based (1, 2, ...); the static "
                 "encoding figure labels stored zero-based IDs (x0, x1, ...)."
             ),
@@ -376,6 +380,10 @@ def render_run_report_v2_tex(
             ),
             r"\section{Wang Z3}",
             rf"Status: {_tex(wang_z3['status'])}. Random seed: {_tex(wang_z3['configuration']['random_seed'])}. Threads: {_tex(wang_z3['configuration']['threads'])}.",
+            (
+                rf"\par Recorded elapsed time: {_tex(_elapsed(timings['wang_z3_ns']))}. "
+                r"This run-specific observation is not a benchmark.\par"
+            ),
             _tall_figure(
                 _narrative_artifact(wang_animation, "fallback"),
                 str(wang_animation["caption"]),
