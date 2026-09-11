@@ -1,6 +1,6 @@
 # Narrative migration checklist
 
-**Status:** frozen inventory and migration map
+**Status:** inventory retained; implementation frozen through T98 on 11 September 2026
 
 **Baseline:** `17edabc5c956cb6f00cbb19266b7701a04e30ee2` on 31 August
 2026
@@ -8,8 +8,9 @@
 This checklist applies the
 [narrative architecture contract](2026-08-31-narrative-architecture-contract.md)
 to every current public page, public Pages asset, dossier/schema contract, and
-known excluded documentation source. Unchecked implementation actions belong
-to later work; this inventory itself makes no public-site or asset change.
+known excluded documentation source. The inventory below retains its original
+baseline; completed implementation checks are bound to the T98 evidence in
+section 13. This checklist itself makes no public-site or asset change.
 
 ## 1. Baseline audit
 
@@ -161,14 +162,14 @@ checks prove the old files are unreferenced before deletion.
 - [x] `sat-end-to-end` and `unsat-search` have no initial-domain overrides;
   the two constrained diagnostic cases remain explicitly configured Wang
   solves rather than claims about the unconstrained formula.
-- [ ] Keep v1 schema bytes/meaning and current cases compatible through every
+- [x] Keep v1 schema bytes/meaning and current cases compatible through every
   v2 change.
-- [ ] Keep v1 formatter/template isolated from v2; share only focused helpers
+- [x] Keep v1 formatter/template isolated from v2; share only focused helpers
   behind thin dispatch.
-- [ ] Keep v1 atomic destination install, isolated pdfLaTeX, no-shell-escape,
+- [x] Keep v1 atomic destination install, isolated pdfLaTeX, no-shell-escape,
   run-specific timing identity, and diagnostic-UNSAT boundary.
-- [ ] Run the existing SAT and all three UNSAT v1 dossier tests after each v2
-  contract, asset, and PDF change.
+- [x] Pass the existing SAT and all three UNSAT v1 dossier regressions on the
+  final v2 contract, asset, and PDF implementation.
 
 ## 8. Shared-asset migration order
 
@@ -209,18 +210,18 @@ checks prove the old files are unreferenced before deletion.
 
 ## 10. V2 PDF implementation gates
 
-- [ ] Follow the nine-section order frozen in the architecture contract.
-- [ ] Consume the same validated facts and static assets as the captured v2
+- [x] Follow the nine-section order frozen in the architecture contract.
+- [x] Consume the same validated facts and static assets as the captured v2
   run; do not consume Pages HTML or Markdown.
-- [ ] Embed no GIF/video and perform no second render or replay.
-- [ ] Mark assignment, witness, verification, generalized witness, and hex
+- [x] Embed no GIF/video and perform no second render or replay.
+- [x] Mark assignment, witness, verification, generalized witness, and hex
   witness not applicable for UNSAT without fabricating a certificate.
-- [ ] Keep raw timings in their named component sections and full detail in the
+- [x] Keep raw timings in their named component sections and full detail in the
   appendix; make no general performance comparison.
-- [ ] Compile with isolated, reproducible, no-shell-escape pdfLaTeX rules.
-- [ ] Validate self-containment, hashes, source identity, component agreement,
+- [x] Compile with isolated, reproducible, no-shell-escape pdfLaTeX rules.
+- [x] Validate self-containment, hashes, source identity, component agreement,
   static-template inputs, and partial-failure cleanup.
-- [ ] Prove v1 cases and output contracts remain compatible.
+- [x] Prove v1 cases and output contracts remain compatible.
 
 ## 11. Excluded documentation sources
 
@@ -242,13 +243,62 @@ checks prove the old files are unreferenced before deletion.
   and expected page class.
 - [x] Every narrative asset has one owner, one source chain, and one allowed
   semantic label.
-- [ ] No GIF is duplicated, embedded by two owners, missing a static fallback,
+- [x] No GIF is duplicated, embedded by two owners, missing a static fallback,
   or included in a PDF.
-- [ ] `pipeline_sat.cm13` identities agree across the worked example, all
+- [x] `pipeline_sat.cm13` identities agree across the worked example, all
   engines, verification, presentation, Pages assets, and v2 dossier.
-- [ ] `unsat-search` remains visibly and cryptographically separate.
-- [ ] Removing documentation and explainability leaves core build, solve,
+- [x] `unsat-search` remains visibly and cryptographically separate.
+- [x] Removing documentation and explainability leaves core build, solve,
   oracles, verifier, and standard export functional.
 - [x] Full suites, strict compilers, sanitizer, analyzer, dynamic analysis,
   applicable profiling, renderer tests, Pages/Jekyll, TeX smoke, diff, secret,
   file-mode, and artifact checks are green before publication.
+
+## 13. T98 implementation freeze — 11 September 2026
+
+The presentation implementation is frozen at `f728bbd`, relative to the T97
+base `b921e7d`. Independent whole-branch review and scoped re-reviews closed
+the two Important PDF findings: missing component-local oracle timings and
+an orphaned hex caption. No Critical or Important finding remains. This is
+a local implementation freeze; publication and later roadmap tasks are separate.
+
+The complete local closing matrix passed: `make check`, `pages-check`, strict
+GCC/Clang, sanitizer, analyzer, Valgrind, Cachegrind, parser fuzz smoke (2,000
+runs), coverage, both dossier smoke targets and the locked renderer suite.
+Final coverage execution passed all 17 C binaries and **199 Python tests**,
+including all **33 v1/v2 dossier tests**; the renderer passed **324 tests**.
+Sanitizer and fuzz required an authorized execution outside the ptrace sandbox
+with leak detection retained. Memcheck completed all 17 binaries and three
+benchmark invocations with zero errors/leaks; its interrupted run was resumed
+at the remaining commands with unchanged recipe, source and build identities.
+Coverage is informational; no timing or coverage threshold was introduced.
+
+Pages evidence covers 40 generated pages, 799 internal references and 48
+browser cases. All 171 inputs to that accepted build remained unchanged through
+the final formatter correction; this subsequent checklist edit is excluded
+from the site. Both final v2 PDFs contain static figures only: **23 SAT pages**
+and **26 search-UNSAT pages**. Every page was inspected at normal reading scale.
+The fresh final smoke preserves all 162 narrative images and 43 page rasters
+byte-for-byte; the six pages changed by captured timing/environment text were
+individually re-inspected. Figure/caption pagination is protected by
+`V2FigurePaginationTests.test_wide_figure_keeps_its_caption_on_the_image_page`.
+
+The frozen-input v1 TeX, PDF and entire output tree remain byte-identical;
+v1 schema/case bytes, formatter and template remain compatible. A disposable
+export without downstream documentation/explainability consumers passed all
+17 C binaries and 62 core Python tests. Core, ABI, independent oracles, schemas
+and dependency locks are unchanged. Final diff, bounded secret scan, file-mode
+and artifact checks found no unexpected tracked output or mode change.
+
+Four non-blocking limitations are retained under the stopping criteria:
+
+- The MRV summary covers redundant lower legend lines; its large decision
+  summary still shows the minimum domain, ties and row-major winner.
+- Raster tests protect semantic values and summary cards more directly than
+  every candidate/winner grid color and displayed active-only count.
+- Some redundant-signal labels crowd their boxes in the search-UNSAT routing
+  figures; signal IDs and routing order remain readable.
+- The didactic ownership panel's `caller owns` label slightly exceeds its card
+  border in both PDFs; its meaning and neighboring values remain readable.
+
+These limitations introduce no additional visual work into the frozen phase.
