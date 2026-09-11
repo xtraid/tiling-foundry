@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -14,7 +15,7 @@ from unittest.mock import patch
 
 from dossier import multi_engine
 from dossier import narrative_assets as narrative_generator
-from dossier.tex_compile import TexCompileError
+from dossier.tex_compile import TexCompileError, compile_tex_pdf
 from formats.pipeline_snapshot import PipelineSnapshotError
 from formats.narrative_assets import (
     boolean_z3_source_sha256,
@@ -31,7 +32,7 @@ from formats.run_dossier_v2 import (
     validate_run_dossier_v2,
 )
 from formats.run_dossier_v2_bundle import load_run_dossier_v2
-from formats.run_report_v2_tex import render_run_report_v2_tex
+from formats.run_report_v2_tex import _wide_figure, render_run_report_v2_tex
 from native import multi_engine_pipeline
 from native.multi_engine_pipeline import (
     TraceCaptureOptions,
@@ -45,6 +46,65 @@ ROOT = Path(__file__).resolve().parents[2]
 SAT_CASE = ROOT / "examples/run-cases-v2/pipeline-sat.json"
 UNSAT_CASE = ROOT / "examples/run-cases-v2/pipeline-unsat-search.json"
 V2_TEMPLATE = ROOT / "templates/run-report-v2.tex"
+
+
+class V2FigurePaginationTests(unittest.TestCase):
+    @unittest.skipUnless(
+        shutil.which("pdflatex") and shutil.which("pdftotext"),
+        "pdflatex and pdftotext are optional",
+    )
+    def test_wide_figure_keeps_its_caption_on_the_image_page(self) -> None:
+        captured_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        with tempfile.TemporaryDirectory() as name:
+            directory = Path(name)
+            picture = directory / "picture"
+            picture.mkdir()
+            (picture / "report.tex").write_text(
+                "\n".join(
+                    (
+                        r"\documentclass{article}",
+                        r"\usepackage[paperwidth=100mm,paperheight=20mm,margin=2mm]{geometry}",
+                        r"\pagestyle{empty}",
+                        r"\begin{document}IMAGE-MARKER\end{document}",
+                    )
+                ),
+                encoding="utf-8",
+            )
+            compile_tex_pdf(picture, "pdflatex", captured_at)
+            shutil.copyfile(picture / "report.pdf", directory / "image.pdf")
+            (directory / "report.tex").write_text(
+                "\n".join(
+                    (
+                        r"\documentclass{article}",
+                        r"\usepackage[a4paper,margin=18mm]{geometry}",
+                        r"\usepackage{graphicx}",
+                        r"\setlength{\parindent}{0pt}",
+                        r"\setlength{\parskip}{0.55em}",
+                        r"\begin{document}",
+                        r"\newlength{\imageheight}",
+                        r"\settoheight{\imageheight}{\includegraphics[width=\textwidth,height=0.48\textheight,keepaspectratio]{image.pdf}}",
+                        # Leave room for the image, but not its caption: both
+                        # must move together when the page cannot hold them.
+                        r"\vspace*{\dimexpr\textheight-\imageheight-42pt\relax}",
+                        _wide_figure("image.pdf", "CAPTION-MARKER"),
+                        r"\end{document}",
+                    )
+                ),
+                encoding="utf-8",
+            )
+            compile_tex_pdf(directory, "pdflatex", captured_at)
+            pages = subprocess.run(
+                ["pdftotext", str(directory / "report.pdf"), "-"],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            ).stdout.split("\f")
+        image_pages = [i for i, page in enumerate(pages) if "IMAGE-MARKER" in page]
+        caption_pages = [i for i, page in enumerate(pages) if "CAPTION-MARKER" in page]
+        self.assertEqual(len(image_pages), 1)
+        self.assertEqual(len(caption_pages), 1)
+        self.assertEqual(image_pages, caption_pages)
 
 
 class MultiEngineDossierTests(unittest.TestCase):

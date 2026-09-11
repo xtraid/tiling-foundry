@@ -45,12 +45,15 @@ def _path(value: object, *, narrative: bool = False) -> str:
 
 
 def _wide_figure(path: str, caption: str) -> str:
+    """Keep a bounded static image and its caption on the same page."""
     return "\n".join(
         (
             r"\begin{center}",
+            r"\begin{minipage}{\textwidth}",
             r"\centering",
             rf"\includegraphics[width=\textwidth,height=0.48\textheight,keepaspectratio]{{{path}}}",
             rf"\par\smallskip{{\small\itshape {_tex(caption)}}}",
+            r"\end{minipage}",
             r"\end{center}",
         )
     )
