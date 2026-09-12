@@ -167,10 +167,10 @@ class PagesCheckerTests(unittest.TestCase):
             if path == target:
                 body = body.replace(
                     'animation="/assets/narrative/boolean-z3/trace.gif" '
-                    'fallback="/assets/narrative/boolean-z3/frame-02.png" '
+                    'fallback="/assets/narrative/boolean-z3/frame-03.png" '
                     'contact_sheet="/assets/narrative/boolean-z3/contact-sheet.png"',
                     'animation="/assets/narrative/boolean-z3/contact-sheet.png" '
-                    'fallback="/assets/narrative/boolean-z3/frame-02.png" '
+                    'fallback="/assets/narrative/boolean-z3/frame-03.png" '
                     'contact_sheet="/assets/narrative/boolean-z3/trace.gif"',
                 )
             return metadata, body

@@ -46,7 +46,7 @@ asset, followed by its atomic legend.
 
 {% include narrative-static.html asset_id="generalized_sheet" image="/assets/narrative/generalized-tiles/sheet.png" alt="A sheet of fourteen Yang-Zhang generalized tiles with internal seams and atomic identifiers." width="908" height="1146" label="canonical-construction" caption="The exact 14 generalized tiles decomposed into 23 positional atomic IDs." source="wang-generalized-tiles-v1+wang-tileset-snapshot-v1" %}
 
-{% include narrative-static.html asset_id="atomic_legend" image="/assets/narrative/generalized-tiles/atomic-legend.png" alt="A semantic legend for twenty-three positional Wang tiles and their edge colors." width="1296" height="782" label="canonical-construction" caption="All 23 atomic IDs with symbolic paper colors and generalized roles." source="wang-generalized-tiles-v1+wang-tileset-snapshot-v1" %}
+{% include narrative-static.html asset_id="atomic_legend" image="/assets/narrative/generalized-tiles/atomic-legend.png" alt="A semantic legend for twenty-three positional Wang tiles and their edge colors." width="866" height="2092" label="canonical-construction" caption="All 23 atomic IDs with symbolic paper colors and generalized roles." source="wang-generalized-tiles-v1+wang-tileset-snapshot-v1" %}
 
 ## Position in the pipeline
 

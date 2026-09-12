@@ -149,9 +149,30 @@ records an explicit not-applicable panel and never fabricates a witness or
 certificate. The separate example is versioned at
 `examples/run-cases-v2/pipeline-unsat-search.json`.
 
-No v2 PDF is produced yet. Its later formatter will consume only the validated
-static milestone PNGs already named by the asset manifest, without solving,
-checking, replaying, or rendering again.
+The default v2 command stops after the validated capture and shared assets. It
+does not import the LaTeX formatter, invoke a TeX compiler, or produce
+`report.tex` and `report.pdf`. With pdfLaTeX available, add `--pdf` when a
+static report is wanted:
+
+```sh
+make shared
+uv run --frozen python tools/generate_run_dossier.py \
+  examples/run-cases-v2/pipeline-sat.json \
+  build/run-dossiers/pipeline-sat-v2-pdf \
+  --pdf
+```
+
+The v2 formatter consumes only the validated `run.json` and static PNGs already
+named by the asset manifest. It does not solve, invoke Z3, verify, replay, or
+render again. SAT reports include the checked witness presentations;
+search-UNSAT reports mark witness-only sections not applicable and do not
+invent a certificate.
+
+The opt-in compiler uses the same isolated, no-shell-escape execution and
+private TeX state as v1. TeX and PDF files are staged with the complete dossier
+and installed atomically; compilation failure leaves no partial destination.
+The v1 command, formatter, output shape, and `--tex-engine` behavior remain
+unchanged.
 
 All v2 durations use one monotonic nanosecond clock and are labelled
 `run-specific-observation-not-a-benchmark`. They are raw facts about that

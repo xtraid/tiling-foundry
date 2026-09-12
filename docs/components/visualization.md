@@ -43,7 +43,7 @@ color to the two additional axes.
 `witness_presentation` moves from the verified square witness through exact
 generalized recognition to the checked hex port.
 
-{% include narrative-animation.html asset_id="witness_presentation" animation="/assets/narrative/presentation/trace.gif" fallback="/assets/narrative/presentation/frame-03.png" contact_sheet="/assets/narrative/presentation/contact-sheet.png" alt="Four frames move from the verified square witness through generalized recognition to the checked hex presentation." width="1080" height="620" label="verified-transformation" caption="Verified square witness, exact generalized overlay, and checked hex port." source="wang-solution-v1+wang-generalized-tiles-v1+checked-square-to-hex" %}
+{% include narrative-animation.html asset_id="witness_presentation" animation="/assets/narrative/presentation/trace.gif" fallback="/assets/narrative/presentation/frame-03.png" contact_sheet="/assets/narrative/presentation/contact-sheet.png" alt="Four frames move from the verified square witness through generalized recognition to the checked hex presentation." width="960" height="520" label="verified-transformation" caption="Verified square witness, exact generalized overlay, and checked hex port." source="wang-solution-v1+wang-generalized-tiles-v1+checked-square-to-hex" %}
 
 ## Position in the pipeline
 

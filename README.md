@@ -4,44 +4,43 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Can a fixed set of just 23 Wang tiles encode an NP-complete problem? Tiling
-Foundry turns the Yang–Zhang construction into an inspectable, tested software
-pipeline: a formula becomes a finite simply connected region, a native C solver
-tiles it, and an independent verifier checks the witness.
+Foundry turns the Yang--Zhang construction into an inspectable, tested software
+pipeline: a formula becomes a finite simply connected region, independent
+engines decide it, and separate checkers validate every published SAT witness.
 
 This is a research implementation, not a general-purpose tiling library. Its
-main concern is keeping the mathematical reduction, the search procedure, and
-the correctness checks separate enough to audit and measure.
+main concern is keeping the mathematical reduction, search, verification, and
+presentation boundaries visible enough to audit and measure. The previous
+experimental codebase remains frozen under `legacy/`.
 
-The project is being rebuilt from the theory outward. The previous experimental
-codebase remains under `legacy/`, but it is not the implementation base of the
-new core.
+**Read:** [Documentation](https://xtraid.github.io/tiling-foundry/) ·
+[Pipeline](https://xtraid.github.io/tiling-foundry/pipeline/) ·
+[Worked example](https://xtraid.github.io/tiling-foundry/worked-example/) ·
+[Reference](https://xtraid.github.io/tiling-foundry/reference/) ·
+[Evidence](https://xtraid.github.io/tiling-foundry/evidence/) ·
+[Run dossiers](https://xtraid.github.io/tiling-foundry/run-dossiers/)
 
 ## Why this repository exists
 
-The 2024 Yang–Zhang result proves NP-completeness for tiling finite simply
-connected regions using one fixed set of 23 Wang tiles. The proof is compact;
-turning it into software exposes engineering questions that are easy to hide in
-an all-in-one prototype:
+The 2024 Yang--Zhang result proves NP-completeness for tiling finite simply
+connected regions with one fixed set of 23 Wang tiles. Turning that compact
+proof into software exposes practical questions: which representation owns a
+claim, how the reduction is checked apart from search, how independent engines
+are compared, and what evidence is needed before parallelism.
 
-- Which representation is authoritative at each stage?
-- How do we test the reduction independently from the solver?
-- Can solver optimizations be isolated and measured without changing semantics?
-- What evidence is enough before adding parallelism?
-
-Tiling Foundry answers those questions with small ownership boundaries,
-differential tests, reproducible benchmark cases, and a deliberately retained
-reference solver path.
+Tiling Foundry answers those questions with explicit ownership, an executable
+reference solver, differential tests, independent oracles and verifiers, and
+reproducible captures.
 
 ## Quick start
 
-The supported development and execution platform is Linux on a POSIX userspace.
-The current toolchain relies on Linux/POSIX facilities including `mmap`,
-`/proc`, Valgrind, and dynamic loading of `libwang.so`. Windows and macOS are
-not currently supported; no compatibility backend is implied or planned
-without a concrete requirement.
+The supported development and execution platform is Linux on a POSIX
+userspace. The toolchain uses Linux/POSIX facilities including `mmap`, `/proc`,
+Valgrind, and dynamic loading of `libwang.so`; Windows and macOS are not
+currently supported.
 
-Requirements are a C17 compiler, `make`, OpenMP support, and
-[`uv`](https://docs.astral.sh/uv/). Then:
+Install a C17 compiler, `make`, OpenMP support, and
+[`uv`](https://docs.astral.sh/uv/), then run:
 
 ```sh
 git clone https://github.com/xtraid/tiling-foundry.git
@@ -49,352 +48,177 @@ cd tiling-foundry
 make check
 ```
 
-`make check` builds the serial and shared libraries, runs the C and Python test
-suites, builds the OpenMP scaffold, and exercises both solver paths on a small
-benchmark case. It does not require a GPU.
+`make check` builds the serial executable and shared library, runs the C and
+core Python tests, builds the OpenMP scaffold, and exercises both serial solver
+paths. It does not require a GPU.
 
 ## Current status
 
-The implemented components cover the square pipeline from `.cm13` input
-through a verified solution document, the default square diagnostic PNG, and
-the checked presentation-only square-to-hex view selected by `--hex`. Parallel
-solving remains future work.
+The complete serial square pipeline is implemented from `.cm13` input through
+four decision paths, independently checked witnesses, versioned solution and
+trace artifacts, and square/generalized/hex presentations. Full-pipeline v2
+captures and their shared narrative assets are available, with a static PDF as
+an explicit opt-in. Parallel solving remains future work.
 
 | Capability | Status |
 | --- | --- |
-| Yang–Zhang formula-to-region construction | Implemented and tested |
-| Reference serial solver | Implemented |
-| Optimized serial path | Implemented with six isolated, measured mechanisms |
-| Independent native verifier | Implemented and required before SAT publication |
-| Boolean Z3 oracle | Implemented over the copied immutable `Formula` |
-| Wang Z3 oracle | Implemented over copied `Region + TILESET` |
-| Boolean–Wang witness correspondence | Implemented; exhaustive evidence covers all 1,701 canonical formulas through three variables and 27,044 constrained native solves |
-| Verified square solution export | Implemented as the closed `wang-solution-v1` contract and deterministic exporter |
-| Wang diagnostic renderer | Implemented as one presentation-only CLI with byte-stable square default and explicit `--hex` mode in the isolated `renderer/` project |
-| Square-to-hex presentation port | Implemented as a pure in-memory Basire/Culik mapping with a raster-independent checker; no hex solver, schema, or core model |
-| Static explainability snapshots | Implemented for parsed formula, canonical tile sheet, and unassigned region, with hash-bound JSON contracts and square/hex diagnostic views |
-| Generalized tile presentation | Implemented as an exact presentation-only 14-to-23 mapping with a pure recognizer, semantic sheet, labelled atomic legend, and square-witness overlay |
-| Reduction construction provenance | Implemented as a separate opt-in native-owned result with exact signal orders, swap-bound gadget spans, manifest v2, and a square overlay view; the compact standard ABI does not allocate it |
-| Native solver event trace | Implemented as separate opt-in reference/optimized entry points with bounded observed events, full initial state, checkpoints, manifest v3, independent offline replay, and deterministic PNG/GIF views |
-| Reproducible Z3 summaries | Implemented for fixed seed/thread settings and explicit Boolean/Wang encoding order, result/model, and stable project-owned counts; no internal Z3 trace claim |
-| Observed-run dossier | Implemented as one opt-in generator of closed raw run metadata, fixed LaTeX, PDF, and reused trace/square/hex assets; four versioned SAT/UNSAT case definitions cover distinct execution shapes |
-| Full-pipeline multi-engine capture | Implemented as separate closed v2 case/run contracts and one atomic capture over Boolean Z3, one native reduction, reference, optimized, Wang Z3, and existing independent checkers; a closed shared-asset pass now binds semantic milestones and static square/generalized/hex presentations, while PDF v2 remains downstream work |
-| Native C JSON layer | Not implemented; `src/io/json.c` is a placeholder |
+| Yang--Zhang formula-to-region construction | Implemented and tested |
+| Reference and optimized serial solvers | Implemented; the optimized path retains six isolated mechanisms |
+| Boolean Z3 and Wang Z3 oracles | Implemented with fixed, recorded construction order |
+| Independent verification | Required before SAT publication |
+| Boolean--Wang witness correspondence | Implemented with exhaustive small-formula evidence |
+| Versioned solutions, snapshots, provenance, and traces | Implemented as separate hash-bound contracts |
+| Square, generalized, and checked hex presentations | Implemented downstream of verification |
+| v1 observed-run dossiers | Implemented for four distinct SAT/UNSAT execution shapes |
+| v2 multi-engine capture, shared assets, and static PDF | Implemented; capture is atomic and PDF is opt-in |
+| Native C JSON layer | Not implemented; `src/io/json.c` remains a placeholder |
 | `TaskPlan` and native OpenMP solver | Not implemented; only the build scaffold exists |
 
-The optimized path preserves the reference path's Wang semantics and public
-contract. Its six retained mechanisms are dynamic DFS storage, omission of
-non-consumable initial-propagation trail entries, SAT-domain ownership
-transfer, byte-wise support aggregation, queue deduplication, and a lazy
-private MRV index that preserves the reference path's row-major tie break. The
-[optimization methodology](docs/solver_performance_scope.md) defines their
-acceptance boundary. Dated reports preserve the measurements and their
-host-specific limitations.
+Optimization claims remain tied to isolated mechanisms and dated evidence; no
+host-specific timing threshold is a general correctness claim. The
+[optimization methodology](docs/solver_performance_scope.md) defines that
+boundary.
 
-## Implemented pipeline
+## Architecture
 
-The implemented paths are:
+The source formula follows two independent routes. Boolean Z3 decides the
+formula directly. The native Yang--Zhang builder constructs one region and
+fixed tileset shared by the reference solver, optimized solver, and Wang Z3.
+Applicable returned witnesses then pass through independent checks before any
+presentation is published.
 
 ```text
-.cm13 --> C parser --> native Formula
-                          |        |\
-                          |        | +--> formula snapshot --> formula view
-                          |        +----> copied Formula ----> Boolean Z3
-                          |                                      |
-                          |                                      v
-                          |                             Boolean witness checker
-                          v
-                  Yang–Zhang builder --> Region + ReductionExplanation
-                                          |  |  |\
-                                          |  |  | +--> v2 manifest --> reduction view
-                                          |  |  +----> v1 manifest --> region view
-                                          |  |                           + tile sheet
-                                          |  +-------> copied Region + TILESET
-                                          |                  |
-                                          |                  v
-                                native reference/       Wang Z3
-                                optimized solver          |  \
-                                   |       |              |   +--> encoding-order summary
-                                   |       +--> observed trace      +--> PNG/GIF
-                                   |                 |       v
-                                   v                 |  Python tiling checker
-                            native verifier           v
-                                   |          offline replay --> PNG/GIF
-                        copied tiling + Python checker
-                                   |
-                                   v
-                        wang-solution-v1 --> square PNG (default/explain)
-                                   \
-                                    +--> pure hex port/check --> hex PNG (--hex)
+                         +--> Boolean Z3 --> assignment check
+.cm13 --> parser --> Formula
+                         +--> Yang--Zhang --> Region + TILESET
+                                                |--> reference solver --+
+                                                |--> optimized solver --+--> witness checks
+                                                +--> Wang Z3 -----------+          |
+                                                                                  v
+                                                                square --> generalized / hex
 ```
 
-The witness bridge relates exact Boolean assignments to the variable cells of
-the same live Yang–Zhang reduction. Its precise scope and evidence are recorded
-in the [witness correspondence design](docs/designs/2026-08-21-witness-extension-design.md).
-The square-to-hex branch changes presentation only; it consumes the same
-square witness after verification. OpenMP is not part of the implemented
-diagram.
+The [pipeline story](https://xtraid.github.io/tiling-foundry/pipeline/) explains
+the data flow and component boundaries. The
+[worked example](https://xtraid.github.io/tiling-foundry/worked-example/)
+follows one named SAT source through the same contracts and checks.
 
-## Correctness boundaries
+## Correctness boundaries and limitations
 
-- The solver uses the 23 atomic Wang tiles, with translation only: no rotation
-  or reflection.
-- The 14 generalized tiles are builder and diagnostic metadata, not solver
-  primitives.
-- The region depends on the input formula and is built at runtime.
-- Search and verification remain independent implementations.
-- Z3 is an oracle and cross-check, not a replacement for the native C solver.
-- Witness extension pins only the variable-gadget cells; extraction first
-  verifies the whole Wang tiling and leaves Boolean clause checking to the
-  independent formula checker.
-- Witness correspondence does not claim a unique tiling for each assignment or
-  that extending an extracted assignment reproduces the original tiling.
-- The hex port is a bijection over the image tile table, not a second solver or
-  correctness oracle. Its pure checker proves translation equivalence while
-  leaving source solution validation upstream.
-- OpenMP is introduced only after the serial path is correct and measurable.
-- Project conventions must be distinguished from claims inherited from the
-  Yang–Zhang paper.
+- The solver uses the 23 atomic Wang tiles with translation only; rotation and
+  reflection are not allowed.
+- The 14 generalized tiles are construction and presentation metadata, not
+  solver primitives.
+- Search, witness extraction, and verification remain separate
+  implementations.
+- Boolean Z3 checks the source formula; Wang Z3 checks the constructed region.
+  Neither replaces the native solvers.
+- A trace records observed events. It is not a standalone UNSAT certificate.
+- The square-to-hex port is a checked one-to-one presentation of an already
+  verified square witness, not another solver or solution schema.
+- Project conventions are distinguished from claims inherited from the
+  Yang--Zhang paper.
+- Parallel search is deferred until the cleaned serial baseline has new
+  evidence and explicit ownership tests.
 
 ## Next milestones
 
-Planned work remains separated into independently reviewed changes. The next
-serial-evidence packets are:
+Work proceeds in this order:
 
-1. extend the hard-UNSAT/scaling corpus and record the option matrix now that
-   the isolated MRV mechanism is measured;
-2. define `TaskPlan` only after the serial evidence, then implement and measure
-   real OpenMP execution.
+1. freeze the current visual documentation and PDF work;
+2. T99: split fast, integration, and evidence verification into reusable CI
+   levels;
+3. T100: perform a behavior-preserving structural cleanup of the serial
+   solver;
+4. collect a new serial baseline, hard-UNSAT evidence, and the public option
+   matrix;
+5. introduce a minimal `TaskPlan` with an equivalent serial executor;
+6. add and measure real OpenMP execution only after those gates pass.
 
-The implementation follows a deliberately small design rule: each datum has one
-owner, derived state is computed when needed, and future metadata is not added to
-core structures before it has a concrete consumer.
+## Build, test, and reproduce
 
-## Build and test
-
-Requirements:
-
-- a C17 compiler;
-- OpenMP support for the parallel build target;
-- [`uv`](https://docs.astral.sh/uv/) for Python reference-tool tests.
-
-Run the complete current check:
+Run the core checks from the repository root:
 
 ```sh
 make clean
 make check
 ```
 
-The imported renderer remains a separate locked Python project. Its Pillow and
-NumPy dependencies are not installed by the root project or exercised by
-`make check`. Run its 283-test combined suite independently:
+The renderer is an isolated locked Python project and has its own suite:
 
 ```sh
 cd renderer
 uv run --locked pytest -q
+cd ..
 ```
 
-CI mirrors that command in a separate read-only Python 3.14 job. Snapshot
-provenance and update instructions are recorded in
-[`renderer/UPSTREAM.md`](renderer/UPSTREAM.md).
+Useful focused targets include `make c-check`, `make python-check`,
+`make strict-check`, `make sanitizer-check`, `make analyzer-check`,
+`make valgrind-check`, `make cachegrind-check`, `make coverage`,
+`make parser-fuzz-smoke`, and `make benchmark-compare-smoke`. Dated evidence
+pages record the environment and limits for extended fuzzing, profiling, and
+benchmarks.
 
-To exercise the Wang renderer on the versioned square solution fixture:
+To render the versioned square witness fixture:
 
 ```sh
 cd renderer
 uv run --locked python wang_square.py \
   ../tests/fixtures/wang_solution_v1_square_sat.json \
   output/wang-square.png
+cd ..
 ```
 
-The same command produces the checked pointy-top axial presentation only when
-the explicit flag is present:
+Add `--hex` and select another output path for the checked pointy-top hex
+presentation.
 
-```sh
-uv run --locked python wang_square.py \
-  ../tests/fixtures/wang_solution_v1_square_sat.json \
-  output/wang-hex.png \
-  --hex
-```
-
-The [square solution contract](docs/wang_solution_v1.md) includes the producer
-API for exporting a verified native result before rendering it. The
-[square-to-hex reference](docs/wang_square_to_hex.md) defines the mapping,
-inverse proof, checker boundary, and integer axial raster convention.
-The [static snapshot contract](docs/wang_explainability_snapshots.md) documents
-the real formula-to-region export and the formula, tile-sheet, region, and
-opt-in final explainability views.
-The [reduction explanation contract](docs/wang_reduction_explanation.md)
-defines native signal/gadget provenance, manifest v2, ownership, replay
-invariants, and the square-only construction overlay.
-The [solver event trace contract](docs/wang_solver_trace.md) defines bounded
-native capture, manifest v3, semantic replay, checkpoints, truncation, and the
-presentation-only animation boundary.
-The [observed-run dossier contract](docs/run_dossiers.md) defines the four
-versioned case classes, authoritative raw metadata, fixed TeX scaffolding,
-asset reuse, atomic output, and UNSAT evidence boundary.
-
-The v2 shared-asset pass is also opt-in through the same dossier command. It
-validates the raw multi-engine capture, renders Boolean/Wang encoding order,
-Yang--Zhang construction, both observed traces, verification receipts, the
-checked witness presentation, and the six-mechanism didactic overview, then
-records every GIF, reduced-motion fallback, contact sheet, frame, caption, alt
-text, semantic label, owner, and source hash in
-`wang-narrative-assets-v1`. The same generator can target a temporary
-`canonical-pages` bundle; tests require all compositor-produced bytes to match
-the run-specific bundle for identical inputs and parameters.
-
-To export one observed reference run and render selected replay states:
-
-```sh
-make shared
-uv run python tools/export_solver_trace.py \
-  tests/instances/pipeline_sat.cm13 build/solver-trace/manifest.json \
-  --event-capacity 4096 --checkpoint-interval 128 --checkpoint-capacity 32
-cd renderer
-uv run --locked python wang_trace_render.py \
-  ../build/solver-trace/manifest.json ../build/solver-trace/rendered
-```
-
-The fixed-configuration Boolean and Wang Z3 summaries are exported separately:
-
-```sh
-uv run python tools/export_z3_encoding_summaries.py \
-  tests/instances/pipeline_sat.cm13 build/z3-summaries
-```
-
-To generate one self-contained report outside the ordinary run path, provide
-pdfLaTeX and select a versioned case explicitly:
+Generate a full-pipeline v2 capture without a TeX dependency:
 
 ```sh
 make shared
 uv run --frozen python tools/generate_run_dossier.py \
-  examples/run-cases/sat-end-to-end.json \
-  build/run-dossiers/sat-end-to-end \
-  --tex-engine pdflatex
+  examples/run-cases-v2/pipeline-sat.json \
+  build/run-dossiers/pipeline-sat-v2
 ```
 
-The compiler is invoked without shell escape. `run.json` preserves raw stage
-durations and hashes; the PDF reuses the validated trace frames and existing
-square/hex renderers. TeX remains an opt-in CI/tooling dependency, not a root
-Python dependency.
-
-Useful individual targets:
-
-```sh
-make serial
-make shared
-make openmp
-make c-check
-make python-check
-make coverage
-make parser-fuzz-smoke
-make strict-check
-make sanitizer-check
-make analyzer-check
-make valgrind-check
-make cachegrind-check
-make benchmark
-make benchmark-compare-smoke
-make benchmark-compare
-```
-
-`make coverage` runs the complete C and Python test suites with branch
-instrumentation and writes disposable text, XML/JSON, and HTML output below
-`build/coverage/`. The baseline is informational: these targets deliberately
-set no pass/fail percentage threshold. The dated interpretation is published
-in the [coverage baseline](docs/coverage_baseline_2026-08-22.md).
-
-`make parser-fuzz-smoke` builds a Clang libFuzzer harness for the canonical
-`.cm13` parser with AddressSanitizer and UndefinedBehaviorSanitizer, copies the
-versioned valid and malformed seeds into disposable storage below `build/`, and
-runs a deterministic short campaign. The committed corpus is therefore never
-modified by fuzzing. For a longer local campaign, use `make parser-fuzz`; its
-defaults can be overridden explicitly, for example:
-
-```sh
-make parser-fuzz FUZZ_RUNS=1000000 FUZZ_MAX_LEN=16384 FUZZ_TIMEOUT=5
-```
-
-Both targets set `allocator_may_return_null=1` only for the fuzz process. This
-lets intentionally enormous headers exercise the parser's out-of-memory return
-instead of being reported as an AddressSanitizer allocation abort; all other
-ASan and UBSan findings remain fatal. LibFuzzer's combined allocation/RSS guard
-is disabled so it does not pre-empt that return path; AddressSanitizer instead
-enforces a finite 256 MiB hard RSS limit. Maximum input length and per-input
-timeout are also bounded, and the artifact directory is recreated for every
-campaign below `build/`. The smoke uses fixed seed and run count and runs as a
-separate read-only CI job. Its measured result is recorded in the
-[parser fuzz smoke report](docs/parser_fuzz_smoke_2026-08-22.md).
-
-Dependabot checks GitHub Actions and the uv lockfile weekly. Every CI action is
-pinned to a reviewed full commit SHA with its release version retained in a
-comment, and repository checkout does not persist credentials.
-
-`make benchmark` builds the portable `-O2` harness and runs the reference path
-over the versioned generic and Yang–Zhang corpus in separate timing,
-single-solve RSS, and metrics passes. Individual cases accept
-`--solver reference|optimized`; reference is the default. Results are
-host-specific evidence, not CI pass/fail thresholds.
-
-`make benchmark-compare` runs seven fresh-process samples over the smallest
-shared SAT/UNSAT `.cm13` corpus. It separates the direct Wang-region comparison
-from the file-to-verified-decision view so the direct Boolean oracle is not
-presented as if it solved a `Region`. The smoke target runs the smallest UNSAT
-case once; the extended presets and JSON Lines capture command are documented in
-[`docs/solver_comparison_benchmark.md`](docs/solver_comparison_benchmark.md).
+With pdfLaTeX available, add `--pdf` to request the additive static v2 report. The
+[run dossier guide](https://xtraid.github.io/tiling-foundry/run-dossiers/)
+documents v1 and v2 case semantics, atomic output, static input reuse, and the
+SAT/UNSAT evidence boundary.
 
 ## Repository layout
 
 ```text
 include/wang/    public C APIs
 src/core/        tiles and region primitives
-src/builder/     Yang–Zhang reduction components
-src/crosscheck/  Boolean/Wang witness bridge above solver and verifier
-src/solver/      serial solver
-src/parallel/    OpenMP build scaffold (solver not implemented)
-src/verify/      independent tiling verification
-src/io/          formula parsing and native JSON placeholder
+src/builder/     Yang--Zhang reduction
+src/crosscheck/  Boolean/Wang witness bridge
+src/solver/      reference and optimized serial search
+src/parallel/    OpenMP build scaffold
+src/verify/      independent native verification
+src/io/          formula parser and native JSON placeholder
 python/model/    pure Python data contracts
 python/native/   C ABI adapters and ownership boundaries
-python/formats/  versioned solution and static-snapshot validation/export
-python/crosscheck/ scoped native/Z3 witness orchestration
+python/formats/  versioned artifact validation and export
 python/oracles/  independent Z3 oracles and witness checks
-python/hex/      deliberately unused empty hex-core placeholders
-renderer/        isolated legacy and explainable square/hex Wang rendering
-tests/           C, Python, and instance regressions
-benchmarks/      fixed reference corpus and profiling runner
-docs/            theory and architecture references
+renderer/        isolated explanatory and square/hex rendering
+tests/           C, Python, fixtures, and instance regressions
+benchmarks/      fixed corpora and profiling tools
+docs/            Pages stories, maintained references, and dated evidence
 legacy/          frozen experimental code
 ```
 
-The C parser is canonical for native input. Native adapters copy data into
-Python-owned models and never expose C pointers. Oracles accept models rather
-than paths: the Boolean oracle consumes `Formula`, while the Wang oracle
-consumes `Region + TILESET`. Both witness checkers are pure Python and
-independent of Z3. The cross-check layer coordinates Boolean/Wang witness
-relations, while the smaller native-only solve coordinator supplies verified
-tilings to producers without importing either Z3 oracle. Both paths keep
-native lifetimes scoped; Python does not duplicate parsing or the Yang–Zhang
-reduction.
+The C parser is canonical for native input. Python adapters copy data across
+the ABI and do not expose C pointers. The cross-check layer coordinates
+Boolean/Wang witness relations without moving oracle concepts into the core.
 
 ## Documentation
 
-The [GitHub Pages documentation](https://xtraid.github.io/tiling-foundry/)
-organizes the technical material by reader interest:
-
-- **Architecture and correctness** covers module ownership, the serial solver,
-  independent verification, Boolean–Wang witness correspondence, the square
-  solution data contract, and the presentation-only square-to-hex proof.
-- **Yang–Zhang reduction** covers geometry, formula-to-region construction,
-  proof obligations, and primary references.
-- **Solver optimization** separates the current methodology from dated,
-  reproducible mechanism reports.
-- **Cross-engine benchmarks** documents the native/Z3 protocol and its recorded
-  smoke baseline without treating unlike solver problems as equivalent.
-- **Historical material** preserves the initial architecture specification as
-  superseded context; current headers, tests, and public pages are authoritative.
-
+GitHub Pages is the canonical long-form narrative. It separates the
+[pipeline](https://xtraid.github.io/tiling-foundry/pipeline/),
+[component stories](https://xtraid.github.io/tiling-foundry/components/tileset/),
+[maintained reference](https://xtraid.github.io/tiling-foundry/reference/),
+and [dated evidence](https://xtraid.github.io/tiling-foundry/evidence/).
 Development plans and the post template remain versioned under `docs/` but are
 excluded from the published site.
 
@@ -402,7 +226,7 @@ excluded from the published site.
 
 The old Pygame, procedural-generation, solver, notes, proof, and asset material
 is frozen under `legacy/`. It may be consulted for ideas but is not a formal
-specification, proof artifact, or dependency of the new implementation.
+specification, proof artifact, or dependency of the current implementation.
 
 ## Primary reference
 

@@ -45,7 +45,7 @@ secondary didactic overview; it makes no timing or speedup claim.
 
 {% include narrative-animation.html asset_id="optimized_trace" animation="/assets/narrative/optimized-trace/trace.gif" fallback="/assets/narrative/optimized-trace/frame-002562.png" contact_sheet="/assets/narrative/optimized-trace/contact-sheet.png" alt="Observed optimized domain states at root, propagation, decision, search, and result milestones." width="988" height="414" label="observed" caption="Selected semantic milestones from the complete optimized trace." source="wang-explain-manifest-v3" %}
 
-{% include narrative-animation.html asset_id="optimized_mechanisms" animation="/assets/narrative/optimized-mechanisms/trace.gif" fallback="/assets/narrative/optimized-mechanisms/frame-06.png" contact_sheet="/assets/narrative/optimized-mechanisms/contact-sheet.png" alt="Seven didactic frames contrast the reference baseline with six measured optimized mechanisms." width="960" height="500" label="didactic" caption="The six retained serial mechanisms, including the lazy MRV index." source="wang-optimized-mechanisms-v1" %}
+{% include narrative-animation.html asset_id="optimized_mechanisms" animation="/assets/narrative/optimized-mechanisms/trace.gif" fallback="/assets/narrative/optimized-mechanisms/frame-06.png" contact_sheet="/assets/narrative/optimized-mechanisms/contact-sheet.png" alt="Seven didactic frames show stack, trail, ownership, byte-support, queue, and lazy-MRV state, ending with a static summary." width="960" height="520" label="didactic" caption="Six concrete panels show the retained serial mechanisms and their private state changes." source="wang-optimized-mechanisms-v1" %}
 
 ## Position in the pipeline
 

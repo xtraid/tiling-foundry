@@ -14,7 +14,11 @@ This page follows only `tests/instances/pipeline_sat.cm13`. Its SHA-256 is
 No initial-domain override is applied. The separate search-UNSAT example is
 not spliced into this run.
 
-{% include narrative-static.html asset_id="worked_example" image="/assets/narrative/pipeline-overview/worked-example.png" alt="Eight static panels follow the captured source from formula to checked presentation." width="1080" height="940" label="observed" caption="Static t0 through tn component milestones for one SAT run." source="wang-run-dossier-v2#named-components" %}
+{% include narrative-static.html asset_id="worked_example" image="/assets/narrative/pipeline-overview/worked-example.png" alt="An eight-stage overview followed by enlarged Boolean decision, Yang-Zhang construction, six verification receipts, verified square witness, and checked hex presentation panels." width="1080" height="3440" label="observed" caption="Eight-stage overview with readable decision, construction, verification, square-witness, and checked-hex details." source="wang-run-dossier-v2#named-components" %}
+
+The opening grid is the component map. The enlarged panels retain the captured
+decision, construction, checker interpretation, square witness, and final hex
+view at a useful reading size; the component pages own their full explanations.
 
 ## Source formula
 
@@ -26,19 +30,20 @@ source bytes; it is not reconstructed from a later tiling.
 
 ## Decisions and construction
 
-Boolean Z3 returns SAT with a checked assignment. The native builder constructs
-one region, one fixed tileset snapshot, and explicit construction provenance.
-Reference, optimized, and Wang Z3 solves then report SAT over those shared
-identities. Agreement means equal terminal status and independently valid
-witnesses; different valid witnesses need not be byte-identical.
+The enlarged decision panel shows the copied Boolean model; the construction
+panel shows the source-to-target signal order and final region vocabulary.
+The native builder constructs one region, one fixed tileset snapshot, and
+explicit construction provenance. Reference, optimized, and Wang Z3 solves
+then report SAT over those shared identities. Agreement means equal terminal
+status and independently valid witnesses; different valid witnesses need not
+be byte-identical.
 
 ## Verification and presentation
 
-Six named checker records cover the Boolean assignment, both native tilings,
-the assignments extracted through the witness correspondence, and the Wang Z3
-tiling. Only after those checks does the presentation layer render the square
-witness, recognize exact generalized contours, and apply the independently
-checked square-to-hex mapping.
+The enlarged receipt panel distinguishes the six named checks and the copied
+native extraction. Only after those checks does the presentation layer render
+the enlarged square witness, recognize exact generalized contours, and apply
+the checked square-to-hex mapping shown in the final panel.
 
 The milestone sequence links to the owned explanations for the
 [tileset]({{ '/components/tileset/' | relative_url }}),

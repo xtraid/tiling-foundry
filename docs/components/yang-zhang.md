@@ -42,7 +42,7 @@ transactionally.
 `region_construction` is a deterministic construction view, not an instrumented
 clock or solver trace.
 
-{% include narrative-animation.html asset_id="region_construction" animation="/assets/narrative/region-construction/trace.gif" fallback="/assets/narrative/region-construction/frame-04.png" contact_sheet="/assets/narrative/region-construction/contact-sheet.png" alt="Six frames reveal variable, forwarding, crossover, and clause gadget spans on the same region." width="980" height="390" label="canonical-construction" caption="Native Yang-Zhang gadget spans accumulated over the observed region." source="wang-reduction-explanation-v1" %}
+{% include narrative-animation.html asset_id="region_construction" animation="/assets/narrative/region-construction/trace.gif" fallback="/assets/narrative/region-construction/frame-05.png" contact_sheet="/assets/narrative/region-construction/contact-sheet.png" alt="Six frames reveal variable, forwarding, crossover, and clause gadget spans on the same region." width="988" height="414" label="canonical-construction" caption="Native Yang-Zhang gadget spans accumulated over the observed region." source="wang-reduction-explanation-v1" %}
 
 ## Position in the pipeline
 

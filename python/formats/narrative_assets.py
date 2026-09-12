@@ -159,7 +159,7 @@ _ANIMATION_TOOLCHAIN: Final = {
     ),
     "boolean_z3": (
         "formats.z3_encoding_summary.build_boolean_z3_summary",
-        "renderer.wang_z3_summary.load_z3_encoding_summary",
+        "renderer.wang_z3_summary.load_z3_encoding_summary+renderer.wang_snapshot.load_explainability_bundle",
         "renderer.wang_z3_summary.render_boolean_z3_assets",
     ),
     "region_construction": (
@@ -179,12 +179,12 @@ _ANIMATION_TOOLCHAIN: Final = {
     ),
     "wang_z3": (
         "formats.z3_encoding_summary.build_wang_z3_summary",
-        "renderer.wang_z3_summary.load_z3_encoding_summary",
+        "renderer.wang_z3_summary.load_z3_encoding_summary+renderer.wang_snapshot.load_explainability_bundle",
         "renderer.wang_z3_summary.render_wang_z3_assets",
     ),
     "verification": (
         "formats.run_dossier_v2_builder.build_run_dossier_v2",
-        "formats.run_dossier_v2.validate_run_dossier_v2+renderer.wang_narrative._load_verification",
+        "formats.run_dossier_v2.validate_run_dossier_v2+renderer.wang_snapshot.load_explainability_bundle+renderer.wang_square.load_wang_presentation+renderer.wang_narrative._load_verification",
         "renderer.wang_narrative.render_verification_assets",
     ),
     "witness_presentation": (
@@ -253,6 +253,13 @@ def verification_source_sha256(run: dict[str, object]) -> str:
             {
                 "verification": run["verification"],
                 "agreement": run["agreement"],
+                "source_formula": run["source"]["sha256"],
+                "formula_snapshot": run["reduction"]["formula_sha256"],
+                "tileset": run["reduction"]["tileset_sha256"],
+                "region": run["reduction"]["region_sha256"],
+                "provenance": run["reduction"]["provenance_sha256"],
+                "reference_solution": run["reference"]["solution_sha256"],
+                "reference_assignment": run["reference"]["extracted_assignment"],
             }
         )
     ).hexdigest()
@@ -260,6 +267,24 @@ def verification_source_sha256(run: dict[str, object]) -> str:
 
 def composite_source_sha256(values: dict[str, str]) -> str:
     return hashlib.sha256(_encode_document(values)).hexdigest()
+
+
+def boolean_z3_source_sha256(summary_sha256: str, formula_sha256: str) -> str:
+    return composite_source_sha256(
+        {"summary": summary_sha256, "formula_snapshot": formula_sha256}
+    )
+
+
+def wang_z3_source_sha256(
+    summary_sha256: str, tileset_sha256: str, region_sha256: str
+) -> str:
+    return composite_source_sha256(
+        {
+            "summary": summary_sha256,
+            "tileset": tileset_sha256,
+            "region": region_sha256,
+        }
+    )
 
 
 def generalized_source_sha256(tileset_sha256: str) -> str:
@@ -586,7 +611,13 @@ def load_narrative_assets(
             "wang-run-dossier-v2#named-components",
             pipeline_digest,
         ),
-        "boolean_z3": ("z3-encoding-summary-v1", expected_identities["boolean_z3_summary"]),
+        "boolean_z3": (
+            "z3-encoding-summary-v1+cm13-formula-snapshot-v1",
+            boolean_z3_source_sha256(
+                expected_identities["boolean_z3_summary"],
+                expected_identities["formula_snapshot"],
+            ),
+        ),
         "region_construction": (
             "wang-reduction-explanation-v1",
             expected_identities["provenance"],
@@ -599,7 +630,14 @@ def load_narrative_assets(
             "wang-explain-manifest-v3",
             expected_identities["optimized_trace_manifest"],
         ),
-        "wang_z3": ("z3-encoding-summary-v1", expected_identities["wang_z3_summary"]),
+        "wang_z3": (
+            "z3-encoding-summary-v1+wang-tileset-snapshot-v1+wang-region-snapshot-v1",
+            wang_z3_source_sha256(
+                expected_identities["wang_z3_summary"],
+                expected_identities["tileset"],
+                expected_identities["region"],
+            ),
+        ),
         "verification": (
             "wang-run-dossier-v2#verification",
             verification_source_sha256(run_document),

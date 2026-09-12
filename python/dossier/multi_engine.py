@@ -39,6 +39,7 @@ from model.tileset import TILESET
 
 
 ROOT = Path(__file__).resolve().parents[2]
+TEMPLATE = ROOT / "templates/run-report-v2.tex"
 
 
 class MultiEngineDossierError(RuntimeError):
@@ -270,6 +271,8 @@ def _install_directory(staging: Path, destination: Path) -> None:
 def generate_multi_engine_dossier(
     case_path: str | Path,
     output_directory: str | Path,
+    *,
+    include_pdf: bool = False,
 ) -> Path:
     """Capture all named engines once and atomically install the complete v2 dossier."""
     case: MultiEngineRunCase = load_run_case_v2(case_path, ROOT)
@@ -435,7 +438,26 @@ def generate_multi_engine_dossier(
                 f"shared narrative asset pass failed: {error}"
             ) from error
         _write_atomic(run_path, _encode_document(run_document))
-        load_run_dossier_v2(run_path)
+        validated_document = load_run_dossier_v2(run_path)
+        if include_pdf:
+            from dossier.tex_compile import TexCompileError, compile_tex_pdf
+            from formats.narrative_assets import load_narrative_assets
+            from formats.run_report_v2_tex import render_run_report_v2_tex
+
+            validated_narrative = load_narrative_assets(
+                narrative_manifest,
+                validated_document,
+            )
+            report_tex = render_run_report_v2_tex(
+                validated_document,
+                validated_narrative,
+                TEMPLATE.read_text(encoding="utf-8"),
+            )
+            _write_atomic(staging / "report.tex", report_tex.encode("utf-8"))
+            try:
+                compile_tex_pdf(staging, "pdflatex", captured_at)
+            except TexCompileError as error:
+                raise MultiEngineDossierError(str(error)) from error
         _install_directory(staging, destination)
         return destination
     except Exception:

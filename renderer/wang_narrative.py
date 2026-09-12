@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import hashlib
 import json
 from pathlib import Path
+from typing import NamedTuple
 
 import numpy as np
 from PIL import Image, ImageDraw
@@ -19,6 +20,8 @@ from wang_explain import (
     EXPLAIN_TEXT_RGB,
     draw_explain_heading,
     explain_font,
+    square_inactive_tile,
+    square_explain_tile,
 )
 from wang_generalized_render import (
     compose_atomic_semantic_legend,
@@ -27,8 +30,9 @@ from wang_generalized_render import (
 )
 from wang_generalized import generalized_specification_sha256
 from wang_hex_port import WangSquareRenderError, check_square_to_hex, reduce_square_to_hex
-from wang_snapshot import load_explainability_bundle
+from wang_snapshot import ExplainabilityBundle, load_explainability_bundle
 from wang_square import (
+    _build_palette_from_edges,
     _compose_wang_hex_explain,
     _compose_wang_square_explain,
     _save_png_atomic,
@@ -89,6 +93,23 @@ class OverviewOutputs:
     worked_example: Path | None
 
 
+class _TilingEvidence(NamedTuple):
+    active_index: int
+    inactive_index: int
+    tile_id: int
+    right_id: int
+    tile_edges: tuple[int, int, int, int]
+    right_edges: tuple[int, int, int, int]
+    required_n: int
+    maximum_tile_id: int
+
+
+class _ExtractionEvidence(NamedTuple):
+    variable: int
+    tile_ids: tuple[int, int, int]
+    value: bool
+
+
 def _save_image(image: Image.Image, path: Path) -> None:
     if image.mode != "RGB":
         raise WangSquareRenderError("narrative output must be RGB")
@@ -108,11 +129,211 @@ def _load_image(path: Path) -> Image.Image:
 
 def _fit(image: Image.Image, size: tuple[int, int]) -> Image.Image:
     fitted = image.copy()
-    fitted.thumbnail(size, resample=Image.Resampling.NEAREST)
+    fitted.thumbnail(size, resample=Image.Resampling.LANCZOS)
     return fitted
 
 
-def _load_verification(path: str | Path) -> tuple[str, tuple[dict[str, object], ...]]:
+def _encoded(document: dict[str, object]) -> bytes:
+    return (
+        json.dumps(document, ensure_ascii=False, allow_nan=False, indent=2) + "\n"
+    ).encode("utf-8")
+
+
+def _manifest_context(
+    path: str | Path,
+) -> tuple[ExplainabilityBundle, dict[str, str | None]]:
+    source = Path(path)
+    bundle = load_explainability_bundle(source)
+    try:
+        document = json.loads(source.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise WangSquareRenderError(
+            f"cannot load explainability identity manifest {source!s}: {error}"
+        ) from error
+    artifacts = document.get("artifacts") if type(document) is dict else None
+    if type(artifacts) is not dict or not {
+        "formula", "tileset", "region", "reduction", "solution"
+    } <= set(artifacts):
+        raise WangSquareRenderError(
+            "verification requires an explainability manifest with reduction and solution identities"
+        )
+    identities: dict[str, str | None] = {
+        "source_formula": bundle.source_formula_sha256,
+    }
+    for target, artifact_name in (
+        ("formula_snapshot", "formula"),
+        ("tileset", "tileset"),
+        ("region", "region"),
+        ("provenance", "reduction"),
+        ("reference_solution", "solution"),
+    ):
+        reference = artifacts[artifact_name]
+        if reference is None:
+            identities[target] = None
+            continue
+        if type(reference) is not dict or set(reference) != {"path", "sha256", "schema"}:
+            raise WangSquareRenderError(
+                f"verification manifest {artifact_name} reference must be closed"
+            )
+        digest = reference["sha256"]
+        if (
+            type(digest) is not str
+            or len(digest) != 64
+            or any(character not in "0123456789abcdef" for character in digest)
+        ):
+            raise WangSquareRenderError(
+                f"verification manifest {artifact_name} identity is invalid"
+            )
+        identities[target] = digest
+    return bundle, identities
+
+
+def _bind_solution(
+    bundle: ExplainabilityBundle,
+    identities: dict[str, str | None],
+    path: str | Path,
+):
+    source = Path(path)
+    try:
+        digest = hashlib.sha256(source.read_bytes()).hexdigest()
+    except OSError as error:
+        raise WangSquareRenderError(f"cannot read verification solution: {error}") from error
+    if digest != identities["reference_solution"]:
+        raise WangSquareRenderError(
+            "verification solution identity disagrees with explainability manifest"
+        )
+    presentation = load_wang_presentation(source)
+    region = bundle.region
+    if (
+        (presentation.min_x, presentation.min_y, presentation.max_x, presentation.max_y)
+        != (region.min_x, region.min_y, region.max_x, region.max_y)
+        or presentation.tile_edges != bundle.tileset.tile_edges
+        or any(
+            (tile_id is None) == active
+            for tile_id, active in zip(
+                presentation.cells, region.active, strict=True
+            )
+        )
+    ):
+        raise WangSquareRenderError(
+            "verification solution structure disagrees with explainability bundle"
+        )
+    return presentation
+
+
+def _tiling_evidence(
+    bundle: ExplainabilityBundle, presentation
+) -> _TilingEvidence:
+    region = bundle.region
+    active_index = next(
+        index
+        for index, active in enumerate(region.active)
+        if active
+        and index % region.width + 1 < region.width
+        and region.active[index + 1]
+        and region.boundary[index] is not None
+        and region.boundary[index][0] is not None
+    )
+    inactive_index = next(
+        index for index, active in enumerate(region.active) if not active
+    )
+    right_index = active_index + 1
+    tile_id = presentation.cells[active_index]
+    right_id = presentation.cells[right_index]
+    if tile_id is None or right_id is None:
+        raise WangSquareRenderError("verification evidence selected an inactive tile")
+    tile = presentation.tile_edges[tile_id]
+    right = presentation.tile_edges[right_id]
+    required = region.boundary[active_index][0]
+    if tile[1] != right[3] or tile[0] != required:
+        raise WangSquareRenderError(
+            "verification evidence does not match the recorded checker result"
+        )
+    return _TilingEvidence(
+        active_index=active_index,
+        inactive_index=inactive_index,
+        tile_id=tile_id,
+        right_id=right_id,
+        tile_edges=tile,
+        right_edges=right,
+        required_n=required,
+        maximum_tile_id=len(presentation.tile_edges) - 1,
+    )
+
+
+def _extraction_evidence(
+    bundle: ExplainabilityBundle,
+    presentation,
+    extracted_assignment: tuple[bool, ...],
+) -> tuple[_ExtractionEvidence, ...]:
+    reduction = bundle.reduction
+    if reduction is None or len(extracted_assignment) != bundle.formula.variable_count:
+        raise WangSquareRenderError(
+            "verification extraction inputs do not match the formula"
+        )
+    gadgets = tuple(
+        sorted(
+            (gadget for gadget in reduction.gadgets if gadget.kind == "variable"),
+            key=lambda gadget: gadget.ordinal,
+        )
+    )
+    if len(gadgets) != len(extracted_assignment):
+        raise WangSquareRenderError(
+            "verification extraction requires one recorded variable gadget per value"
+        )
+    evidence: list[_ExtractionEvidence] = []
+    for variable, (gadget, value) in enumerate(
+        zip(gadgets, extracted_assignment, strict=True)
+    ):
+        rows = tuple(range(gadget.y_begin, min(gadget.y_begin + 3, gadget.y_end)))
+        if len(rows) != 3:
+            raise WangSquareRenderError(
+                "verification extraction gadget does not expose three source cells"
+            )
+        tile_ids: list[int] = []
+        for y in rows:
+            index = (y - presentation.min_y) * presentation.width + (
+                gadget.x_begin - presentation.min_x
+            )
+            tile_id = presentation.cells[index]
+            if tile_id is None:
+                raise WangSquareRenderError(
+                    "verification extraction selected an inactive source cell"
+                )
+            tile_ids.append(tile_id)
+        evidence.append(
+            _ExtractionEvidence(
+                variable=variable,
+                tile_ids=(tile_ids[0], tile_ids[1], tile_ids[2]),
+                value=value,
+            )
+        )
+    return tuple(evidence)
+
+
+def _assignment_sha256(values: tuple[bool, ...]) -> str:
+    return hashlib.sha256(_encoded({"witness": list(values)})).hexdigest()
+
+
+def _bounded_variable_indices(variable_count: int) -> tuple[int, ...]:
+    if variable_count <= 3:
+        return tuple(range(variable_count))
+    return (0, 1, variable_count - 1)
+
+
+def _load_verification(
+    path: str | Path,
+    *,
+    manifest_path: str | Path | None = None,
+    solution_path: str | Path | None = None,
+    extracted_assignment: tuple[bool, ...] | None = None,
+) -> tuple[
+    str,
+    tuple[dict[str, object], ...],
+    ExplainabilityBundle | None,
+    object | None,
+    tuple[bool, ...] | None,
+]:
     source = Path(path)
     try:
         document = json.loads(source.read_text(encoding="utf-8"))
@@ -197,44 +418,82 @@ def _load_verification(path: str | Path) -> tuple[str, tuple[dict[str, object], 
         if not valid:
             raise WangSquareRenderError(f"verification record {name} is inconsistent")
         records.append(record)
-    encoded_source = (
-        json.dumps(
-            {"verification": verification, "agreement": agreement},
-            ensure_ascii=False,
-            allow_nan=False,
-            indent=2,
+    bundle: ExplainabilityBundle | None = None
+    presentation = None
+    source_payload: dict[str, object] = {
+        "verification": verification,
+        "agreement": agreement,
+    }
+    if manifest_path is not None:
+        bundle, identities = _manifest_context(manifest_path)
+        if status == "sat":
+            if solution_path is None or extracted_assignment is None:
+                raise WangSquareRenderError(
+                    "SAT verification explanation requires solution and copied assignment"
+                )
+            presentation = _bind_solution(bundle, identities, solution_path)
+            assignment_record = verification["reference_assignment"]
+            if _assignment_sha256(extracted_assignment) != assignment_record[
+                "witness_sha256"
+            ]:
+                raise WangSquareRenderError(
+                    "verification assignment identity disagrees with checker receipt"
+                )
+        elif solution_path is not None or extracted_assignment is not None:
+            raise WangSquareRenderError(
+                "UNSAT verification must not receive solution or assignment data"
+            )
+        if (status == "sat") != (identities["reference_solution"] is not None):
+            raise WangSquareRenderError(
+                "verification solution applicability disagrees with explainability manifest"
+            )
+        source_payload.update(identities)
+        source_payload["reference_assignment"] = (
+            None
+            if extracted_assignment is None
+            else list(extracted_assignment)
         )
-        + "\n"
-    ).encode("utf-8")
+    elif status == "sat":
+        raise WangSquareRenderError(
+            "SAT verification explanation requires explainability context"
+        )
+    encoded_source = _encoded(source_payload)
     source_sha256 = document["source_sha256"]
     if (
         type(source_sha256) is not str
         or hashlib.sha256(encoded_source).hexdigest() != source_sha256
     ):
         raise WangSquareRenderError("verification receipt source hash drifted")
-    return status, tuple(records)
+    return status, tuple(records), bundle, presentation, extracted_assignment
 
 
 def _verification_frame(
     status: str,
     records: tuple[dict[str, object], ...],
     stage: int,
+    bundle: ExplainabilityBundle | None,
+    presentation,
+    extracted_assignment: tuple[bool, ...] | None,
 ) -> Image.Image:
-    image = Image.new("RGB", (960, 500), EXPLAIN_PANEL_RGB)
+    image = Image.new("RGB", (1920, 1040), EXPLAIN_PANEL_RGB)
     draw = ImageDraw.Draw(image)
-    draw_explain_heading(
-        draw,
-        (18, 16),
-        title="Independent verification sequence",
-        subtitle=(
-            f"observed record {stage + 1}/6 | expected {status.upper()} | "
-            "renders checker receipts; does not rerun a verifier"
-        ),
+    draw.text(
+        (30, 16),
+        "Independent verification receipts",
+        font=explain_font(52),
+        fill=EXPLAIN_TEXT_RGB,
+    )
+    draw.text(
+        (30, 78),
+        f"Receipt {stage + 1}/6 | {status.upper()} | display only; no verifier rerun",
+        font=explain_font(34),
+        fill=EXPLAIN_MUTED_RGB,
     )
     for index, ((_, label, expected_prefix), record) in enumerate(
         zip(_CHECKS, records, strict=True)
     ):
-        y = 92 + index * 60
+        x = 30 + (index % 3) * 630
+        y = 118 + (index // 3) * 130
         visible = index <= stage
         performed = record.get("performed") is True
         passed = record.get("passed") is True
@@ -250,36 +509,69 @@ def _verification_frame(
                 f"verification record {_CHECKS[index][0]} is inconsistent"
             )
         draw.rounded_rectangle(
-            (18, y, 930, y + 46),
-            radius=6,
+            (x, y, x + 600, y + 110),
+            radius=12,
             fill=fill if visible else (242, 244, 247),
             outline=(53, 144, 93) if index == stage else (181, 188, 199),
-            width=2 if index == stage else 1,
+            width=4 if index == stage else 2,
         )
         draw.text(
-            (32, y + 7),
+            (x + 16, y + 16),
             label,
-            font=explain_font(12),
+            font=explain_font(40),
             fill=EXPLAIN_TEXT_RGB if visible else EXPLAIN_MUTED_RGB,
         )
         draw.text(
-            (278, y + 8),
+            (x + 16, y + 66),
             state,
-            font=explain_font(11),
+            font=explain_font(32),
             fill=EXPLAIN_TEXT_RGB if visible else EXPLAIN_MUTED_RGB,
         )
-        draw.text(
-            (548, y + 9),
-            checker,
-            font=explain_font(9),
-            fill=EXPLAIN_MUTED_RGB,
-        )
-    draw.text(
-        (18, 472),
-        "SAT checks validate named witnesses independently; UNSAT has no fabricated certificate.",
-        font=explain_font(9),
-        fill=EXPLAIN_MUTED_RGB,
+    if status == "unsat":
+        draw.rounded_rectangle((170, 390, 1750, 850), radius=24, fill=(239, 242, 246), outline=(181, 188, 199), width=3)
+        draw.text((490, 470), "No SAT witness was returned", font=explain_font(48), fill=EXPLAIN_TEXT_RGB)
+        draw.text((360, 565), "Six witness checks are not applicable; no certificate is fabricated.", font=explain_font(34), fill=EXPLAIN_MUTED_RGB)
+        draw.text((460, 650), "Observed search traces remain diagnostics only.", font=explain_font(34), fill=EXPLAIN_MUTED_RGB)
+        return image
+
+    if bundle is None or presentation is None or extracted_assignment is None:
+        raise WangSquareRenderError("SAT verification frame lacks validated context")
+    palette = _build_palette_from_edges(presentation.tile_edges)
+    tiling = _tiling_evidence(bundle, presentation)
+    draw.rounded_rectangle((30, 390, 930, 982), radius=18, fill=EXPLAIN_ACTIVE_RGB, outline=(181, 188, 199), width=2)
+    draw.text((62, 416), "Tiling checker coverage", font=explain_font(48), fill=EXPLAIN_TEXT_RGB)
+
+    tile_id = tiling.tile_id
+    right_id = tiling.right_id
+    tile_size = 180
+    image.paste(square_explain_tile(tiling.tile_edges, palette, tile_size, tile_id=tile_id, edge_labels=True), (92, 500))
+    image.paste(square_explain_tile(tiling.right_edges, palette, tile_size, tile_id=right_id, edge_labels=True), (318, 500))
+    draw.text((92, 696), f"internal: #{tile_id} E{tiling.tile_edges[1]} = #{right_id} W{tiling.right_edges[3]}", font=explain_font(42), fill=EXPLAIN_TEXT_RGB)
+    draw.text((92, 756), f"boundary: #{tile_id} N{tiling.tile_edges[0]} = required N{tiling.required_n}", font=explain_font(42), fill=EXPLAIN_TEXT_RGB)
+    image.paste(square_inactive_tile(118), (100, 822))
+    draw.text((248, 838), "TILE_NONE", font=explain_font(46), fill=EXPLAIN_TEXT_RGB)
+    draw.text((248, 894), f"inactive[{tiling.inactive_index}] = null = native 255", font=explain_font(40), fill=EXPLAIN_TEXT_RGB)
+    draw.text((560, 538), f"active[{tiling.active_index}] = tile #{tile_id}", font=explain_font(42), fill=EXPLAIN_TEXT_RGB)
+    draw.text((560, 606), f"valid IDs: 0..{tiling.maximum_tile_id}", font=explain_font(42), fill=EXPLAIN_TEXT_RGB)
+
+    draw.rounded_rectangle((960, 390, 1890, 982), radius=18, fill=EXPLAIN_ACTIVE_RGB, outline=(181, 188, 199), width=2)
+    draw.text((992, 416), "Source cells -> recorded value", font=explain_font(48), fill=EXPLAIN_TEXT_RGB)
+    extraction = _extraction_evidence(bundle, presentation, extracted_assignment)
+    selected_indices = _bounded_variable_indices(len(extraction))
+    selected_extraction = tuple(
+        extraction[variable]
+        for variable in selected_indices
     )
+    if len(extraction) > len(selected_indices):
+        draw.text((1530, 432), f"{len(extraction) - 3} omitted", font=explain_font(32), fill=EXPLAIN_MUTED_RGB)
+    for row, item in enumerate(selected_extraction):
+        y = 500 + row * 145
+        draw.text((994, y + 34), f"x{item.variable}", font=explain_font(48), fill=EXPLAIN_TEXT_RGB)
+        for offset, source_tile in enumerate(item.tile_ids):
+            image.paste(square_explain_tile(presentation.tile_edges[source_tile], palette, 112, tile_id=source_tile, edge_labels=False), (1080 + offset * 124, y))
+        draw.text((1470, y + 6), f"recorded {'true' if item.value else 'false'}", font=explain_font(46), fill=(30, 112, 70))
+        draw.text((1470, y + 68), "checker passed", font=explain_font(36), fill=EXPLAIN_MUTED_RGB)
+    draw.text((994, 946), "Displayed cells only; decoding happened upstream.", font=explain_font(32), fill=EXPLAIN_MUTED_RGB)
     return image
 
 
@@ -287,11 +579,27 @@ def render_verification_assets(
     run_path: str | Path,
     output_directory: str | Path,
     *,
+    manifest_path: str | Path | None = None,
+    solution_path: str | Path | None = None,
+    extracted_assignment: tuple[bool, ...] | None = None,
     duration_ms: int = 750,
 ) -> AnimationOutputs:
-    status, records = _load_verification(run_path)
+    status, records, bundle, presentation, extracted_assignment = _load_verification(
+        run_path,
+        manifest_path=manifest_path,
+        solution_path=solution_path,
+        extracted_assignment=extracted_assignment,
+    )
     frames = tuple(
-        _verification_frame(status, records, stage) for stage in range(len(_CHECKS))
+        _verification_frame(
+            status,
+            records,
+            stage,
+            bundle,
+            presentation,
+            extracted_assignment,
+        )
+        for stage in range(len(_CHECKS))
     )
     return write_animation_assets(
         frames,
@@ -308,7 +616,7 @@ def _presentation_frame(
     hex_image: Image.Image,
     stage: int,
 ) -> Image.Image:
-    image = Image.new("RGB", (1080, 620), EXPLAIN_PANEL_RGB)
+    image = Image.new("RGB", (1920, 1040), EXPLAIN_PANEL_RGB)
     draw = ImageDraw.Draw(image)
     labels = (
         "verified square witness",
@@ -316,36 +624,48 @@ def _presentation_frame(
         "pure Basire/Culik port",
         "checked hex presentation",
     )
-    draw_explain_heading(
-        draw,
-        (18, 16),
-        title="Verified witness presentation",
-        subtitle=f"verified-transformation stage {stage + 1}/4 | {labels[stage]}",
+    draw.text(
+        (36, 16),
+        "Verified witness presentation",
+        font=explain_font(56),
+        fill=EXPLAIN_TEXT_RGB,
+    )
+    draw.text(
+        (36, 82),
+        f"Stage {stage + 1}/4 | {labels[stage]}",
+        font=explain_font(40),
+        fill=EXPLAIN_MUTED_RGB,
     )
     sources = (square, generalized, generalized, hex_image)
-    fitted = _fit(sources[stage], (1020, 475))
+    fitted = _fit(sources[stage], (1840, 760))
     image.paste(
         fitted,
-        ((1080 - fitted.width) // 2, 88 + (475 - fitted.height) // 2),
+        ((1920 - fitted.width) // 2, 152 + (760 - fitted.height) // 2),
     )
     if stage == 2:
         draw.rounded_rectangle(
-            (246, 508, 834, 565),
-            radius=7,
+            (300, 844, 1620, 926),
+            radius=14,
             fill=(239, 242, 246),
             outline=(55, 126, 168),
-            width=2,
+            width=4,
         )
         draw.text(
-            (278, 525),
+            (350, 864),
             "H(N,E,S,W) = (E,S,kappa,W,N,kappa); inverse and matching checked",
-            font=explain_font(11),
+            font=explain_font(34),
             fill=EXPLAIN_TEXT_RGB,
         )
     draw.text(
-        (18, 594),
-        "The independent square witness check precedes presentation; raster output proves nothing by itself.",
-        font=explain_font(9),
+        (36, 944),
+        "Pure 1:1 view of the already verified square witness.",
+        font=explain_font(40),
+        fill=EXPLAIN_TEXT_RGB,
+    )
+    draw.text(
+        (36, 992),
+        "The checker validates the transform; the pixels are presentation only.",
+        font=explain_font(34),
         fill=EXPLAIN_MUTED_RGB,
     )
     return image
@@ -394,10 +714,115 @@ def render_generalized_assets(
     sheet = destination / "sheet.png"
     legend = destination / "atomic-legend.png"
     _save_png_atomic(compose_generalized_sheet(bundle.tileset.tile_edges), sheet)
-    _save_png_atomic(
-        compose_atomic_semantic_legend(bundle.tileset.tile_edges), legend
-    )
+    _save_image(_compose_atomic_legend(bundle.tileset.tile_edges), legend)
     return GeneralizedOutputs(sheet, legend)
+
+
+def _compose_atomic_legend(
+    tile_edges: tuple[tuple[int, int, int, int], ...],
+) -> Image.Image:
+    """Append local matching examples to the checked atomic vocabulary."""
+    scale = 2
+    vocabulary = Image.fromarray(
+        compose_atomic_semantic_legend(tile_edges, scale=scale), mode="RGB"
+    )
+    panel_height = 310 * scale
+    image = Image.new(
+        "RGB",
+        (vocabulary.width, vocabulary.height + panel_height),
+        EXPLAIN_PANEL_RGB,
+    )
+    image.paste(vocabulary, (0, 0))
+    draw = ImageDraw.Draw(image)
+    panel_y = vocabulary.height
+    draw.line(
+        (24 * scale, panel_y, image.width - 24 * scale, panel_y),
+        fill=(181, 188, 199),
+        width=2 * scale,
+    )
+    draw.text(
+        (24 * scale, panel_y + 18 * scale),
+        "Local Wang compatibility uses the shared edge only",
+        font=explain_font(32 * scale),
+        fill=EXPLAIN_TEXT_RGB,
+    )
+    draw.text(
+        (24 * scale, panel_y + 57 * scale),
+        "Canonical IDs: equal shared colors = valid; unequal = invalid.",
+        font=explain_font(28 * scale),
+        fill=EXPLAIN_MUTED_RGB,
+    )
+
+    palette = _build_palette_from_edges(tile_edges)
+    examples = (
+        ("VALID", 0, 4, 24 * scale, (213, 237, 224), (52, 145, 94)),
+        ("INVALID", 0, 3, 447 * scale, (248, 226, 226), (190, 62, 62)),
+    )
+    tile_size = 72 * scale
+    tile_y = panel_y + 132 * scale
+    for label, left_id, right_id, card_x, fill, outline in examples:
+        draw.rounded_rectangle(
+            (
+                card_x,
+                panel_y + 88 * scale,
+                card_x + 399 * scale,
+                panel_y + 290 * scale,
+            ),
+            radius=10 * scale,
+            fill=fill,
+            outline=outline,
+            width=3 * scale,
+        )
+        draw.text(
+            (card_x + 16 * scale, panel_y + 98 * scale),
+            label,
+            font=explain_font(28 * scale),
+            fill=EXPLAIN_TEXT_RGB,
+        )
+        left_x = card_x + 18 * scale
+        right_x = card_x + 100 * scale
+        image.paste(
+            square_explain_tile(
+                tile_edges[left_id],
+                palette,
+                tile_size,
+                tile_id=left_id,
+                edge_labels=True,
+            ),
+            (left_x, tile_y),
+        )
+        image.paste(
+            square_explain_tile(
+                tile_edges[right_id],
+                palette,
+                tile_size,
+                tile_id=right_id,
+                edge_labels=True,
+            ),
+            (right_x, tile_y),
+        )
+        left_color = tile_edges[left_id][1]
+        right_color = tile_edges[right_id][3]
+        relation = "=" if left_color == right_color else "!="
+        draw.text(
+            (card_x + 190 * scale, panel_y + 145 * scale),
+            f"#{left_id} E = {left_color}",
+            font=explain_font(20 * scale),
+            fill=EXPLAIN_TEXT_RGB,
+        )
+        draw.text(
+            (card_x + 190 * scale, panel_y + 184 * scale),
+            f"{relation}  #{right_id} W = {right_color}",
+            font=explain_font(20 * scale),
+            fill=EXPLAIN_TEXT_RGB,
+        )
+        draw.text(
+            (card_x + 190 * scale, panel_y + 230 * scale),
+            "shared colors agree" if relation == "=" else "shared colors differ",
+            font=explain_font(18 * scale),
+            fill=outline,
+        )
+    return image
 
 
 def render_presentation_status(status: str, output_path: str | Path) -> Path:
@@ -489,27 +914,51 @@ def _pipeline_frame(sources: tuple[Image.Image, ...], stage: int) -> Image.Image
 
 
 def _home_preview(square: Image.Image) -> Image.Image:
-    image = Image.new("RGB", (760, 430), EXPLAIN_PANEL_RGB)
+    scale = 2
+    image = Image.new("RGB", (760 * scale, 430 * scale), EXPLAIN_PANEL_RGB)
     draw = ImageDraw.Draw(image)
     draw_explain_heading(
         draw,
-        (18, 16),
+        (18 * scale, 16 * scale),
         title="Verified SAT witness",
         subtitle="observed | captured SAT source | square presentation",
+        scale=scale,
     )
-    fitted = _fit(square, (720, 320))
-    image.paste(fitted, ((760 - fitted.width) // 2, 82))
+    fitted = _fit(square, (720 * scale, 320 * scale))
+    image.paste(fitted, ((image.width - fitted.width) // 2, 82 * scale))
     draw.text(
-        (18, 407),
+        (18 * scale, 407 * scale),
         "Preview only; the worked example retains the full source and trust boundary.",
-        font=explain_font(9),
+        font=explain_font(9 * scale),
         fill=EXPLAIN_MUTED_RGB,
     )
     return image
 
 
-def _worked_example(sources: tuple[Image.Image, ...]) -> Image.Image:
-    image = Image.new("RGB", (1080, 940), EXPLAIN_PANEL_RGB)
+def _worked_example(
+    sources: tuple[Image.Image, ...], square: Image.Image
+) -> Image.Image:
+    detail_sources = (
+        ("Decision | copied Boolean result", sources[1]),
+        ("Construction | canonical Yang-Zhang region", sources[2]),
+        ("Check interpretation | six independent receipts", sources[6]),
+        ("Verified witness | square source", square),
+        ("Final presentation | checked hex port", sources[7]),
+    )
+    details = tuple(
+        (label, _fit(source, (1012, 560)))
+        for label, source in detail_sources
+    )
+    details_top = 958
+    detail_gap = 18
+    detail_heights = tuple(detail.height + 70 for _, detail in details)
+    image_height = (
+        details_top
+        + sum(detail_heights)
+        + detail_gap * (len(details) - 1)
+        + 54
+    )
+    image = Image.new("RGB", (1080, image_height), EXPLAIN_PANEL_RGB)
     draw = ImageDraw.Draw(image)
     draw_explain_heading(
         draw,
@@ -535,6 +984,30 @@ def _worked_example(sources: tuple[Image.Image, ...]) -> Image.Image:
     draw.text(
         (18, 918),
         "Milestones are semantic selections, not uniformly sampled time points.",
+        font=explain_font(9),
+        fill=EXPLAIN_MUTED_RGB,
+    )
+    y = details_top
+    for (label, detail), card_height in zip(
+        details, detail_heights, strict=True
+    ):
+        draw.rounded_rectangle(
+            (18, y, 1062, y + card_height),
+            radius=9,
+            fill=EXPLAIN_ACTIVE_RGB,
+            outline=(181, 188, 199),
+        )
+        draw.text(
+            (34, y + 14),
+            label,
+            font=explain_font(24),
+            fill=EXPLAIN_TEXT_RGB,
+        )
+        image.paste(detail, ((1080 - detail.width) // 2, y + 54))
+        y += card_height + detail_gap
+    draw.text(
+        (18, image.height - 32),
+        "Selected panels retain source detail; the component pages own the full explanations.",
         font=explain_font(9),
         fill=EXPLAIN_MUTED_RGB,
     )
@@ -569,7 +1042,7 @@ def render_overview_assets(
         home_preview = destination / "home-preview.png"
         worked_example = destination / "worked-example.png"
         _save_image(_home_preview(home_image), home_preview)
-        _save_image(_worked_example(sources), worked_example)
+        _save_image(_worked_example(sources, home_image), worked_example)
     return OverviewOutputs(animation, home_preview, worked_example)
 
 
@@ -581,6 +1054,9 @@ def _parser() -> argparse.ArgumentParser:
     verification = subparsers.add_parser("verification")
     verification.add_argument("run", type=Path)
     verification.add_argument("output_directory", type=Path)
+    verification.add_argument("--manifest", type=Path)
+    verification.add_argument("--solution", type=Path)
+    verification.add_argument("--assignment-json")
     witness = subparsers.add_parser("witness")
     witness.add_argument("solution", type=Path)
     witness.add_argument("output_directory", type=Path)
@@ -603,7 +1079,28 @@ def main(arguments: list[str] | None = None) -> int:
     args = parser.parse_args(arguments)
     try:
         if args.mode == "verification":
-            outputs = render_verification_assets(args.run, args.output_directory)
+            assignment = None
+            if args.assignment_json is not None:
+                try:
+                    raw_assignment = json.loads(args.assignment_json)
+                except json.JSONDecodeError as error:
+                    raise WangSquareRenderError(
+                        f"verification assignment JSON is invalid: {error.msg}"
+                    ) from error
+                if type(raw_assignment) is not list or any(
+                    type(value) is not bool for value in raw_assignment
+                ):
+                    raise WangSquareRenderError(
+                        "verification assignment JSON must be a Boolean array"
+                    )
+                assignment = tuple(raw_assignment)
+            outputs = render_verification_assets(
+                args.run,
+                args.output_directory,
+                manifest_path=args.manifest,
+                solution_path=args.solution,
+                extracted_assignment=assignment,
+            )
             print(f"animation={outputs.animation}")
             print(f"contact_sheet={outputs.contact_sheet}")
             print(f"fallback={outputs.fallback}")

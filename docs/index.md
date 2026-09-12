@@ -48,7 +48,7 @@ description: A research software laboratory for finite Wang tilings and inspecta
     <h2>A selected result, not a visual proof</h2>
   </div>
 
-  {% include narrative-static.html asset_id="home_preview" image="/assets/narrative/pipeline-overview/home-preview.png" alt="A compact square Wang witness preview for the captured SAT source." width="760" height="430" label="observed" caption="Selected verified SAT square output for the captured instance." source="wang-solution-v1" %}
+  {% include narrative-static.html asset_id="home_preview" image="/assets/narrative/pipeline-overview/home-preview.png" alt="A compact square Wang witness preview for the captured SAT source." width="1520" height="860" label="observed" caption="Selected verified SAT square output for the captured instance." source="wang-solution-v1" %}
 
   <p class="home-section__prose">
     The image is downstream of an independently checked square witness. Read

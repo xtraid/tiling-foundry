@@ -89,7 +89,8 @@ OPENMP_LIBRARY := $(LIB_DIR)/libwang_openmp.a
 	strict-check sanitizer-check analyzer-check valgrind-check \
 	cachegrind-check benchmark benchmark-smoke benchmark-compare \
 	benchmark-compare-smoke coverage coverage-c coverage-python \
-	parser-fuzz parser-fuzz-smoke parser-fuzz-corpus run-dossier-smoke clean
+	parser-fuzz parser-fuzz-smoke parser-fuzz-corpus run-dossier-smoke \
+	run-dossier-v2-smoke clean
 
 all: serial shared
 
@@ -176,6 +177,22 @@ run-dossier-smoke: shared
 	test -s $(BUILD_DIR)/run-dossier-smoke/report.tex
 	test -s $(BUILD_DIR)/run-dossier-smoke/report.pdf
 	test -s $(BUILD_DIR)/run-dossier-smoke/run.json
+
+run-dossier-v2-smoke: shared
+	$(RM) -r $(BUILD_DIR)/run-dossier-v2-smoke-sat
+	$(RM) -r $(BUILD_DIR)/run-dossier-v2-smoke-unsat
+	$(UV) run --frozen python tools/generate_run_dossier.py \
+		examples/run-cases-v2/pipeline-sat.json \
+		$(BUILD_DIR)/run-dossier-v2-smoke-sat --pdf
+	$(UV) run --frozen python tools/generate_run_dossier.py \
+		examples/run-cases-v2/pipeline-unsat-search.json \
+		$(BUILD_DIR)/run-dossier-v2-smoke-unsat --pdf
+	test -s $(BUILD_DIR)/run-dossier-v2-smoke-sat/report.tex
+	test -s $(BUILD_DIR)/run-dossier-v2-smoke-sat/report.pdf
+	test -s $(BUILD_DIR)/run-dossier-v2-smoke-sat/run.json
+	test -s $(BUILD_DIR)/run-dossier-v2-smoke-unsat/report.tex
+	test -s $(BUILD_DIR)/run-dossier-v2-smoke-unsat/report.pdf
+	test -s $(BUILD_DIR)/run-dossier-v2-smoke-unsat/run.json
 
 c-check: serial $(C_TEST_BINS)
 	@set -e; \

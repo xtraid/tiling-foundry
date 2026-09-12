@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -14,8 +15,14 @@ from unittest.mock import patch
 
 from dossier import multi_engine
 from dossier import narrative_assets as narrative_generator
+from dossier.tex_compile import TexCompileError, compile_tex_pdf
 from formats.pipeline_snapshot import PipelineSnapshotError
-from formats.narrative_assets import load_narrative_assets
+from formats.narrative_assets import (
+    boolean_z3_source_sha256,
+    load_narrative_assets,
+    verification_source_sha256,
+    wang_z3_source_sha256,
+)
 from formats.run_case_v2 import (
     CASE_SCHEMA,
     load_run_case_v2,
@@ -25,6 +32,7 @@ from formats.run_dossier_v2 import (
     validate_run_dossier_v2,
 )
 from formats.run_dossier_v2_bundle import load_run_dossier_v2
+from formats.run_report_v2_tex import _wide_figure, render_run_report_v2_tex
 from native import multi_engine_pipeline
 from native.multi_engine_pipeline import (
     TraceCaptureOptions,
@@ -37,6 +45,66 @@ from tools import generate_run_dossier as public_generator
 ROOT = Path(__file__).resolve().parents[2]
 SAT_CASE = ROOT / "examples/run-cases-v2/pipeline-sat.json"
 UNSAT_CASE = ROOT / "examples/run-cases-v2/pipeline-unsat-search.json"
+V2_TEMPLATE = ROOT / "templates/run-report-v2.tex"
+
+
+class V2FigurePaginationTests(unittest.TestCase):
+    @unittest.skipUnless(
+        shutil.which("pdflatex") and shutil.which("pdftotext"),
+        "pdflatex and pdftotext are optional",
+    )
+    def test_wide_figure_keeps_its_caption_on_the_image_page(self) -> None:
+        captured_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        with tempfile.TemporaryDirectory() as name:
+            directory = Path(name)
+            picture = directory / "picture"
+            picture.mkdir()
+            (picture / "report.tex").write_text(
+                "\n".join(
+                    (
+                        r"\documentclass{article}",
+                        r"\usepackage[paperwidth=100mm,paperheight=20mm,margin=2mm]{geometry}",
+                        r"\pagestyle{empty}",
+                        r"\begin{document}IMAGE-MARKER\end{document}",
+                    )
+                ),
+                encoding="utf-8",
+            )
+            compile_tex_pdf(picture, "pdflatex", captured_at)
+            shutil.copyfile(picture / "report.pdf", directory / "image.pdf")
+            (directory / "report.tex").write_text(
+                "\n".join(
+                    (
+                        r"\documentclass{article}",
+                        r"\usepackage[a4paper,margin=18mm]{geometry}",
+                        r"\usepackage{graphicx}",
+                        r"\setlength{\parindent}{0pt}",
+                        r"\setlength{\parskip}{0.55em}",
+                        r"\begin{document}",
+                        r"\newlength{\imageheight}",
+                        r"\settoheight{\imageheight}{\includegraphics[width=\textwidth,height=0.48\textheight,keepaspectratio]{image.pdf}}",
+                        # Leave room for the image, but not its caption: both
+                        # must move together when the page cannot hold them.
+                        r"\vspace*{\dimexpr\textheight-\imageheight-42pt\relax}",
+                        _wide_figure("image.pdf", "CAPTION-MARKER"),
+                        r"\end{document}",
+                    )
+                ),
+                encoding="utf-8",
+            )
+            compile_tex_pdf(directory, "pdflatex", captured_at)
+            pages = subprocess.run(
+                ["pdftotext", str(directory / "report.pdf"), "-"],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            ).stdout.split("\f")
+        image_pages = [i for i, page in enumerate(pages) if "IMAGE-MARKER" in page]
+        caption_pages = [i for i, page in enumerate(pages) if "CAPTION-MARKER" in page]
+        self.assertEqual(len(image_pages), 1)
+        self.assertEqual(len(caption_pages), 1)
+        self.assertEqual(image_pages, caption_pages)
 
 
 class MultiEngineDossierTests(unittest.TestCase):
@@ -156,12 +224,215 @@ class MultiEngineDossierTests(unittest.TestCase):
             document,
         )
         self.assertEqual(narrative["product"], "run-specific")
+        for solver in ("reference", "optimized"):
+            animation = narrative["animations"][f"{solver}_trace"]
+            self.assertEqual(animation["semantic_label"], "observed")
+            self.assertEqual(animation["scope"], {
+                "complete": True, "selected": True, "truncated": False,
+            })
         self.assertEqual(
             narrative["animations"]["optimized_mechanisms"]["semantic_label"],
             "didactic",
         )
+        expected_copy = {
+            "boolean_z3": (
+                "Real source clauses become occurrence-preserving exactly-one sums "
+                "before the copied assignment is shown.",
+                "Four frames place each source-order clause beside its "
+                "occurrence-preserving sum and then show the copied Boolean assignment.",
+            ),
+            "wang_z3": (
+                "A real cell shows its shared term, canonical tile tuple, boundary "
+                "equality, and returned model projection.",
+                "Five frames show adjacent canonical Wang tiles sharing an internal "
+                "edge, one exposed boundary equality, and the copied model projection.",
+            ),
+            "verification": (
+                "Six named checker receipts with concrete tiling rules and the recorded "
+                "native extraction beside its source cells.",
+                "Six frames show all checker receipts, valid tile IDs, TILE_NONE, "
+                "internal and boundary equality, and copied extracted Boolean values "
+                "beside variable-gadget cells.",
+            ),
+        }
+        for name, (caption, alt_text) in expected_copy.items():
+            self.assertEqual(narrative["animations"][name]["caption"], caption)
+            self.assertEqual(narrative["animations"][name]["alt_text"], alt_text)
         self.assertFalse((self.sat_directory / "report.tex").exists())
         self.assertFalse((self.sat_directory / "report.pdf").exists())
+
+    def test_v2_sat_report_follows_pipeline_and_uses_static_milestones(self) -> None:
+        narrative = load_narrative_assets(
+            self.sat_directory / "assets/narrative/manifest.json",
+            self.sat_document,
+        )
+        tex = render_run_report_v2_tex(
+            self.sat_document,
+            narrative,
+            V2_TEMPLATE.read_text(encoding="utf-8"),
+        )
+        headings = (
+            r"\section{Summary}",
+            r"\section{Source instance}",
+            r"\section{Boolean Z3}",
+            r"\section{Yang--Zhang reduction}",
+            r"\section{Reference solver}",
+            r"\section{Optimized solver}",
+            r"\section{Wang Z3}",
+            r"\section{Verification and presentation}",
+            r"\section{Reproducibility appendix}",
+        )
+        offsets = tuple(tex.index(heading) for heading in headings)
+        self.assertEqual(offsets, tuple(sorted(offsets)))
+        self.assertIn(
+            r"\verbatiminput{assets/data/pipeline_sat.cm13}",
+            tex,
+        )
+        for group in (
+            "region_construction",
+            "reference_trace",
+            "optimized_trace",
+        ):
+            for path in narrative["pdf_milestones"][group]:
+                self.assertIn(path, tex)
+        self.assertNotIn("contact-sheet.png", tex)
+        self.assertNotIn(".gif", tex)
+        for name in ("square", "generalized", "hex"):
+            path = narrative["statics"][f"{name}_presentation"]["artifact"]["path"]
+            self.assertIn(
+                r"\includegraphics[width=\textwidth,height=0.48\textheight,keepaspectratio]"
+                rf"{{assets/narrative/{path}}}",
+                tex,
+            )
+        sheet_path = narrative["statics"]["generalized_sheet"]["artifact"]["path"]
+        self.assertIn(
+            r"\includegraphics[width=0.82\textwidth,height=0.64\textheight,keepaspectratio]"
+            rf"{{assets/narrative/{sheet_path}}}",
+            tex,
+        )
+        legend_path = narrative["statics"]["atomic_legend"]["artifact"]["path"]
+        self.assertEqual(tex.count(f"{{assets/narrative/{legend_path}}}"), 2)
+        self.assertIn("viewport=0 2092 1732 4184,clip,width=0.92", tex)
+        self.assertIn("viewport=0 0 1732 2092,clip,width=0.92", tex)
+
+    def test_v2_unsat_report_marks_witness_only_content_not_applicable(self) -> None:
+        narrative = load_narrative_assets(
+            self.unsat_directory / "assets/narrative/manifest.json",
+            self.unsat_document,
+        )
+        tex = render_run_report_v2_tex(
+            self.unsat_document,
+            narrative,
+            V2_TEMPLATE.read_text(encoding="utf-8"),
+        )
+        self.assertIn("Assignment: not applicable for this UNSAT result", tex)
+        self.assertIn("Witness verification: not applicable", tex)
+        self.assertIn("Witness presentations: not applicable", tex)
+        self.assertIn("No UNSAT certificate is claimed", tex)
+        self.assertIn(
+            narrative["statics"]["presentation_status"]["artifact"]["path"],
+            tex,
+        )
+        presentation_status = narrative["statics"]["presentation_status"]
+        status_path = presentation_status["artifact"]["path"]
+        self.assertIn(
+            r"\includegraphics[width=0.72\textwidth,height=0.30\textheight,keepaspectratio]"
+            rf"{{assets/narrative/{status_path}}}",
+            tex,
+        )
+        self.assertNotIn("contact-sheet.png", tex)
+        self.assertNotIn(".gif", tex)
+        for name in (
+            "home_preview",
+            "worked_example",
+            "square_presentation",
+            "generalized_presentation",
+            "hex_presentation",
+        ):
+            self.assertIsNone(narrative["statics"][name])
+
+    def test_v2_formatter_is_pure_after_caller_validation(self) -> None:
+        narrative = load_narrative_assets(
+            self.sat_directory / "assets/narrative/manifest.json",
+            self.sat_document,
+        )
+        with patch("builtins.open", side_effect=AssertionError("formatter I/O")), patch(
+            "io.open", side_effect=AssertionError("formatter I/O")
+        ):
+            tex = render_run_report_v2_tex(
+                self.sat_document,
+                narrative,
+                "@@TITLE@@\n@@BODY@@\n",
+            )
+        self.assertIn(r"\section{Summary}", tex)
+
+    def test_v2_reports_each_oracle_timing_in_its_own_section(self) -> None:
+        for directory, document in (
+            (self.sat_directory, self.sat_document),
+            (self.unsat_directory, self.unsat_document),
+        ):
+            with self.subTest(status=document["case"]["expected_status"]):
+                narrative = load_narrative_assets(
+                    directory / "assets/narrative/manifest.json", document
+                )
+                tex = render_run_report_v2_tex(
+                    document, narrative, V2_TEMPLATE.read_text(encoding="utf-8")
+                )
+                appendix = tex.split(
+                    r"\section{Reproducibility appendix}", 1
+                )[1]
+                for heading, timing_name in (
+                    ("Boolean Z3", "boolean_z3_ns"),
+                    ("Wang Z3", "wang_z3_ns"),
+                ):
+                    elapsed_ns = document["timings"][timing_name]
+                    expected = (
+                        f"{elapsed_ns / 1_000_000:.3f} ms ({elapsed_ns} ns)"
+                    )
+                    section = tex.split(rf"\section{{{heading}}}", 1)[1].split(
+                        r"\section{", 1
+                    )[0]
+                    self.assertIn(expected, section)
+                    self.assertIn("run-specific", section.lower())
+                    self.assertIn("not a benchmark", section.lower())
+                    self.assertIn(expected, appendix)
+
+    def test_narrative_source_hashes_cover_every_consumed_identity(self) -> None:
+        run = self.sat_document
+        verification_digest = verification_source_sha256(run)
+        for path, replacement in (
+            (("source", "sha256"), "0" * 64),
+            (("reduction", "formula_sha256"), "1" * 64),
+            (("reduction", "tileset_sha256"), "2" * 64),
+            (("reduction", "region_sha256"), "3" * 64),
+            (("reduction", "provenance_sha256"), "4" * 64),
+            (("reference", "solution_sha256"), "5" * 64),
+            (("reference", "extracted_assignment"), [True, False, True]),
+        ):
+            mutated = copy.deepcopy(run)
+            mutated[path[0]][path[1]] = replacement
+            self.assertNotEqual(
+                verification_source_sha256(mutated),
+                verification_digest,
+                path,
+            )
+
+        boolean_digest = boolean_z3_source_sha256("a" * 64, "b" * 64)
+        self.assertNotEqual(
+            boolean_z3_source_sha256("c" * 64, "b" * 64),
+            boolean_digest,
+        )
+        self.assertNotEqual(
+            boolean_z3_source_sha256("a" * 64, "c" * 64),
+            boolean_digest,
+        )
+        wang_digest = wang_z3_source_sha256("a" * 64, "b" * 64, "c" * 64)
+        for values in (
+            ("d" * 64, "b" * 64, "c" * 64),
+            ("a" * 64, "d" * 64, "c" * 64),
+            ("a" * 64, "b" * 64, "d" * 64),
+        ):
+            self.assertNotEqual(wang_z3_source_sha256(*values), wang_digest)
 
     def test_unsat_capture_has_no_witness_or_fabricated_verification(self) -> None:
         document = self.unsat_document
@@ -193,6 +464,36 @@ class MultiEngineDossierTests(unittest.TestCase):
         self.assertIsNone(narrative["animations"]["witness_presentation"])
         self.assertIsNotNone(narrative["statics"]["presentation_status"])
         self.assertIsNone(narrative["statics"]["home_preview"])
+        self.assertEqual(
+            narrative["animations"]["boolean_z3"]["caption"],
+            "Source clauses retain occurrence-preserving exactly-one sums; "
+            "the assignment is not applicable for this UNSAT result.",
+        )
+        self.assertEqual(
+            narrative["animations"]["boolean_z3"]["alt_text"],
+            "Four frames show source-order clauses and sums, then mark the "
+            "Boolean assignment not applicable because no SAT model was returned.",
+        )
+        self.assertEqual(
+            narrative["animations"]["wang_z3"]["caption"],
+            "The encoding is constructed, but cell, tile, boundary, and returned-model "
+            "examples are not applicable for this UNSAT result.",
+        )
+        self.assertEqual(
+            narrative["animations"]["wang_z3"]["alt_text"],
+            "Five frames end with an UNSAT panel that makes no cell, tile tuple, "
+            "boundary, model, witness, or certificate claim.",
+        )
+        self.assertEqual(
+            narrative["animations"]["verification"]["caption"],
+            "Six named checker receipts mark every witness check not applicable "
+            "because no SAT witness was returned.",
+        )
+        self.assertEqual(
+            narrative["animations"]["verification"]["alt_text"],
+            "Six frames mark every witness check not applicable and state that "
+            "no SAT witness or certificate is fabricated.",
+        )
         for solver, animation_name in (
             ("reference", "reference_trace"),
             ("optimized", "optimized_trace"),
@@ -216,6 +517,34 @@ class MultiEngineDossierTests(unittest.TestCase):
                 {"conflict", "backtrack", "result"} <= selected_kinds,
                 (solver, selected_kinds),
             )
+            animation = narrative["animations"][animation_name]
+            self.assertIn("observed search diagnostic", animation["caption"])
+            self.assertIn("not an UNSAT certificate", animation["caption"])
+            selected = [
+                event for event in trace["events"]
+                if event["sequence"] in selected_sequences
+            ]
+            decision = next(e for e in selected if e["kind"] == "decision")
+            reduction = next(e for e in selected if (
+                e["kind"] == "domain_reduction" and e["reason"] == "propagation"
+                and e["sequence"] > decision["sequence"]
+            ))
+            empty = next(e for e in selected if (
+                e["kind"] == "domain_reduction" and e["new_domain"] == 0
+                and e["sequence"] >= reduction["sequence"]
+            ))
+            conflict = next(e for e in selected if e["kind"] == "conflict")
+            rollback = next(e for e in selected if e["kind"] == "backtrack")
+            next_branches = [e for e in selected if (
+                e["kind"] == "decision" and e["sequence"] > rollback["sequence"]
+            )]
+            self.assertTrue(next_branches, f"{solver} omits the next branch")
+            next_branch = next_branches[0]
+            self.assertLess(decision["sequence"], reduction["sequence"])
+            self.assertLess(empty["sequence"], conflict["sequence"])
+            self.assertLess(conflict["sequence"], rollback["sequence"])
+            self.assertLess(rollback["sequence"], next_branch["sequence"])
+            self.assertLess(rollback["change_mark"], conflict["change_mark"])
 
     def test_case_contract_forbids_initial_domain_overrides(self) -> None:
         invalid = json.loads(SAT_CASE.read_text(encoding="utf-8"))
@@ -269,7 +598,17 @@ class MultiEngineDossierTests(unittest.TestCase):
                 tex_engine="pdflatex",
             )
         self.assertEqual(v2_actual, v2_expected)
-        generate_v2.assert_called_once_with(SAT_CASE, v2_expected)
+        generate_v2.assert_called_once_with(SAT_CASE, v2_expected, include_pdf=False)
+        with self.assertRaisesRegex(
+            public_generator.DossierGenerationError,
+            "v2-only",
+        ):
+            public_generator.generate_run_dossier(
+                v1_case,
+                expected,
+                tex_engine="pdflatex",
+                include_pdf=True,
+            )
         with self.assertRaisesRegex(
             public_generator.DossierGenerationError,
             "v1-only",
@@ -327,6 +666,24 @@ class MultiEngineDossierTests(unittest.TestCase):
                     "import sys; import formats.run_dossier_v2_bundle; "
                     "assert 'dossier.multi_engine' not in sys.modules; "
                     "assert 'native.multi_engine_pipeline' not in sys.modules"
+                ),
+            ],
+            cwd=ROOT,
+            env={**os.environ, "PYTHONPATH": "python"},
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import sys; import dossier.multi_engine; "
+                    "assert 'formats.run_report_v2_tex' not in sys.modules; "
+                    "assert 'dossier.tex_compile' not in sys.modules"
                 ),
             ],
             cwd=ROOT,
@@ -619,6 +976,25 @@ class MultiEngineDossierTests(unittest.TestCase):
         self.assertEqual(wang.call_count, 1)
         self.assertFalse(destination.exists())
         self.assertEqual(set(self.root.glob(".replace-failed.*")), before)
+
+    def test_v2_pdf_compile_failure_leaves_no_partial_destination(self) -> None:
+        destination = self.root / "pdf-compile-failed"
+        before = set(self.root.glob(".pdf-compile-failed.*"))
+        with patch(
+            "dossier.tex_compile.compile_tex_pdf",
+            side_effect=TexCompileError("forced controlled compile failure"),
+        ):
+            with self.assertRaisesRegex(
+                multi_engine.MultiEngineDossierError,
+                "forced controlled compile failure",
+            ):
+                multi_engine.generate_multi_engine_dossier(
+                    SAT_CASE,
+                    destination,
+                    include_pdf=True,
+                )
+        self.assertFalse(destination.exists())
+        self.assertEqual(set(self.root.glob(".pdf-compile-failed.*")), before)
 
     def test_v2_schemas_are_closed_draft_2020_12_documents(self) -> None:
         for name, expected in (

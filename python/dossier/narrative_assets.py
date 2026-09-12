@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import copy
 import hashlib
+import json
 import os
 from pathlib import Path
 import shutil
@@ -24,6 +25,7 @@ from formats.narrative_assets import (
     OPTIMIZED_MECHANISMS_SHA256,
     SCHEMA_NAME,
     STATIC_NAMES,
+    boolean_z3_source_sha256,
     composite_source_sha256,
     generalized_source_sha256,
     generalized_presentation_source_sha256,
@@ -31,6 +33,7 @@ from formats.narrative_assets import (
     load_narrative_assets,
     pipeline_source_sha256,
     verification_source_sha256,
+    wang_z3_source_sha256,
     witness_presentation_source_sha256,
 )
 from formats.pipeline_snapshot import _encode_document, _write_atomic
@@ -193,6 +196,62 @@ def _animation_metadata(
     run: dict[str, object],
 ) -> dict[str, dict[str, str]]:
     pipeline_digest = pipeline_source_sha256(identities, run)
+    search_diagnostic = run["case"]["expected_status"] == "unsat"
+    reference_trace_caption = (
+        "Selected semantic milestones from the complete observed search "
+        "diagnostic; it is not an UNSAT certificate."
+        if search_diagnostic
+        else "Selected semantic milestones from the complete reference trace."
+    )
+    optimized_trace_caption = (
+        "Selected semantic milestones from the complete observed search "
+        "diagnostic; it is not an UNSAT certificate."
+        if search_diagnostic
+        else "Selected semantic milestones from the complete optimized trace."
+    )
+    boolean_z3_caption = (
+        "Source clauses retain occurrence-preserving exactly-one sums; "
+        "the assignment is not applicable for this UNSAT result."
+        if search_diagnostic
+        else "Real source clauses become occurrence-preserving exactly-one sums "
+        "before the copied assignment is shown."
+    )
+    boolean_z3_alt = (
+        "Four frames show source-order clauses and sums, then mark the Boolean "
+        "assignment not applicable because no SAT model was returned."
+        if search_diagnostic
+        else "Four frames place each source-order clause beside its occurrence-preserving "
+        "sum and then show the copied Boolean assignment."
+    )
+    wang_z3_caption = (
+        "The encoding is constructed, but cell, tile, boundary, and returned-model "
+        "examples are not applicable for this UNSAT result."
+        if search_diagnostic
+        else "A real cell shows its shared term, canonical tile tuple, boundary "
+        "equality, and returned model projection."
+    )
+    wang_z3_alt = (
+        "Five frames end with an UNSAT panel that makes no cell, tile tuple, "
+        "boundary, model, witness, or certificate claim."
+        if search_diagnostic
+        else "Five frames show adjacent canonical Wang tiles sharing an internal "
+        "edge, one exposed boundary equality, and the copied model projection."
+    )
+    verification_caption = (
+        "Six named checker receipts mark every witness check not applicable "
+        "because no SAT witness was returned."
+        if search_diagnostic
+        else "Six named checker receipts with concrete tiling rules and the recorded "
+        "native extraction beside its source cells."
+    )
+    verification_alt = (
+        "Six frames mark every witness check not applicable and state that no SAT "
+        "witness or certificate is fabricated."
+        if search_diagnostic
+        else "Six frames show all checker receipts, valid tile IDs, TILE_NONE, "
+        "internal and boundary equality, and copied extracted Boolean values "
+        "beside variable-gadget cells."
+    )
     mechanism_digest = hashlib.sha256(MECHANISM_SOURCE.read_bytes()).hexdigest()
     if mechanism_digest != OPTIMIZED_MECHANISMS_SHA256:
         raise NarrativeAssetError(
@@ -213,12 +272,15 @@ def _animation_metadata(
         "boolean_z3": _metadata(
             owner="/components/boolean-z3/",
             semantic_label="encoding-order",
-            caption="Project-owned Boolean constraint construction and returned assignment.",
-            alt_text="Four frames add Boolean variables and source-order exactly-one clauses before showing the copied result.",
-            source_contract="z3-encoding-summary-v1",
-            source_sha256=str(identities["boolean_z3_summary"]),
+            caption=boolean_z3_caption,
+            alt_text=boolean_z3_alt,
+            source_contract="z3-encoding-summary-v1+cm13-formula-snapshot-v1",
+            source_sha256=boolean_z3_source_sha256(
+                str(identities["boolean_z3_summary"]),
+                str(identities["formula_snapshot"]),
+            ),
             producer="formats.z3_encoding_summary.build_boolean_z3_summary",
-            validator="renderer.wang_z3_summary.load_z3_encoding_summary",
+            validator="renderer.wang_z3_summary.load_z3_encoding_summary+renderer.wang_snapshot.load_explainability_bundle",
             compositor="renderer.wang_z3_summary.render_boolean_z3_assets",
         ),
         "region_construction": _metadata(
@@ -235,7 +297,7 @@ def _animation_metadata(
         "reference_trace": _metadata(
             owner="/components/reference-solver/",
             semantic_label="observed",
-            caption="Selected semantic milestones from the complete reference trace.",
+            caption=reference_trace_caption,
             alt_text="Observed reference domain states at root, propagation, decision, search, and result milestones.",
             source_contract="wang-explain-manifest-v3",
             source_sha256=str(identities["reference_trace_manifest"]),
@@ -246,7 +308,7 @@ def _animation_metadata(
         "optimized_trace": _metadata(
             owner="/components/optimized-solver/",
             semantic_label="observed",
-            caption="Selected semantic milestones from the complete optimized trace.",
+            caption=optimized_trace_caption,
             alt_text="Observed optimized domain states at root, propagation, decision, search, and result milestones.",
             source_contract="wang-explain-manifest-v3",
             source_sha256=str(identities["optimized_trace_manifest"]),
@@ -257,23 +319,27 @@ def _animation_metadata(
         "wang_z3": _metadata(
             owner="/components/wang-z3/",
             semantic_label="encoding-order",
-            caption="Project-owned Wang edge-term construction and returned model.",
-            alt_text="Five frames add edge terms, shared internal edges, tile relations, boundaries, and the copied result.",
-            source_contract="z3-encoding-summary-v1",
-            source_sha256=str(identities["wang_z3_summary"]),
+            caption=wang_z3_caption,
+            alt_text=wang_z3_alt,
+            source_contract="z3-encoding-summary-v1+wang-tileset-snapshot-v1+wang-region-snapshot-v1",
+            source_sha256=wang_z3_source_sha256(
+                str(identities["wang_z3_summary"]),
+                str(identities["tileset"]),
+                str(identities["region"]),
+            ),
             producer="formats.z3_encoding_summary.build_wang_z3_summary",
-            validator="renderer.wang_z3_summary.load_z3_encoding_summary",
+            validator="renderer.wang_z3_summary.load_z3_encoding_summary+renderer.wang_snapshot.load_explainability_bundle",
             compositor="renderer.wang_z3_summary.render_wang_z3_assets",
         ),
         "verification": _metadata(
             owner="/components/verification/",
             semantic_label="observed",
-            caption="The six named independent checker records from the captured run.",
-            alt_text="Six frames report Boolean, native, and Wang Z3 witness checks without rerunning a verifier.",
+            caption=verification_caption,
+            alt_text=verification_alt,
             source_contract="wang-run-dossier-v2#verification",
             source_sha256=verification_source_sha256(run),
             producer="formats.run_dossier_v2_builder.build_run_dossier_v2",
-            validator="formats.run_dossier_v2.validate_run_dossier_v2+renderer.wang_narrative._load_verification",
+            validator="formats.run_dossier_v2.validate_run_dossier_v2+renderer.wang_snapshot.load_explainability_bundle+renderer.wang_square.load_wang_presentation+renderer.wang_narrative._load_verification",
             compositor="renderer.wang_narrative.render_verification_assets",
         ),
         "witness_presentation": _metadata(
@@ -292,8 +358,8 @@ def _animation_metadata(
         "optimized_mechanisms": _metadata(
             owner="/components/optimized-solver/",
             semantic_label="didactic",
-            caption="The six retained serial mechanisms, including the lazy MRV index.",
-            alt_text="Seven didactic frames contrast the reference baseline with six measured optimized mechanisms.",
+            caption="Six concrete panels show the retained serial mechanisms and their private state changes.",
+            alt_text="Seven didactic frames show stack, trail, ownership, byte-support, queue, and lazy-MRV state, ending with a static summary.",
             source_contract="wang-optimized-mechanisms-v1",
             source_sha256=mechanism_digest,
             producer="renderer/data/optimized-mechanisms-v1.json",
@@ -325,8 +391,15 @@ def _static_metadata(
         "worked_example": _metadata(
             owner="/worked-example/",
             semantic_label="observed",
-            caption="Static t0 through tn component milestones for one SAT run.",
-            alt_text="Eight static panels follow the captured source from formula to checked presentation.",
+            caption=(
+                "Eight-stage overview with readable decision, construction, "
+                "verification, square-witness, and checked-hex details."
+            ),
+            alt_text=(
+                "An eight-stage overview followed by enlarged Boolean decision, "
+                "Yang-Zhang construction, six verification receipts, verified "
+                "square witness, and checked hex presentation panels."
+            ),
             source_contract="wang-run-dossier-v2#named-components",
             source_sha256=pipeline_source_sha256(identities, run),
             validator="formats.run_dossier_v2_bundle.load_run_dossier_v2",
@@ -517,7 +590,12 @@ def generate_narrative_assets(
             ["wang_square.py", str(reference_manifest), str(formula_path), "--view", "formula"]
         )
         boolean_outputs = _run_renderer(
-            ["wang_z3_summary.py", str(boolean_summary), str(staging / "boolean-z3")],
+            [
+                "wang_z3_summary.py",
+                str(boolean_summary),
+                str(reference_manifest),
+                str(staging / "boolean-z3"),
+            ],
             required_outputs=("fallback",),
         )
         region_outputs = _run_renderer(
@@ -550,7 +628,12 @@ def generate_narrative_assets(
             required_outputs=("fallback",),
         )
         wang_outputs = _run_renderer(
-            ["wang_z3_summary.py", str(wang_summary), str(staging / "wang-z3")],
+            [
+                "wang_z3_summary.py",
+                str(wang_summary),
+                str(reference_manifest),
+                str(staging / "wang-z3"),
+            ],
             required_outputs=("fallback",),
         )
         verification_receipts = staging / ".verification-receipts.json"
@@ -558,13 +641,37 @@ def generate_narrative_assets(
             verification_receipts,
             _encode_document(_verification_receipts(run)),
         )
+        verification_arguments = [
+            "wang_narrative.py",
+            "verification",
+            str(verification_receipts),
+            str(staging / "verification"),
+            "--manifest",
+            str(reference_manifest),
+        ]
+        if run["case"]["expected_status"] == "sat":
+            reference_solution = _run_artifact(
+                run_root, run, "reference_solution"
+            )
+            if reference_solution is None:
+                raise NarrativeAssetError(
+                    "SAT verification explanation requires a reference solution"
+                )
+            verification_arguments.extend(
+                [
+                    "--solution",
+                    str(reference_solution),
+                    "--assignment-json",
+                    json.dumps(
+                        run["reference"]["extracted_assignment"],
+                        ensure_ascii=False,
+                        allow_nan=False,
+                        separators=(",", ":"),
+                    ),
+                ]
+            )
         verification_outputs = _run_renderer(
-            [
-                "wang_narrative.py",
-                "verification",
-                str(verification_receipts),
-                str(staging / "verification"),
-            ],
+            verification_arguments,
             required_outputs=("fallback",),
         )
         verification_receipts.unlink()
