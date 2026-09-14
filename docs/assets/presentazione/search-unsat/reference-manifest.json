@@ -1,0 +1,33 @@
+{
+  "schema": "wang-explain-manifest-v3",
+  "stage": "solver-trace",
+  "source_formula_sha256": "ea2b8feb6eb8f4e722f1ec9021445c84858120c8567d42528631bdfb77400a94",
+  "artifacts": {
+    "formula": {
+      "path": "formula-7c2cbd3397a3743be504c419ab793454e96b86050d69d1bc8b1f63b61ae9ead2.json",
+      "sha256": "7c2cbd3397a3743be504c419ab793454e96b86050d69d1bc8b1f63b61ae9ead2",
+      "schema": "cm13-formula-snapshot-v1"
+    },
+    "tileset": {
+      "path": "tileset-462a102690c420bfe52a634e7b365a6be3bfcf59169f0acd96264831196723fa.json",
+      "sha256": "462a102690c420bfe52a634e7b365a6be3bfcf59169f0acd96264831196723fa",
+      "schema": "wang-tileset-snapshot-v1"
+    },
+    "region": {
+      "path": "region-316399c1144915624eacd958d0dd06e2169269db178ffcd562ffc3b4f35715cd.json",
+      "sha256": "316399c1144915624eacd958d0dd06e2169269db178ffcd562ffc3b4f35715cd",
+      "schema": "wang-region-snapshot-v1"
+    },
+    "reduction": {
+      "path": "reduction-2b16e0f6f9eeef44fa519cd2fe43356b8d9ad583accfebc3b2564b8abc43c33e.json",
+      "sha256": "2b16e0f6f9eeef44fa519cd2fe43356b8d9ad583accfebc3b2564b8abc43c33e",
+      "schema": "wang-reduction-explanation-v1"
+    },
+    "solution": null,
+    "trace": {
+      "path": "trace-87d9838b3112be211e5576fd0ee3bae98f2dfb4f2be4d767cbc5ecc5464e41b1.json",
+      "sha256": "87d9838b3112be211e5576fd0ee3bae98f2dfb4f2be4d767cbc5ecc5464e41b1",
+      "schema": "wang-solver-trace-v1"
+    }
+  }
+}

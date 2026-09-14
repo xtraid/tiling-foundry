@@ -1,0 +1,42 @@
+{
+  "schema": "cm13-formula-snapshot-v1",
+  "source": {
+    "name": "pipeline_unsat_search.cm13",
+    "sha256": "ea2b8feb6eb8f4e722f1ec9021445c84858120c8567d42528631bdfb77400a94"
+  },
+  "variable_count": 4,
+  "clauses": [
+    {
+      "clause_id": 0,
+      "variables": [
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "clause_id": 1,
+      "variables": [
+        0,
+        1,
+        2
+      ]
+    },
+    {
+      "clause_id": 2,
+      "variables": [
+        1,
+        2,
+        2
+      ]
+    },
+    {
+      "clause_id": 3,
+      "variables": [
+        3,
+        3,
+        3
+      ]
+    }
+  ]
+}

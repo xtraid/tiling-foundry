@@ -18,6 +18,8 @@ from check_pages import (
     COMPONENTS,
     EXPECTED_BY_CLASS,
     STATIC_POLICY,
+    PRESENTAZIONE_REFERENCE_FRAMES,
+    SEARCH_UNSAT_FRAMES,
 )
 
 
@@ -43,6 +45,9 @@ REFERENCE_ATTRIBUTES = {
     "source": "srcset",
 }
 NARRATIVE_ASSET_POLICY = {
+    "presentazione_construction": ("/presentazione/", "static"),
+    **{name: ("/presentazione/", "static")
+       for name in (*PRESENTAZIONE_REFERENCE_FRAMES, *SEARCH_UNSAT_FRAMES)},
     **{name: (route, "animation") for name, (route, _) in ANIMATION_POLICY.items()},
     **{
         name: (route, "static")
@@ -305,7 +310,7 @@ def _check_semantics(
         for source, alt, width, height in page.images:
             if not alt.strip():
                 _error(errors, root, page, f"image {source!r} has empty alt text")
-            if "/assets/narrative/" in source:
+            if any(prefix in source for prefix in ("/assets/narrative/", "/assets/presentazione/")):
                 try:
                     valid_dimensions = int(width) > 0 and int(height) > 0
                 except ValueError:
