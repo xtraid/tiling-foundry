@@ -10,6 +10,19 @@
   <figcaption>
     <strong>{{ include.label | escape }}.</strong>
     {{ include.caption | escape }}
+    {% if page.url == '/presentazione/' %}
+    <a class="full-size-image" href="{{ include.image | relative_url }}">Open full-size image</a>
+    <details class="technical-provenance">
+      <summary>Technical provenance</summary>
+      <span class="asset-source">Source contract: <code>{{ include.source | escape }}</code>.</span>
+      {% if include.image contains '/assets/presentazione/search-unsat/' %}
+      <a href="{{ '/assets/presentazione/search-unsat/reference-manifest.json' | relative_url }}">Search-UNSAT trace manifest and SHA-256 identities</a>
+      {% else %}
+      <a href="{{ '/assets/narrative/manifest.json' | relative_url }}">Asset manifest and SHA-256 identities</a>
+      {% endif %}
+    </details>
+    {% else %}
     <span class="asset-source">Source contract: <code>{{ include.source | escape }}</code>.</span>
+    {% endif %}
   </figcaption>
 </figure>

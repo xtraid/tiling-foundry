@@ -38,6 +38,8 @@ next non-singleton cell by row-major minimum remaining values, and explores
 choices with iterative depth-first search and an undo trail. Every SAT result
 is checked before publication.
 
+[See concrete propagation, MRV, conflict and rollback states →]({{ '/presentazione/#native-solver' | relative_url }}).
+
 ## Primary animation
 
 `reference_trace` selects semantic milestones from one complete observed trace.

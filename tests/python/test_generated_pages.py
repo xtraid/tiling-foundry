@@ -15,7 +15,9 @@ from check_generated_pages import (  # noqa: E402
     EXPECTED_ROUTES,
     check_site,
 )
-from check_pages import ANIMATION_POLICY, STATIC_POLICY  # noqa: E402
+from check_pages import (  # noqa: E402
+    ANIMATION_POLICY, STATIC_POLICY, PRESENTAZIONE_REFERENCE_FRAMES, SEARCH_UNSAT_FRAMES,
+)
 
 
 SITE_URL = "https://xtraid.github.io"
@@ -102,7 +104,11 @@ def _valid_site(root: Path) -> None:
         for name in ("fallback.png", "animation.gif", "contact-sheet.png"):
             (narrative / name).write_bytes(b"asset")
 
-    for asset_id, (route, _) in STATIC_POLICY.items():
+    statics = {**STATIC_POLICY, "presentazione_construction": ("/presentazione/", "canonical-construction"), **{
+        name: ("/presentazione/", "observed")
+        for name in (*PRESENTAZIONE_REFERENCE_FRAMES, *SEARCH_UNSAT_FRAMES)
+    }}
+    for asset_id, (route, _) in statics.items():
         if asset_id == "presentation_status":
             continue
         page = root / route.strip("/") / "index.html" if route != "/" else root / "index.html"
@@ -140,7 +146,7 @@ class GeneratedPagesTests(unittest.TestCase):
             _valid_site(root)
             result = check_site(root, site_url=SITE_URL, baseurl=BASEURL)
         self.assertEqual(result.errors, ())
-        self.assertEqual(result.page_count, 40)
+        self.assertEqual(result.page_count, 41)
 
     def test_rejects_the_known_home_regression_and_broken_links(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -18,6 +18,20 @@ ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs"
 NARRATIVE_ROOT = DOCS / "assets/narrative"
 NARRATIVE_MANIFEST = NARRATIVE_ROOT / "manifest.json"
+# Fixed excerpts for the one additive tour; canonical ownership stays unchanged.
+PRESENTAZIONE_REFERENCE_FRAMES = {
+    "presentazione_mrv": "reference-trace/frame-002517.png",
+    "presentazione_propagation": "reference-trace/frame-000001.png",
+}
+SEARCH_UNSAT_ROOT = DOCS / "assets/presentazione/search-unsat"
+SEARCH_UNSAT_MANIFEST_SHA256 = "709da24ce86b0726f43b85f4f0265ed1d10cc7ccbbcdfa14ad5517228737b7f3"
+SEARCH_UNSAT_FRAMES = {
+    "presentazione_branch_decision": (3995, "f450779fc8b78b8aa3555b01dde5674088c8c1180a05ff8373947542e4e2cf6a"),
+    "presentazione_branch_empty": (4118, "ee235aa7c7628b2ac6dffeec20a76b2e3e413c034861ceb0d2635d1134894357"),
+    "presentazione_branch_conflict": (4120, "0d483876eee2d8aaf26112bfe5fc87d60f0589cd95a625a4a342ec96a8974bcd"),
+    "presentazione_branch_rollback": (4121, "f1ca9f3eaca7c08e3ca8d756efbeef3a728c11165a6851889aed7b65ac97abf9"),
+    "presentazione_branch_next": (4122, "32f28128321a4ab89e1b1c4b65e010f7eb6fe9feb1a503ca28edc5c7e2724981"),
+}
 
 PUBLIC_CLASSES = {"story", "reference", "evidence", "history"}
 SECTIONS = {
@@ -51,6 +65,7 @@ COMPONENTS = {
 STORY_ROUTES = {
     "/",
     "/pipeline/",
+    "/presentazione/",
     "/worked-example/",
     "/reference/",
     "/evidence/",
@@ -563,6 +578,10 @@ def _require_owner_copy(
         locations = [
             route for route, document in documents.items() if public in document.body
         ]
+        # Only this tour excerpt may repeat the reference animation's fallback.
+        if (name == "reference_trace" and public == roles.get("fallback")
+                and "/presentazione/" in locations):
+            locations.remove("/presentazione/")
         if locations != [owner]:
             fail(
                 errors,
@@ -631,6 +650,68 @@ def _parse_narrative_includes(
                     arguments=arguments,
                 )
     return includes
+
+
+def _check_presentazione_excerpts(
+    includes: dict[str, NarrativeInclude], reference: object, errors: list[str]
+) -> None:
+    # The existing v3 loader checks every snapshot hash, identity and trace replay.
+    if str(ROOT / "python") not in sys.path:
+        sys.path.insert(0, str(ROOT / "python"))
+    from formats.solver_trace_snapshot import load_solver_trace_bundle
+
+    manifest_path = SEARCH_UNSAT_ROOT / "reference-manifest.json"
+    try:
+        if hashlib.sha256(manifest_path.read_bytes()).hexdigest() != SEARCH_UNSAT_MANIFEST_SHA256:
+            raise ValueError("manifest differs from the pinned search-UNSAT capture")
+        manifest, _ = load_solver_trace_bundle(manifest_path)
+        source = ROOT / "tests/instances/pipeline_unsat_search.cm13"
+        if hashlib.sha256(source.read_bytes()).hexdigest() != manifest["source_formula_sha256"]:
+            raise ValueError("source formula differs from search-UNSAT capture")
+        expected_files = {manifest_path.name} | {
+            item["path"] for item in manifest["artifacts"].values() if item is not None
+        } | {f"frame-{sequence:06d}.png" for sequence, _ in SEARCH_UNSAT_FRAMES.values()}
+        if {p.name for p in SEARCH_UNSAT_ROOT.iterdir()} != expected_files:
+            raise ValueError("search-UNSAT excerpt inventory differs from its fixed selection")
+    except (OSError, ValueError) as error:
+        fail(errors, manifest_path, str(error))
+
+    reference = reference if isinstance(reference, dict) else {}
+    frames = reference.get("frames", [])
+    frames = frames if isinstance(frames, list) else []
+    frame_paths = {item.get("path") for item in frames if isinstance(item, dict)}
+    paths = {}
+    for asset_id, relative in PRESENTAZIONE_REFERENCE_FRAMES.items():
+        if relative not in frame_paths:
+            fail(errors, NARRATIVE_MANIFEST, f"Presentazione frame {relative!r} is not a validated reference frame")
+        paths[asset_id] = (f"/assets/narrative/{relative}", "828")
+    for asset_id, (sequence, digest) in SEARCH_UNSAT_FRAMES.items():
+        filename = f"frame-{sequence:06d}.png"
+        image = SEARCH_UNSAT_ROOT / filename
+        try:
+            if hashlib.sha256(image.read_bytes()).hexdigest() != digest:
+                raise ValueError("PNG differs from the pinned search-UNSAT render")
+        except (OSError, ValueError) as error:
+            fail(errors, image, str(error))
+        paths[asset_id] = (f"/assets/presentazione/search-unsat/{filename}", "972")
+
+    for asset_id, (image, height) in paths.items():
+        excerpt = includes.pop(asset_id, None)
+        label = "MRV" if asset_id == "presentazione_mrv" else asset_id
+        if excerpt is None:
+            fail(errors, DOCS / "presentazione.md", f"missing Presentazione {label} excerpt")
+            continue
+        if excerpt.route != "/presentazione/" or excerpt.template != "narrative-static.html":
+            fail(errors, excerpt.path, f"Presentazione {label} excerpt must be a static on /presentazione/")
+        for field, value in {
+            "image": image, "source": "wang-explain-manifest-v3", "label": "observed",
+            "width": "1976", "height": height,
+        }.items():
+            if excerpt.arguments.get(field) != value:
+                fail(errors, excerpt.path, f"Presentazione {label} {field!r} disagrees with reference trace")
+        for field in ("alt", "caption"):
+            if not excerpt.arguments.get(field, "").strip():
+                fail(errors, excerpt.path, f"Presentazione {label} {field!r} must be nonempty")
 
 
 def check_narrative_assets(
@@ -840,6 +921,22 @@ def check_narrative_assets(
                 errors,
             )
         assets_by_owner[str(record["owner"])].add(name)
+
+    # One fixed construction preview; its animation and provenance keep their owner.
+    construction = includes.pop("presentazione_construction", None)
+    expected = {
+        "image": "/assets/narrative/region-construction/frame-04.png",
+        "width": "1976", "height": "828", "label": "canonical-construction",
+        "source": "wang-reduction-explanation-v1",
+    }
+    if "region-construction/frame-04.png" not in animation_frames.get("region_construction", ()):
+        fail(errors, NARRATIVE_MANIFEST, "Presentazione construction must reuse a validated frame")
+    if (construction is None or construction.route != "/presentazione/"
+            or construction.template != "narrative-static.html"
+            or any(construction.arguments.get(k) != v for k, v in expected.items())
+            or not all(construction.arguments.get(k, "").strip() for k in ("alt", "caption"))):
+        fail(errors, DOCS / "presentazione.md", "Presentazione construction preview differs from its fixed source")
+    _check_presentazione_excerpts(includes, animations.get("reference_trace"), errors)
 
     expected_include_ids = set(ANIMATION_POLICY) | (
         set(STATIC_POLICY) - {"presentation_status"}

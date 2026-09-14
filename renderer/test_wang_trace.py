@@ -181,6 +181,44 @@ def test_one_composition_chain_is_byte_stable_for_png_sheet_and_gif(tmp_path):
         assert animation.n_frames == 10
 
 
+def test_presentazione_search_unsat_branch_replays_and_reexports_exactly(tmp_path):
+    source = ROOT / "docs/assets/presentazione/search-unsat"
+    manifest = source / "reference-manifest.json"
+    bundle = load_trace_bundle(manifest)
+    trace = bundle.trace
+    states = replay_trace(trace)
+    assert (trace.solver, trace.status, trace.observed_event_count) == ("reference", "unsat", 4370)
+    assert not trace.truncated and bundle.solution is None
+    assert trace.events[-1].kind == "result" and trace.events[-1].status == "unsat"
+
+    # One depth-two frame tries 0, fails, restores its full entry state, then tries 3.
+    first, rollback, following = (trace.events[i] for i in (3994, 4121, 4122))
+    assert (first.kind, first.cell, first.depth, first.old_domain, first.new_domain) == (
+        "decision", 492, 2, 9, 1
+    )
+    assert (rollback.kind, rollback.cell, rollback.depth) == ("backtrack", 492, 2)
+    assert (following.kind, following.cell, following.depth, following.new_domain) == (
+        "decision", 492, 2, 8
+    )
+    assert first.change_mark == rollback.change_mark == following.change_mark == 3990
+    assert states[3993] == states[4121] == states[4122]
+    assert [(states[i][492], states[i][614]) for i in (3993, 3995, 4120, 4121, 4123)] == [
+        (9, 320), (1, 320), (1, 0), (9, 320), (8, 320)
+    ]
+    reductions = [event for event in trace.events[3995:4121] if event.kind == "domain_reduction"]
+    assert len(reductions) == 124
+    assert len({event.cell for event in reductions}) == 122
+    assert trace.events[4120].change_mark == 4114
+
+    # Existing max_frames selects these five; no custom selector or raster path.
+    rendered = render_trace_assets(manifest, tmp_path / "rendered", max_frames=20)
+    names = {frame.name for frame in rendered.frames}
+    for sequence in (3995, 4118, 4120, 4121, 4122):
+        name = f"frame-{sequence:06d}.png"
+        assert name in names
+        assert (tmp_path / "rendered" / name).read_bytes() == (source / name).read_bytes()
+
+
 def test_observed_mrv_selection_is_row_major_and_deterministic(tmp_path):
     bundle = load_trace_bundle(MANIFEST)
     states = replay_trace(bundle.trace)

@@ -24,6 +24,10 @@ The [reference solver component]({{ '/components/reference-solver/' | relative_u
 owns the observed trace animation. This page remains the detailed API,
 ownership, and verification reference for both native paths.
 
+Jump to [propagation](#5-propagation), [undo trail / rollback](#undo-trail-and-rollback),
+[MRV](#mrv-selection), [iterative DFS](#iterative-dfs), or
+[SAT publication](#7-mandatory-sat-verification-and-publication).
+
 ## 1. Scope and dependency boundary
 
 The subsystem implements a finite-region Wang decision procedure over the
@@ -249,6 +253,8 @@ same domains.
 
 ## 5. Propagation
 
+[Visual example → neighbor domain reduction]({{ '/presentazione/#propagation' | relative_url }}).
+
 When cell `i` changes, propagation computes the union of compatible neighbor
 tiles and intersects it with each active neighbor `j`:
 
@@ -284,12 +290,20 @@ rollback.
 
 ## 6. Trail, MRV, and iterative DFS
 
+### Undo trail and rollback
+
+[Visual example → one search-UNSAT branch]({{ '/presentazione/#conflict-and-rollback' | relative_url }}).
+
 The undo trail is a contiguous vector of `(cell_index, old_domain)` entries.
 Each search-time reduction appends the previous value before changing the
 domain. Rollback walks entries in reverse to a saved marker and updates
 `resolved_count` from the current and restored cardinalities. Multiple entries
 for the same cell are intentional because they reproduce every intermediate
 state exactly.
+
+### MRV selection
+
+[Visual example → tied minimum domains and the chosen cell]({{ '/presentazione/#mrv-and-decision' | relative_url }}).
 
 The reference MRV selection scans active cells in row-major order and chooses
 the smallest nonsingleton domain. The optimized path makes the same first
@@ -304,6 +318,8 @@ Both paths therefore retain the lowest dense index on ties. Candidates are
 tried in ascending tile-ID order, and propagation visits neighbors in `N`,
 `E`, `S`, `W` order. These rules make each path deterministic for a fixed
 mechanism set.
+
+### Iterative DFS
 
 DFS uses a heap-allocated stack rather than the process stack. A frame holds
 the chosen cell, remaining candidates, and the trail position before the

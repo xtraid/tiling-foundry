@@ -1,6 +1,7 @@
 from copy import deepcopy
 import hashlib
 from pathlib import Path
+import shutil
 import sys
 import tempfile
 import unittest
@@ -30,6 +31,66 @@ class PagesCheckerTests(unittest.TestCase):
         check_pages.check_site_structure(documents, errors)
         self.assertEqual(errors, [])
         self.assertEqual((animations, statics), (9, 8))
+
+    def test_presentazione_is_additive_and_reuse_is_bound(self) -> None:
+        documents = _documents()
+        self.assertEqual(len(documents), 41)
+        self.assertEqual(len(set(documents) - {"/presentazione/"}), 40)
+        tour = documents["/presentazione/"]
+        for old, new, diagnostic in (
+            ('source="wang-explain-manifest-v3"', 'source="wrong"', "'source'"),
+            ('label="observed"', 'label="didactic"', "'label'"),
+            ('reference-trace/frame-002517.png', 'reference-trace/frame-002516.png', "'image'"),
+        ):
+            with self.subTest(diagnostic=diagnostic):
+                changed = dict(documents)
+                changed["/presentazione/"] = check_pages.Document(
+                    tour.path, tour.metadata, tour.body.replace(old, new)
+                )
+                errors: list[str] = []
+                check_pages.check_narrative_assets(changed, errors)
+                self.assertIn(f"Presentazione MRV {diagnostic} disagrees", "\n".join(errors))
+
+    def test_construction_preview_preserves_source_and_semantic_label(self) -> None:
+        documents = _documents()
+        tour = documents["/presentazione/"]
+        for old, new in (
+            ("region-construction/frame-04.png", "reference-trace/frame-000001.png"),
+            ('label="canonical-construction"', 'label="observed"'),
+        ):
+            with self.subTest(replacement=new):
+                changed = dict(documents)
+                changed["/presentazione/"] = check_pages.Document(
+                    tour.path, tour.metadata, tour.body.replace(old, new)
+                )
+                errors = []
+                check_pages.check_narrative_assets(changed, errors)
+                self.assertIn("construction preview differs", "\n".join(errors))
+
+    def test_presentazione_cannot_replace_or_move_the_owner(self) -> None:
+        documents = _documents()
+        owner = documents["/components/reference-solver/"]
+        documents["/components/reference-solver/"] = check_pages.Document(
+            owner.path, owner.metadata, check_pages.NARRATIVE_INCLUDE.sub("", owner.body)
+        )
+        errors: list[str] = []
+        check_pages.check_narrative_assets(documents, errors)
+        self.assertIn("owned asset 'reference_trace' has no include", "\n".join(errors))
+
+        documents = _documents()
+        tour = documents["/presentazione/"]
+        include = next(match.group(0) for match in check_pages.NARRATIVE_INCLUDE.finditer(tour.body)
+                       if 'asset_id="presentazione_mrv"' in match.group(0))
+        documents["/presentazione/"] = check_pages.Document(
+            tour.path, tour.metadata, tour.body.replace(include, "")
+        )
+        owner = documents["/components/reference-solver/"]
+        documents["/components/reference-solver/"] = check_pages.Document(
+            owner.path, owner.metadata, owner.body + include
+        )
+        errors = []
+        check_pages.check_narrative_assets(documents, errors)
+        self.assertIn("must be a static on /presentazione/", "\n".join(errors))
 
     def test_artifact_rejects_unknown_extension_and_wrong_hash(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -62,6 +123,40 @@ class PagesCheckerTests(unittest.TestCase):
         joined = "\n".join(errors)
         self.assertIn("must end in .png or .gif", joined)
         self.assertIn("disagrees with manifest", joined)
+
+    def test_search_unsat_excerpt_rejects_changed_source_or_render(self) -> None:
+        documents = _documents()
+        manifest = check_pages._load_manifest([])
+        trace_name = next(check_pages.SEARCH_UNSAT_ROOT.glob("trace-*.json")).name
+        for filename, diagnostic in (
+            ("reference-manifest.json", "pinned search-UNSAT capture"),
+            (trace_name, "does not match"),
+            ("frame-004121.png", "pinned search-UNSAT render"),
+        ):
+            with self.subTest(filename=filename), tempfile.TemporaryDirectory() as directory:
+                copied = Path(directory) / "search-unsat"
+                shutil.copytree(check_pages.SEARCH_UNSAT_ROOT, copied)
+                (copied / filename).write_bytes(b"changed source or render")
+                errors = []
+                includes = check_pages._parse_narrative_includes(documents, errors)
+                with mock.patch.object(check_pages, "SEARCH_UNSAT_ROOT", copied):
+                    check_pages._check_presentazione_excerpts(
+                        includes, manifest["animations"]["reference_trace"], errors
+                    )
+                self.assertIn(diagnostic, "\n".join(errors))
+
+    def test_search_unsat_excerpt_cannot_silently_use_a_sat_frame(self) -> None:
+        documents = _documents()
+        tour = documents["/presentazione/"]
+        documents["/presentazione/"] = check_pages.Document(
+            tour.path, tour.metadata, tour.body.replace(
+                "/assets/presentazione/search-unsat/frame-004121.png",
+                "/assets/narrative/reference-trace/frame-002517.png",
+            )
+        )
+        errors = []
+        check_pages.check_narrative_assets(documents, errors)
+        self.assertIn("presentazione_branch_rollback 'image' disagrees", "\n".join(errors))
 
     def test_manifest_closes_identity_and_pdf_milestone_structure(self) -> None:
         documents = _documents()

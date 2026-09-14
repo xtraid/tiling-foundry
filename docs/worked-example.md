@@ -9,12 +9,22 @@ description: One named pipeline_sat.cm13 instance followed from source bytes to 
 
 # Worked SAT example
 
-This page follows only `tests/instances/pipeline_sat.cm13`. Its SHA-256 is
+This page follows one small three-variable CM1-in-3 SAT instance through the
+complete pipeline, from source formula to independently checked presentations.
+
+<details markdown="1">
+<summary>Technical provenance</summary>
+
+Source: `tests/instances/pipeline_sat.cm13`. SHA-256:
 `3caaa6b29ac988fb4f51cc7071202d83ea1591ba6170e683b6da449cb3641542`.
 No initial-domain override is applied. The separate search-UNSAT example is
 not spliced into this run.
 
+</details>
+
 {% include narrative-static.html asset_id="worked_example" image="/assets/narrative/pipeline-overview/worked-example.png" alt="An eight-stage overview followed by enlarged Boolean decision, Yang-Zhang construction, six verification receipts, verified square witness, and checked hex presentation panels." width="1080" height="3440" label="observed" caption="Eight-stage overview with readable decision, construction, verification, square-witness, and checked-hex details." source="wang-run-dossier-v2#named-components" %}
+
+[Open the complete worked figure at full size]({{ '/assets/narrative/pipeline-overview/worked-example.png' | relative_url }}).
 
 The opening grid is the component map. The enlarged panels retain the captured
 decision, construction, checker interpretation, square witness, and final hex

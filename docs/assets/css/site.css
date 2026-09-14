@@ -389,6 +389,40 @@ figure {
   font-size: 0.68rem;
 }
 
+/* The technical tour alone gets wider figures; existing stories retain their layout. */
+body[data-page-kind="presentazione"] .article {
+  width: min(100% - (2 * var(--gutter)), var(--presentation-width));
+}
+
+body[data-page-kind="presentazione"] .article__body {
+  max-width: none;
+}
+
+body[data-page-kind="presentazione"] .article__body > :not(figure),
+body[data-page-kind="presentazione"] .document-return {
+  max-width: var(--reading-width);
+  margin-inline: auto;
+}
+
+body[data-page-kind="presentazione"] .full-size-image {
+  display: block;
+  margin-top: 0.75rem;
+}
+
+body[data-page-kind="presentazione"] .technical-provenance {
+  margin-top: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+body[data-page-kind="presentazione"] summary {
+  cursor: pointer;
+}
+
+body[data-page-kind="presentazione"] summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
 .article-abstract {
   max-width: 40rem;
   margin: 0;
