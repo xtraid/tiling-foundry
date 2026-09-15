@@ -39,18 +39,64 @@ userspace. The toolchain uses Linux/POSIX facilities including `mmap`, `/proc`,
 Valgrind, and dynamic loading of `libwang.so`; Windows and macOS are not
 currently supported.
 
-Install a C17 compiler, `make`, OpenMP support, and
-[`uv`](https://docs.astral.sh/uv/), then run:
+For the full dossier, install a C17 compiler, `make`, Python 3.11 or newer,
+Git, [`uv`](https://docs.astral.sh/uv/getting-started/installation/), and
+pdfLaTeX. On Debian 13, the system packages are:
+
+```sh
+sudo apt-get update
+sudo apt-get install --no-install-recommends \
+  build-essential python3 git ca-certificates curl texlive-latex-base
+```
+
+If `uv` is not installed, download and inspect the standalone installer before
+running it. The version used for the setup check is 0.12.1:
+
+```sh
+curl -LsSf https://astral.sh/uv/0.12.1/install.sh -o /tmp/uv-install.sh
+cat /tmp/uv-install.sh
+sh /tmp/uv-install.sh
+export PATH="$HOME/.local/bin:$PATH"
+uv --version
+```
+
+Clone and prepare the project:
 
 ```sh
 git clone https://github.com/xtraid/tiling-foundry.git
 cd tiling-foundry
-make check
+make demo-setup
 ```
 
-`make check` builds the serial executable and shared library, runs the C and
-core Python tests, builds the OpenMP scaffold, and exercises both serial solver
-paths. It does not require a GPU.
+`demo-setup` checks the compiler and compiles a small PDF with the real report
+template before installing dependencies. It then builds `libwang.so` and
+checks Z3, image rendering, and fonts. A missing prerequisite stops setup with
+an error; the target does not install system packages.
+
+The two Python environments stay separate: `.venv` uses Python 3.11 or newer;
+`renderer/.venv` uses Python 3.14, selected by `renderer/.python-version`.
+Both are installed with `uv sync --locked`. The first setup needs network
+access to download packages and, when absent, the renderer's Python. Keep the
+environments and uv-managed interpreter installed for offline use. No global
+`pip` installation or GPU is needed.
+
+Generate the first complete dossier from the included SAT case:
+
+```sh
+UV_OFFLINE=1 uv run --locked python tools/generate_run_dossier.py \
+  examples/run-cases-v2/pipeline-sat.json \
+  build/first-dossier --pdf
+```
+
+Open `build/first-dossier/report.pdf`; on a headless machine, copy that file
+to your computer. The output directory must be new for each run. `UV_OFFLINE=1`
+also reaches the renderer subprocesses, so this command needs no downloads
+after setup. It runs the four engines and checks the recorded results before
+producing the figures and PDF.
+
+This first run uses a known case with an expected result. Direct input through
+`make demo INPUT=...` and the narrated `make demo-check` suite are the next
+steps in the [Exam Ready plan](docs/plans/2026-09-15-exam-ready-v1.0.md).
 
 ## Current status
 
@@ -123,17 +169,29 @@ follows one named SAT source through the same contracts and checks.
 
 ## Next milestones
 
-Work proceeds in this order:
+The visual documentation and Presentazione tour are integrated. The next
+milestone is **v1.0.0 Exam Ready**: a clean-clone setup, a simple command that
+turns a new supported formula into a verified dossier and PDF, a short narrated
+test suite, and clearer documentation. `make demo-setup` prepares the full
+environment; the direct-input command and narrated suite are planned work.
 
-1. freeze the current visual documentation and PDF work;
-2. T99: split fast, integration, and evidence verification into reusable CI
+**Release checkpoint:** publish the tag and GitHub Release, then verify the
+documented commands from a fresh clone of that tag and open the resulting
+dossier on the presentation computer. A local freeze or merged PR alone does
+not complete this milestone.
+
+The [Exam Ready plan](docs/plans/2026-09-15-exam-ready-v1.0.md) records the six
+sessions and acceptance criteria. After the release and project defense, work
+resumes in this order:
+
+1. T99: split fast, integration, and evidence verification into reusable CI
    levels;
-3. T100: perform a behavior-preserving structural cleanup of the serial
+2. T100: perform a behavior-preserving structural cleanup of the serial
    solver;
-4. collect a new serial baseline, hard-UNSAT evidence, and the public option
+3. collect a new serial baseline, hard-UNSAT evidence, and the public option
    matrix;
-5. introduce a minimal `TaskPlan` with an equivalent serial executor;
-6. add and measure real OpenMP execution only after those gates pass.
+4. introduce a minimal `TaskPlan` with an equivalent serial executor;
+5. add and measure real OpenMP execution only after those gates pass.
 
 ## Build, test, and reproduce
 
@@ -143,6 +201,12 @@ Run the core checks from the repository root:
 make clean
 make check
 ```
+
+`make check` builds the serial libraries, runs the C and core Python tests,
+builds the OpenMP scaffold, and exercises both serial solver paths. The core
+checks require a C17 compiler with OpenMP support, `make`, Python and `uv`;
+they do not require LaTeX. The full dossier setup above also prepares the
+renderer and PDF tools.
 
 The renderer is an isolated locked Python project and has its own suite:
 

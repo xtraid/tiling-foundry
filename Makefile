@@ -84,7 +84,7 @@ SERIAL_LIBRARY := $(LIB_DIR)/libwang.a
 SHARED_LIBRARY := $(LIB_DIR)/libwang.so
 OPENMP_LIBRARY := $(LIB_DIR)/libwang_openmp.a
 
-.PHONY: all setup serial shared openmp check c-check python-check pages-check \
+.PHONY: all setup demo-setup serial shared openmp check c-check python-check pages-check \
 	generated-pages-check \
 	strict-check sanitizer-check analyzer-check valgrind-check \
 	cachegrind-check benchmark benchmark-smoke benchmark-compare \
@@ -96,6 +96,16 @@ all: serial shared
 
 setup:
 	$(UV) sync --frozen
+
+# Keep these steps in one recipe: missing prerequisites must stop setup even -j.
+demo-setup: export DEMO_SETUP_CC = $(CC)
+demo-setup: export DEMO_SETUP_UV = $(UV)
+demo-setup:
+	@$(PYTHON) tools/demo_setup.py preflight
+	$(UV) sync --locked
+	$(UV) sync --locked --directory renderer
+	$(MAKE) shared
+	@$(PYTHON) tools/demo_setup.py verify
 
 serial: $(SERIAL_LIBRARY)
 
