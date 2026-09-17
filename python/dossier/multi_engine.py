@@ -343,6 +343,10 @@ def _generate_dossier(
             optimized_options=_native_options(case.optimized_trace),
             progress=progress,
         )
+        if capture.reference.trace.truncated or capture.optimized.trace.truncated:
+            raise MultiEngineDossierError(
+                "full-pipeline dossier requires complete traces; event capacity exhausted"
+            )
 
         reference_manifest_path = data / "reference-manifest.json"
         optimized_manifest_path = data / "optimized-manifest.json"

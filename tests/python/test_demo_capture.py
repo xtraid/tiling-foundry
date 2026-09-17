@@ -118,8 +118,13 @@ class DemoCaptureTests(unittest.TestCase):
             source.write_text("p cm13 nope\n")
             with self.assertRaises(FormulaLoadError):
                 self.direct(source, root / "bad", include_pdf=False)
-            with self.assertRaisesRegex((PipelineSnapshotError, multi_engine.MultiEngineDossierError), "complete|truncat"):
-                self.direct(SOURCE, root / "short", include_pdf=False, event_capacity=2)
+            with patch.object(
+                multi_engine, "dump_solver_trace_bundle",
+                side_effect=AssertionError("incomplete traces must fail before export"),
+            ) as export:
+                with self.assertRaisesRegex((PipelineSnapshotError, multi_engine.MultiEngineDossierError), "complete|truncat"):
+                    self.direct(SOURCE, root / "short", include_pdf=False, event_capacity=2)
+                export.assert_not_called()
             self.assertEqual(sorted(p.name for p in root.iterdir()), [source.name])
 
     def test_direct_trace_capacity_rejected_before_reading_source(self):
