@@ -74,7 +74,9 @@ def _run_record(
     *,
     manifest: Path | None = None,
     assignment: tuple[bool, ...] | None = None,
+    expectation_supplied: bool = True,
 ) -> dict[str, object]:
+    expected_status = status if expectation_supplied else None
     performed = status == "sat"
     checks = {}
     specifications = (
@@ -96,7 +98,7 @@ def _run_record(
             "witness_sha256": digest,
         }
     agreement = {
-        "expected_status": status,
+        "expected_status": expected_status,
         "boolean_z3_status": status,
         "reference_status": status,
         "optimized_status": status,
@@ -135,10 +137,40 @@ def _run_record(
     ).hexdigest()
     return {
         "schema": "wang-verification-receipts-v1",
-        "expected_status": status,
+        "expected_status": expected_status,
         **receipt_payload,
         "source_sha256": source_sha256,
     }
+
+
+@pytest.mark.parametrize("status", ["sat", "unsat"])
+def test_nullable_verification_uses_observed_consensus_and_binds_receipts(tmp_path, status):
+    context = (
+        {"manifest_path": TRACE_MANIFEST, "solution_path": TRACE_SOLUTION,
+         "extracted_assignment": ASSIGNMENT}
+        if status == "sat" else {}
+    )
+    document = _run_record(
+        status, expectation_supplied=False,
+        manifest=TRACE_MANIFEST if status == "sat" else None,
+        assignment=ASSIGNMENT if status == "sat" else None,
+    )
+    path = tmp_path / "receipts.json"
+    path.write_text(json.dumps(document), encoding="utf-8")
+    observed, records, _, _, _ = wang_narrative._load_verification(path, **context)
+    assert observed == status
+    assert all(record["performed"] is (status == "sat") for record in records)
+    for field, value in (("reference_status", "unknown"), ("optimized_status", "unsat" if status == "sat" else "sat"), ("expected_status", status)):
+        original = document["agreement"][field]
+        document["agreement"][field] = value
+        path.write_text(json.dumps(document), encoding="utf-8")
+        with pytest.raises(WangSquareRenderError, match="agreement"):
+            wang_narrative._load_verification(path, **context)
+        document["agreement"][field] = original
+    document["source_sha256"] = "0" * 64
+    path.write_text(json.dumps(document), encoding="utf-8")
+    with pytest.raises(WangSquareRenderError, match="source"):
+        wang_narrative._load_verification(path, **context)
 
 
 def test_verification_composition_is_deterministic_for_sat_and_unsat(tmp_path):

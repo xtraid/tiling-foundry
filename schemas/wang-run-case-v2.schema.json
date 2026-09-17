@@ -20,7 +20,7 @@
     "title": {"type": "string", "minLength": 1},
     "purpose": {"type": "string", "minLength": 1},
     "source": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.?/).+\\.cm13$"},
-    "expected_status": {"enum": ["sat", "unsat"]},
+    "expected_status": {"enum": ["sat", "unsat", null]},
     "reference_trace": {"$ref": "#/$defs/trace"},
     "optimized_trace": {"$ref": "#/$defs/trace"}
   },

@@ -207,7 +207,7 @@ def render_run_report_v2_tex(
             statics,
         )
     )
-    status = str(case["expected_status"])
+    status = str(reference["status"])
 
     source_artifact = artifacts["source_input"]
     assert isinstance(source_artifact, dict)
@@ -320,6 +320,13 @@ def render_run_report_v2_tex(
             rf"All named statuses agree & {_tex(agreement['all_status_equal'])} \\",
             rf"Agreement passed & {_tex(agreement['passed'])} \\",
             r"\end{tabular}",
+            *(
+                (
+                    r"\par",
+                    "Expected result: not supplied; result observed from four named engines.",
+                )
+                if case["expected_status"] is None else ()
+            ),
             _multi_panel_figure(
                 _milestones(manifest, "end_to_end"),
                 "Static semantic milestones from this validated full-pipeline run.",

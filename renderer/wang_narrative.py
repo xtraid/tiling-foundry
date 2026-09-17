@@ -351,9 +351,11 @@ def _load_verification(
         raise WangSquareRenderError("verification receipt snapshot must be closed")
     if document["schema"] != "wang-verification-receipts-v1":
         raise WangSquareRenderError("verification receipt schema is unsupported")
-    status = document["expected_status"]
-    if type(status) is not str or status not in {"sat", "unsat"}:
-        raise WangSquareRenderError("verification receipt status is unsupported")
+    expected_status = document["expected_status"]
+    if expected_status is not None and (
+        type(expected_status) is not str or expected_status not in {"sat", "unsat"}
+    ):
+        raise WangSquareRenderError("verification receipt expectation is unsupported")
     verification = document["verification"]
     agreement = document["agreement"]
     if type(verification) is not dict or set(verification) != {
@@ -372,8 +374,12 @@ def _load_verification(
     }
     if type(agreement) is not dict or set(agreement) != agreement_fields:
         raise WangSquareRenderError("verification agreement must be closed")
+    status = agreement["reference_status"]
+    if type(status) is not str or status not in {"sat", "unsat"}:
+        raise WangSquareRenderError("verification agreement status is unsupported")
     if (
-        agreement["expected_status"] != status
+        agreement["expected_status"] != expected_status
+        or (expected_status is not None and expected_status != status)
         or any(
             agreement[name] != status
             for name in (

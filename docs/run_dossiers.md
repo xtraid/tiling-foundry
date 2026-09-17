@@ -130,6 +130,29 @@ SAT/UNSAT status plus independently valid SAT witnesses; different valid
 witnesses are not required to be byte-equal. UNKNOWN, mismatch, a truncated
 trace, or a failed checker aborts the capture before installation.
 
+### Result expectation and recorded outcome
+
+The v2 case and run contracts keep `expected_status` required and accept
+`"sat"`, `"unsat"`, or `null`. A null value means no expected result was supplied;
+it is never filled from a solver result and does not mean UNKNOWN. All four
+named engines must first report the same terminal result. A supplied expectation
+is then checked as an additional assertion. Witness checks, presentation
+applicability, and PDF status follow the observed agreement. For an absent
+expectation the PDF says so explicitly.
+
+The standalone narrative manifest adds `case.observed_status` exactly when
+`case.expected_status` is null. Known cases retain the existing three-field case
+shape. Verification receipts preserve the nullable expectation and use their
+four recorded agreement statuses; they need no extra status field. Bundle
+loading also binds each native source identity and trace status/completeness,
+and each Z3 summary status, to its run record.
+
+Updated readers continue to accept earlier v2 dossiers, and known-case output
+and canonical asset identities stay unchanged. Earlier strict readers reject
+the new nullable variant. V1 retains its existing contracts. This is an
+extension of the existing v2 and narrative contracts, with no new pipeline or
+independent UNSAT certificate.
+
 The downstream shared-asset pass then consumes only that validated capture.
 Its closed `wang-narrative-assets-v1` manifest names fixed component assets,
 not generic stages: Boolean and Wang Z3 encoding order, canonical region
