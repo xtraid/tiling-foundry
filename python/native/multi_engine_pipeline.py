@@ -138,6 +138,7 @@ def capture_multi_engine_native_pipeline(
     reference_options: TraceCaptureOptions,
     optimized_options: TraceCaptureOptions,
     clock_ns: Callable[[], int] = perf_counter_ns,
+    progress: Callable[[str], None] | None = None,
 ) -> MultiEngineNativeCapture:
     """Parse and reduce once, then capture reference and optimized exactly once."""
     if not isinstance(reference_options, TraceCaptureOptions):
@@ -147,11 +148,15 @@ def capture_multi_engine_native_pipeline(
     if not callable(clock_ns):
         raise TypeError("clock_ns must be callable")
 
+    if progress is not None:
+        progress("Parsing")
     started = clock_ns()
     with _loaded_formula(path) as native_formula:
         formula = _copy_formula(native_formula)
         parse_ns = _elapsed_ns(clock_ns, started)
 
+        if progress is not None:
+            progress("Reduction")
         started = clock_ns()
         with _built_explained_reduction(native_formula) as native_reduction:
             region = _copy_region(native_reduction.reduction.region)
@@ -168,6 +173,8 @@ def capture_multi_engine_native_pipeline(
                 ("reference", False, reference_options),
                 ("optimized", True, optimized_options),
             ):
+                if progress is not None:
+                    progress("Optimized" if optimized else "Reference")
                 started = clock_ns()
                 result, trace = _solve_native_traced(
                     native_reduction.reduction,
@@ -180,6 +187,11 @@ def capture_multi_engine_native_pipeline(
                 solve_timings[name] = _elapsed_ns(clock_ns, started)
 
                 if result.status is TilingSolveStatus.SAT:
+                    if progress is not None:
+                        progress(
+                            "Optimized verification" if optimized
+                            else "Reference verification"
+                        )
                     started = clock_ns()
                     assignment = _verify_and_extract(
                         native_formula,

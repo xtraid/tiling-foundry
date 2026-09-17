@@ -6,6 +6,9 @@ VALGRIND ?= valgrind
 PAGES_BUILD_DIR ?= build/pages
 UV_CACHE_DIR ?= $(CURDIR)/.uv-cache
 export UV_CACHE_DIR
+# Command-line values are otherwise expanded for Make's implicit environment,
+# even by parse-time $(shell ...) calls. Export only the raw demo copies below.
+unexport INPUT TIMEOUT
 
 CPPFLAGS ?= -Iinclude
 CFLAGS ?= -std=c17 -Wall -Wextra -Wpedantic -O2
@@ -84,7 +87,7 @@ SERIAL_LIBRARY := $(LIB_DIR)/libwang.a
 SHARED_LIBRARY := $(LIB_DIR)/libwang.so
 OPENMP_LIBRARY := $(LIB_DIR)/libwang_openmp.a
 
-.PHONY: all setup demo-setup serial shared openmp check c-check python-check pages-check \
+.PHONY: all setup demo-setup demo serial shared openmp check c-check python-check pages-check \
 	generated-pages-check \
 	strict-check sanitizer-check analyzer-check valgrind-check \
 	cachegrind-check benchmark benchmark-smoke benchmark-compare \
@@ -106,6 +109,13 @@ demo-setup:
 	$(UV) sync --locked --directory renderer
 	$(MAKE) shared
 	@$(PYTHON) tools/demo_setup.py verify
+
+# Pass raw values through the environment: filenames are not shell/Make code.
+TIMEOUT ?= 300
+demo: export TILING_DEMO_INPUT = $(value INPUT)
+demo: export TILING_DEMO_TIMEOUT = $(value TIMEOUT)
+demo:
+	@$(PYTHON) tools/demo.py
 
 serial: $(SERIAL_LIBRARY)
 

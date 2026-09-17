@@ -13,7 +13,7 @@ nav_order: 35
 
 # Observed-run dossiers and example index
 
-The sole public generator dispatches closed v1 and v2 case documents to
+The named-case generator dispatches closed v1 and v2 case documents to
 separate implementations. Both are explicitly opt-in and leave parsing,
 reduction, ordinary solving, snapshot export, and the default Wang renderer
 unchanged.
@@ -103,6 +103,71 @@ and trail history diagnose what the run observed but do not constitute a
 standalone mathematical proof of unsatisfiability.
 
 ## Full-pipeline v2 capture
+
+### New CM1-in-3 input
+
+Run `make demo-setup` once, then use the installed environments offline:
+
+```sh
+make demo INPUT='path/to/new formula.cm13' TIMEOUT=300
+```
+
+The input needs a `p cm13 n n` header, followed by `n` clauses. Each clause has
+three positive variable indices in `1..n` and ends in `0`. Every variable must
+occur exactly three times across all clauses, counting repeated occurrences
+within one clause. Lines beginning with `c` are comments. For example:
+
+```text
+c Three variables, each with three occurrences
+p cm13 3 3
+1 1 2 0
+1 2 3 0
+2 3 3 0
+```
+
+No expected result is supplied. The demo copies the original bytes before
+parsing, reduces once, and runs reference, optimized, Boolean Z3 and Wang Z3
+once each. The dossier and PDF consume that same validated capture. Named
+cases below use the same capture producer and retain their configured metadata.
+
+Each invocation creates a separate `build/demo/run-*` directory containing
+`input.cm13`, diagnostic `input.json` (original path/name and SHA-256),
+`worker.log`, and the completed `dossier/` with `run.json`, source/trace assets,
+figures, `report.tex` and `report.pdf`. Input names with spaces or shell/Make
+metacharacters are passed literally; quote the command argument as above.
+The portable name inside a new dossier is always `input.cm13`.
+
+The command prints real operations as they start. `worker.log` keeps the full
+worker output even if a slow terminal or pipe cannot display every message.
+`TIMEOUT` defaults to 300
+seconds and must be finite and positive. It covers the worker's preflight,
+input copy, native/Z3 capture, checks, figures and LaTeX. Timeout or Ctrl-C stops
+the worker and its child processes; SIGTERM is also handled. The log and copied
+input survive failures, while any staging artifacts remain diagnostic only.
+The command prints `dossier=` and `pdf=` only after successful completion.
+
+For explicit output and trace capacity, use the same supervised Python entry:
+
+```sh
+python3 tools/demo.py 'path/to/new formula.cm13' \
+  --output build/my-demo --timeout 300 --event-capacity 100000
+```
+
+The output directory must be new, including when a symlink already occupies
+that path. Trace capacity is an integer from 2 to 100000 per native solver;
+the default is 100000 and checkpoints are disabled. Exhaustion fails without
+rerunning either solver. Missing dependencies require `make demo-setup`; the
+demo never builds, installs or downloads them itself.
+
+Malformed input, missing dependencies, UNKNOWN, engine disagreement, incomplete
+trace and failed checks produce distinct diagnostic messages. Timeout exits
+with 124; handled SIGINT/SIGTERM exits with 130/143. These are process outcomes,
+not UNSAT results. GNU Make reports a failed recipe with its own nonzero exit.
+UNSAT succeeds only when all four engines agree on that terminal result, and
+still carries no independent UNSAT certificate. Arbitrary inputs may exceed the
+time or trace limits; neither option promises completion.
+
+### Named cases
 
 `wang-run-case-v2` deliberately has no initial-domain override field. Its
 canonical case follows `tests/instances/pipeline_sat.cm13` through the four

@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import tempfile
 from time import perf_counter_ns
+from typing import Callable
 
 from formats.pipeline_snapshot import _encode_document, _write_atomic
 from formats.run_case_v2 import (
@@ -273,11 +274,53 @@ def generate_multi_engine_dossier(
     output_directory: str | Path,
     *,
     include_pdf: bool = False,
+    progress: Callable[[str], None] | None = None,
 ) -> Path:
     """Capture all named engines once and atomically install the complete v2 dossier."""
     case: MultiEngineRunCase = load_run_case_v2(case_path, ROOT)
-    destination = Path(output_directory).resolve()
-    if destination.exists():
+    return _generate_dossier(
+        case, ROOT / case.source, output_directory,
+        include_pdf=include_pdf, progress=progress,
+    )
+
+
+def generate_input_dossier(
+    input_path: str | Path,
+    output_directory: str | Path,
+    *,
+    include_pdf: bool = True,
+    event_capacity: int = 100_000,
+    progress: Callable[[str], None] | None = None,
+) -> Path:
+    """Capture a new CM1-in-3 file without supplying an expected result."""
+    if type(event_capacity) is not int or not 2 <= event_capacity <= 100_000:
+        raise ValueError("event_capacity must be an integer in [2, 100000]")
+    trace = TraceConfiguration(event_capacity, 0, 0)
+    case = MultiEngineRunCase(
+        identifier="demo-input",
+        title="CM1-in-3 input dossier",
+        purpose="Observe and independently check four engines on the copied input.",
+        source="input.cm13",
+        expected_status=None,
+        reference_trace=trace,
+        optimized_trace=trace,
+    )
+    return _generate_dossier(
+        case, Path(input_path), output_directory,
+        include_pdf=include_pdf, progress=progress,
+    )
+
+
+def _generate_dossier(
+    case: MultiEngineRunCase,
+    source_path: Path,
+    output_directory: str | Path,
+    *,
+    include_pdf: bool,
+    progress: Callable[[str], None] | None,
+) -> Path:
+    destination = Path(output_directory).absolute()
+    if os.path.lexists(destination):
         raise MultiEngineDossierError(
             f"output directory already exists: {destination!s}"
         )
@@ -286,28 +329,30 @@ def generate_multi_engine_dossier(
         tempfile.mkdtemp(prefix=f".{destination.name}.", dir=destination.parent)
     )
     try:
-        source_path = ROOT / case.source
-        source_bytes = source_path.read_bytes()
-        source_sha256 = hashlib.sha256(source_bytes).hexdigest()
-        capture = capture_multi_engine_native_pipeline(
-            source_path,
-            reference_options=_native_options(case.reference_trace),
-            optimized_options=_native_options(case.optimized_trace),
-        )
-
         data = staging / "assets/data"
         data.mkdir(parents=True)
-        source_copy = data / source_path.name
+        source_copy = data / Path(case.source).name
+        source_bytes = source_path.read_bytes()
+        started = perf_counter_ns()
+        _write_atomic(source_copy, source_bytes)
+        export_ns = perf_counter_ns() - started
+        source_sha256 = hashlib.sha256(source_bytes).hexdigest()
+        capture = capture_multi_engine_native_pipeline(
+            source_copy,
+            reference_options=_native_options(case.reference_trace),
+            optimized_options=_native_options(case.optimized_trace),
+            progress=progress,
+        )
+
         reference_manifest_path = data / "reference-manifest.json"
         optimized_manifest_path = data / "optimized-manifest.json"
         boolean_summary_path = data / "boolean-z3.json"
         wang_summary_path = data / "wang-z3.json"
 
         started = perf_counter_ns()
-        _write_atomic(source_copy, source_bytes)
         dump_solver_trace_bundle(
             reference_manifest_path,
-            source_path,
+            source_copy,
             capture.formula,
             capture.region,
             capture.explanation,
@@ -316,7 +361,7 @@ def generate_multi_engine_dossier(
         )
         dump_solver_trace_bundle(
             optimized_manifest_path,
-            source_path,
+            source_copy,
             capture.formula,
             capture.region,
             capture.explanation,
@@ -325,11 +370,13 @@ def generate_multi_engine_dossier(
         )
         reference_manifest, _ = load_solver_trace_bundle(reference_manifest_path)
         optimized_manifest, _ = load_solver_trace_bundle(optimized_manifest_path)
-        export_ns = perf_counter_ns() - started
+        export_ns += perf_counter_ns() - started
         region_reference = reference_manifest["artifacts"]["region"]
         assert isinstance(region_reference, dict)
         region_sha256 = str(region_reference["sha256"])
 
+        if progress is not None:
+            progress("Boolean Z3")
         started = perf_counter_ns()
         boolean_summary = build_boolean_z3_summary(
             capture.formula,
@@ -338,6 +385,8 @@ def generate_multi_engine_dossier(
         boolean_z3_ns = perf_counter_ns() - started
         boolean_assignment = boolean_summary["model"]["assignment"]
         if boolean_summary["status"] == "sat":
+            if progress is not None:
+                progress("Boolean Z3 verification")
             started = perf_counter_ns()
             if not isinstance(boolean_assignment, list) or not is_valid_assignment(
                 capture.formula, boolean_assignment
@@ -349,6 +398,8 @@ def generate_multi_engine_dossier(
         else:
             boolean_z3_verify_ns = None
 
+        if progress is not None:
+            progress("Wang Z3")
         started = perf_counter_ns()
         wang_summary = build_wang_z3_summary(
             capture.formula,
@@ -359,6 +410,8 @@ def generate_multi_engine_dossier(
         wang_z3_ns = perf_counter_ns() - started
         wang_cells = wang_summary["model"]["cells"]
         if wang_summary["status"] == "sat":
+            if progress is not None:
+                progress("Wang Z3 verification")
             started = perf_counter_ns()
             if not isinstance(wang_cells, list) or not is_valid_tiling(
                 capture.region, TILESET, wang_cells
@@ -400,6 +453,8 @@ def generate_multi_engine_dossier(
             "wang_z3_verify_ns": wang_z3_verify_ns,
             "export_ns": export_ns,
         }
+        if progress is not None:
+            progress("Bundle verification")
         run_document = build_run_dossier_v2(
             case,
             capture,
@@ -423,6 +478,8 @@ def generate_multi_engine_dossier(
         )
 
         try:
+            if progress is not None:
+                progress("Figures")
             narrative_manifest = generate_narrative_assets(
                 run_path,
                 staging / "assets/narrative",
@@ -440,6 +497,8 @@ def generate_multi_engine_dossier(
         _write_atomic(run_path, _encode_document(run_document))
         validated_document = load_run_dossier_v2(run_path)
         if include_pdf:
+            if progress is not None:
+                progress("PDF")
             from dossier.tex_compile import TexCompileError, compile_tex_pdf
             from formats.narrative_assets import load_narrative_assets
             from formats.run_report_v2_tex import render_run_report_v2_tex
@@ -458,6 +517,9 @@ def generate_multi_engine_dossier(
                 compile_tex_pdf(staging, "pdflatex", captured_at)
             except TexCompileError as error:
                 raise MultiEngineDossierError(str(error)) from error
+        if progress is not None:
+            progress("Final validation")
+        load_run_dossier_v2(run_path)
         _install_directory(staging, destination)
         return destination
     except Exception:

@@ -94,9 +94,29 @@ also reaches the renderer subprocesses, so this command needs no downloads
 after setup. It runs the four engines and checks the recorded results before
 producing the figures and PDF.
 
-This first run uses a known case with an expected result. Direct input through
-`make demo INPUT=...` and the narrated `make demo-check` suite are the next
-steps in the [Exam Ready plan](docs/plans/2026-09-15-exam-ready-v1.0.md).
+This first run uses a known case with an expected result. The narrated
+`make demo-check` suite remains a next step in the
+[Exam Ready plan](docs/plans/2026-09-15-exam-ready-v1.0.md).
+
+### Run a new input
+
+After `make demo-setup`, give the demo a CM1-in-3 file without an expected result:
+
+```sh
+make demo INPUT='path/to/new formula.cm13' TIMEOUT=300
+```
+
+The command copies the input, runs each of the four engines once, checks their
+results, and produces the figures and PDF using the installed environments
+offline. It prints the PDF path only after the complete dossier succeeds.
+Each invocation retains its input, original name/hash and log in a new directory
+under `build/demo/`.
+
+`TIMEOUT` is a global limit in seconds, including capture, figures and PDF.
+Timeout, cancellation, UNKNOWN, disagreement or an incomplete trace fail with
+diagnostics; they do not mean UNSAT. Arbitrary inputs have no completion-time
+guarantee. The [dossier guide](docs/run_dossiers.md#new-cm1-in-3-input)
+describes the input format, output and diagnostic options.
 
 ## Current status
 
