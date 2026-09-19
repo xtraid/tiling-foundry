@@ -1,8 +1,8 @@
 # Roadmap v1.0.0 — Exam Ready
 
 Data: 15 settembre 2026. **Release: TODO.** Scope concordato per preparare la
-difesa del progetto. **S1 è FATTO** con verifica isolata del candidato locale;
-S2–S6 e la pubblicazione restano da eseguire.
+difesa del progetto. **S1 e S2 sono FATTO**, con setup isolato e nuovi dossier
+SAT/UNSAT offline verificati; S3–S6 e la pubblicazione restano da eseguire.
 
 L'obiettivo è poter clonare una versione precisa, inserire una formula nuova,
 eseguire il progetto con pochi comandi e mostrare un dossier completo con PDF.
@@ -11,8 +11,9 @@ La documentazione deve aiutare a spiegare contributi, correttezza e limiti.
 **Milestone principale: v1.0.0 pubblicata e verificata come versione d'esame.**
 Il checkpoint in fondo al piano si chiude soltanto dopo la verifica della
 versione pubblicata. Un freeze locale o una PR integrata non lo completano.
-Puntare al congelamento almeno tre giorni prima della presentazione, lasciando
-gli ultimi giorni alle prove. La data esatta dell'esame resta da confermare.
+Scadenza confermata dall'utente il 17 settembre: **mercoledì 23 settembre 2026**.
+Obiettivo operativo: release pubblicata e verificata entro **domenica 20**, con
+lunedì e martedì dedicati alle prove. L'orario della scadenza non è ancora indicato.
 
 ## Scope e ordine del lavoro
 
@@ -21,7 +22,8 @@ reference, optimized, Boolean Z3, Wang Z3, checker, renderer e dossier.
 Il lavoro aggiunge accesso semplice, riproducibilità e chiarezza espositiva.
 
 Interfaccia prevista: **`demo-setup` implementato e verificato in S1**;
-`demo` e `demo-check` restano da implementare e verificare:
+`demo` implementato e verificato in S2;
+`demo-check` resta da implementare e verificare in S3:
 
 ```bash
 make demo-setup
@@ -37,7 +39,7 @@ con l'input proposto durante la dimostrazione.
 | Sessione Astra xhigh | Stato | Risultato | Stima |
 |---|---|---|---|
 | S1 | FATTO | Clone pulito e setup completo | 2–3 ore |
-| S2 | TODO | Formula nuova → quattro motori → dossier e PDF | 4–6 ore |
+| S2 | FATTO | Formula nuova → quattro motori → dossier e PDF | 4–6 ore |
 | S3 | TODO | Suite breve commentata e regressioni della demo | 2–3 ore |
 | S4 | TODO | Documentazione più chiara e utile alla difesa | 2–3 ore |
 | S5 | TODO | Prova isolata, offline e sul computer dell'esame | 3–4 ore |
@@ -46,6 +48,15 @@ con l'input proposto durante la dimostrazione.
 Totale stimato: **14–21 ore**, più **2–4 ore di riserva**. Sono stime di lavoro
 con verifica e revisione, non garanzie; download, CI e ambiente possono
 allungare il calendario. S2 contiene la maggiore incertezza tecnica.
+
+Calendario obiettivo aggiornato il 19 settembre: chiusura S2 sabato 19, poi
+S3/S4; S5 e S6 domenica 20, inclusa la prova sul computer dell'esame.
+La QA di S2 ha richiesto correzioni sui nuovi input e il margine è diminuito.
+Stima residua **dopo S2: 8–12 ore effettive**, più 2–4 ore di riserva e attese
+esterne. La release verificata il 20 resta un obiettivo, non un esito garantito;
+la prova sul computer dell'esame e la verifica dal tag pubblico sono necessarie.
+Il calendario non anticipa l'autorizzazione alle singole sessioni o alla
+pubblicazione e va rivisto se emergono problemi tecnici o indisponibilità.
 
 ## S1 — Clone pulito e setup completo
 
@@ -77,9 +88,9 @@ build dello scaffold OpenMP e dieci test dossier v1/TeX. Review e re-review
 senza finding residui. I tempi sono osservazioni di questa prova.
 
 Base operativa `2e3ca52`; il candidato è verificato nel solo clone QA detached
-`abe06ff`, tree `f38dca5`, con 463 input coincidenti prima del test. Le modifiche
-operative restano non committate; questa chiusura aggiorna solo lo stato del
-piano rispetto al candidato testato. Evidenze, comandi, ambiente e handoff:
+`abe06ff`, tree `f38dca5`, con 463 input coincidenti prima del test. La sessione
+è stata poi fissata nel checkpoint locale `e179cc1`, all'avvio di S2.
+Evidenze, comandi, ambiente e handoff:
 `build/exam-ready-s1/resume-20260915T161536/`. S1 verifica il caso noto già
 distribuito; input nuovi SAT/UNSAT, QA completa e prova sul computer dell'esame
 restano nelle sessioni successive.
@@ -123,6 +134,32 @@ concreto e revisionato; non introdurre preventivamente schemi o framework.
 attesi; almeno un nuovo SAT e un nuovo UNSAT producono dossier e PDF coerenti.
 Misurare separatamente la durata del dossier sulla macchina scelta, senza
 promettere tempi costanti per qualsiasi formula.
+
+**Chiusura verificata il 19 settembre:** candidato `98718b2`, dopo i checkpoint
+contratti `a3ecd66`, comando `c737f7a` e fix di accettazione. Due input nuovi a
+tre variabili, verificati per enumerazione indipendente, hanno prodotto dossier
+completi nel clone QA con rete disabilitata: **SAT 70,316 s / 19 pagine** e
+**UNSAT 37,702 s / 20 pagine**. Nessun risultato atteso passato alla demo;
+copia/hash, quattro motori concordi, trace complete, bundle e asset validati.
+Tutte le 39 pagine sono coperte dalla QA: lettura iniziale integrale, confronto
+dei raster finali e ispezione di tutte le dieci pagine modificate.
+
+Review del codice e dei fix senza finding residui; nessun finding PDF bloccante.
+Resta la nota minore P-M1: una riga secondaria MRV è parzialmente coperta, ma le
+informazioni della decisione sono ripetute interamente nel riquadro principale.
+Le panoramiche di regioni larghe richiedono zoom, come documentato nella guida.
+Renderer finale **337/337**; **87 asset canonici rigenerati identici**. Il gate
+generale precedente aveva 17 C e 232 Python verdi; i fix successivi sono coperti
+da gate mirati, test dei processi e nuove prove offline, senza ripetere i motori
+all'interno di una run. Core, ABI, oracoli, lock e dossier v1 preservati.
+
+Limite osservato: il primo SAT a sei variabili supera i 100000 eventi per trace.
+Ora fallisce esplicitamente prima di export/Z3 (39,302 s nella prova), senza
+dossier incompleto presentato come successo. Nessuna garanzia su input arbitrari.
+Fonti: `build/exam-ready-s2/handoff-final.md`, `acceptance-summary-final.json`,
+review finali SAT/UNSAT e [piano S2](2026-09-15-exam-ready-s2.md).
+La prova sul computer dell'esame e la verifica della versione pubblicata restano
+rispettivamente S5 e S6.
 
 ## S3 — Suite breve spiegabile durante l'esecuzione
 
