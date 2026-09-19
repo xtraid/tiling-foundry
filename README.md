@@ -94,9 +94,17 @@ also reaches the renderer subprocesses, so this command needs no downloads
 after setup. It runs the four engines and checks the recorded results before
 producing the figures and PDF.
 
-This first run uses a known case with an expected result. The narrated
-`make demo-check` suite remains a next step in the
-[Exam Ready plan](docs/plans/2026-09-15-exam-ready-v1.0.md).
+Run the short, narrated verification suite after setup:
+
+```sh
+make demo-check
+```
+
+It checks parsing, known SAT and UNSAT cases, agreement between the four engines,
+and rejection of an altered witness. It stops at the first failure and prints
+the measured duration after success. See the
+[suite guide](docs/run_dossiers.md#suite-breve-commentata)
+for the six checks, diagnostics, and timeout options.
 
 ### Run a new input
 

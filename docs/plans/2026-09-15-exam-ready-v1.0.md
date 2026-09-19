@@ -2,7 +2,8 @@
 
 Data: 15 settembre 2026. **Release: TODO.** Scope concordato per preparare la
 difesa del progetto. **S1 e S2 sono FATTO**, con setup isolato e nuovi dossier
-SAT/UNSAT offline verificati; S3–S6 e la pubblicazione restano da eseguire.
+SAT/UNSAT offline verificati; S3 è IN CORSO, S4–S6 e la pubblicazione restano
+da eseguire.
 
 L'obiettivo è poter clonare una versione precisa, inserire una formula nuova,
 eseguire il progetto con pochi comandi e mostrare un dossier completo con PDF.
@@ -40,7 +41,7 @@ con l'input proposto durante la dimostrazione.
 |---|---|---|---|
 | S1 | FATTO | Clone pulito e setup completo | 2–3 ore |
 | S2 | FATTO | Formula nuova → quattro motori → dossier e PDF | 4–6 ore |
-| S3 | TODO | Suite breve commentata e regressioni della demo | 2–3 ore |
+| S3 | IN CORSO | Suite breve commentata e regressioni della demo | 2–3 ore |
 | S4 | TODO | Documentazione più chiara e utile alla difesa | 2–3 ore |
 | S5 | TODO | Prova isolata, offline e sul computer dell'esame | 3–4 ore |
 | S6 | TODO | PR, freeze, pubblicazione e verifica dal tag | 1–2 ore |

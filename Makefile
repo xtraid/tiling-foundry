@@ -87,7 +87,7 @@ SERIAL_LIBRARY := $(LIB_DIR)/libwang.a
 SHARED_LIBRARY := $(LIB_DIR)/libwang.so
 OPENMP_LIBRARY := $(LIB_DIR)/libwang_openmp.a
 
-.PHONY: all setup demo-setup demo serial shared openmp check c-check python-check pages-check \
+.PHONY: all setup demo-setup demo demo-check serial shared openmp check c-check python-check pages-check \
 	generated-pages-check \
 	strict-check sanitizer-check analyzer-check valgrind-check \
 	cachegrind-check benchmark benchmark-smoke benchmark-compare \
@@ -116,6 +116,10 @@ demo: export TILING_DEMO_INPUT = $(value INPUT)
 demo: export TILING_DEMO_TIMEOUT = $(value TIMEOUT)
 demo:
 	@$(PYTHON) tools/demo.py
+
+demo-check: export TILING_DEMO_TIMEOUT = $(value TIMEOUT)
+demo-check:
+	@$(PYTHON) tools/demo_check.py
 
 serial: $(SERIAL_LIBRARY)
 

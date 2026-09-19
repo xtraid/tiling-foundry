@@ -102,6 +102,60 @@ subset of that trace. For UNSAT, `unsat_certificate` is always false: conflicts
 and trail history diagnose what the run observed but do not constitute a
 standalone mathematical proof of unsatisfiability.
 
+## Suite breve commentata
+
+Dopo `make demo-setup`, eseguire offline:
+
+```sh
+make demo-check
+```
+
+La suite annuncia in italiano sei controlli, spiegando cosa verificano:
+
+1. **Input valido:** il parser C legge le tre variabili e le tre clausole del
+   caso `tests/instances/pipeline_sat.cm13`.
+2. **Input fuori dominio:** il parser rifiuta una variabile non dichiarata;
+   un errore I/O non conta come il rifiuto atteso.
+3. **SAT noto:** il solver reference produce un tiling verificato e un
+   assegnamento booleano estratto, controllati anche dai checker indipendenti.
+4. **UNSAT noto:** `tests/instances/pipeline_unsat_search.cm13` contiene la
+   clausola `(x4,x4,x4)`, che richiede `3*x4=1`; il risultato non ha witness.
+5. **Accordo:** optimized, Boolean Z3 e Wang Z3 confermano entrambi gli esiti
+   noti; ogni motore gira una volta per caso e ogni witness SAT viene verificato.
+   I risultati reference dei punti precedenti vengono riusati.
+6. **Witness alterato:** una sola tessera viene sostituita con un'altra del
+   tileset, incompatibile con un colore di bordo. Il checker Python deve
+   rifiutare la copia e accettare ancora l'originale. Le coordinate stampate
+   partono da zero.
+
+Questi sono casi fissi con esito noto; `make demo INPUT=...`, descritto sotto,
+accetta invece un input nuovo senza presumere SAT o UNSAT. La suite breve non
+genera PDF, figure o trace e non sostituisce l'intera suite di test del progetto.
+Richiede solo l'ambiente Python principale e la libreria nativa già installati;
+non avvia build, installazioni o download.
+
+Ogni invocazione conserva `worker.log` in una directory distinta
+`build/demo-check/run-*`, stampata come `diagnostics=...`. Si ferma al primo
+fallimento. Solo dopo tutti i controlli compare `Superati 6/6 controlli`, con
+la durata effettiva: l'obiettivo indicativo di 30–60 secondi dopo il setup non
+è una soglia CI e non introduce attese artificiali. La durata del dossier si
+misura separatamente.
+
+Il timeout globale predefinito è 300 secondi; si può cambiarlo con
+`make demo-check TIMEOUT=60`. Per scegliere una directory di diagnostica nuova:
+
+```sh
+python3 tools/demo_check.py --output build/my-check --timeout 60
+```
+
+Directory, file o link già presenti non vengono sovrascritti. Timeout,
+interruzione, UNKNOWN, discordanza, errori e output incompleti sono fallimenti,
+mai risultati UNSAT. La CLI restituisce 124 per timeout, 130/143 per
+SIGINT/SIGTERM, 1 per errori e 2 per argomenti invalidi; GNU Make restituisce
+il proprio esito nonzero quando la ricetta fallisce. Timeout e interruzioni
+fermano anche i processi figli. Il log resta disponibile; se un terminale
+lento perde messaggi, contiene comunque l'output completo del worker.
+
 ## Full-pipeline v2 capture
 
 ### New CM1-in-3 input
