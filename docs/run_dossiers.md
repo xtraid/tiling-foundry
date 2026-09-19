@@ -167,6 +167,10 @@ UNSAT succeeds only when all four engines agree on that terminal result, and
 still carries no independent UNSAT certificate. Arbitrary inputs may exceed the
 time or trace limits; neither option promises completion.
 
+Wide regions appear as overview figures in the PDF. Use the PDF viewer's zoom
+or the full-resolution PNG frames under `dossier/assets/narrative/` to inspect
+individual cells and trace labels; a whole-page view cannot show every detail.
+
 ### Named cases
 
 `wang-run-case-v2` deliberately has no initial-domain override field. Its

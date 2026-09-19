@@ -340,6 +340,22 @@ def _builder_frame(bundle: object, stage: int) -> Image.Image:
                 outline=(174, 181, 193),
             )
 
+    crossover_labels_omitted = False
+    if stage == 3:
+        previous_right = origin_x
+        for gadget in crossovers:
+            label_box = draw.textbbox(
+                (origin_x + gadget.x_begin * cell + 8,
+                 origin_y + gadget.y_begin * cell + 5),
+                f"X{gadget.ordinal}:s{gadget.swap_row}",
+                font=explain_font(14 * EXPLAIN_RENDER_SCALE),
+                stroke_width=3,
+            )
+            if label_box[0] < previous_right or label_box[2] > origin_x + grid_width:
+                crossover_labels_omitted = True
+                break
+            previous_right = label_box[2]
+
     for gadget in reduction.gadgets:
         visible = (
             (stage == 0 and gadget.kind == "variable")
@@ -366,7 +382,9 @@ def _builder_frame(bundle: object, stage: int) -> Image.Image:
             outline=_GADGET_COLORS[gadget.kind],
             width=width,
         )
-        if gadget.kind == "crossover" and stage in {2, 3}:
+        if gadget.kind == "crossover" and (
+            stage == 2 or (stage == 3 and not crossover_labels_omitted)
+        ):
             crossover_label = (
                 f"X{gadget.ordinal}: swap rows "
                 f"{gadget.swap_row}/{gadget.swap_row + 1}"
@@ -464,11 +482,19 @@ def _builder_frame(bundle: object, stage: int) -> Image.Image:
                 fill=EXPLAIN_TEXT_RGB,
             )
             y += 42
+        evidence_font = explain_font(14 * EXPLAIN_RENDER_SCALE)
+        swap_list = "adjacent swaps: " + ", ".join(
+            str(gadget.swap_row) for gadget in crossovers
+        )
+        if draw.textbbox((legend_x, 0), swap_list, font=evidence_font)[2] > image.width - 36:
+            swap_list = f"adjacent swaps: {len(crossovers)} (row list omitted)"
+        evidence = f"source signals: {len(reduction.source_signals)}\n{swap_list}"
+        if crossover_labels_omitted:
+            evidence += f"\n{len(crossovers)} crossover labels omitted (overview)"
         draw.text(
             (legend_x, y + 8),
-            f"source signals: {len(reduction.source_signals)}\nadjacent swaps: "
-            + ", ".join(str(gadget.swap_row) for gadget in crossovers),
-            font=explain_font(14 * EXPLAIN_RENDER_SCALE),
+            evidence,
+            font=evidence_font,
             fill=EXPLAIN_TEXT_RGB,
             spacing=12,
         )
