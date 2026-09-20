@@ -64,27 +64,41 @@ Make passa `TIMEOUT` raw nell'ambiente. Codici diretti: 124 timeout,
 File: nuovo `tools/demo_check.py`, `tests/python/test_demo_check.py`,
 target in `Makefile`, sezione in `docs/run_dossiers.md`.
 
-- [ ] Scrivere e osservare test fallenti per i sei controlli e i fallimenti
+- [x] Scrivere e osservare test fallenti per i sei controlli e i fallimenti
   elencati sopra; registrare RED/GREEN nel report di implementazione.
-- [ ] Implementare il comando minimo con le API indicate nel preflight.
-- [ ] Verificare una sola chiamata per motore/caso e il tamper di una tessera
+- [x] Implementare il comando minimo con le API indicate nel preflight.
+- [x] Verificare una sola chiamata per motore/caso e il tamper di una tessera
   con ID valido; mantenere attivi i controlli anche con Python ottimizzato.
-- [ ] Provare errori parser, UNKNOWN, disaccordo, witness invalidi e fail-fast.
-- [ ] Provare marker assente/errato, codici di errore, argomenti invalidi,
+- [x] Provare errori parser, UNKNOWN, disaccordo, witness invalidi e fail-fast.
+- [x] Provare marker assente/errato, codici di errore, argomenti invalidi,
   directory esistente e passaggio letterale di TIMEOUT da Make.
-- [ ] Eseguire test S3 e regressioni CLI/processi S2. La matrice reale del
+- [x] Eseguire test S3 e regressioni CLI/processi S2. La matrice reale del
   supervisore esiste già: non duplicarla, aggiungere il collegamento S3.
-- [ ] Documentare sei controlli, comandi, prerequisiti, log e limiti.
-- [ ] Review indipendente, correzioni pertinenti e checkpoint locale.
+- [x] Documentare sei controlli, comandi, prerequisiti, log e limiti.
+- [x] Review indipendente, correzioni pertinenti e checkpoint locale.
 
 ## Task 2 — Accettazione e chiusura
 
-- [ ] Aggiornare il clone QA preservato al candidato revisionato.
-- [ ] Eseguire due `make demo-check` offline, misurando separatamente i tempi.
-- [ ] Verificare sei controlli, esito zero e directory distinte; confrontare
+- [x] Aggiornare il clone QA preservato al candidato revisionato.
+- [x] Eseguire due `make demo-check` offline, misurando separatamente i tempi.
+- [x] Verificare sei controlli, esito zero e directory distinte; confrontare
   hash di log e marker della prima esecuzione dopo la seconda.
-- [ ] Verificare fonti congelate, modifiche utente preservate e gate pertinenti.
-- [ ] Registrare evidenze, note residue e stato S3 nella roadmap e nell'handoff.
+- [x] Verificare fonti congelate, modifiche utente preservate e gate pertinenti.
+- [x] Registrare evidenze, note residue e stato S3 nella roadmap e nell'handoff.
 
 S4–S6 restano successive; il successo della suite sul server non sostituisce
 la prova sul computer dell'esame o la verifica dal tag pubblico.
+
+## Chiusura verificata — 20 settembre 2026
+
+S3 FATTO sul codice `3722f70` (implementazione `05ae767`). Review finale
+senza finding residui. Il test offline ha scoperto e fatto correggere il
+default TIMEOUT vuoto: 300 va assegnato prima di unexport nel Makefile.
+La regressione copre entrambi i comandi demo/demo-check e il vuoto esplicito.
+
+31 test mirati verdi in 25.119 s; due run offline con renderer nascosto in
+6.274 / 6.275 s complessivi, 6/6 controlli. Seconda run in directory distinta,
+prima run preservata byte per byte. Il target 30–60 s non era un minimo;
+nessuna attesa artificiale aggiunta. Pages 41 route verdi. README utente e
+sudoku3 preservati; nessuna pubblicazione. Fonte delle evidenze:
+`build/exam-ready-s3/handoff-final.md`.

@@ -1,9 +1,9 @@
 # Roadmap v1.0.0 — Exam Ready
 
 Data: 15 settembre 2026. **Release: TODO.** Scope concordato per preparare la
-difesa del progetto. **S1 e S2 sono FATTO**, con setup isolato e nuovi dossier
-SAT/UNSAT offline verificati; S3 è IN CORSO, S4–S6 e la pubblicazione restano
-da eseguire.
+difesa del progetto. **S1–S3 sono FATTO**, con setup isolato, nuovi dossier
+SAT/UNSAT e suite breve offline verificati. S4 è IN CORSO; S5–S6 e la
+pubblicazione restano da eseguire.
 
 L'obiettivo è poter clonare una versione precisa, inserire una formula nuova,
 eseguire il progetto con pochi comandi e mostrare un dossier completo con PDF.
@@ -24,7 +24,7 @@ Il lavoro aggiunge accesso semplice, riproducibilità e chiarezza espositiva.
 
 Interfaccia prevista: **`demo-setup` implementato e verificato in S1**;
 `demo` implementato e verificato in S2;
-`demo-check` resta da implementare e verificare in S3:
+`demo-check` implementato e verificato in S3:
 
 ```bash
 make demo-setup
@@ -41,8 +41,8 @@ con l'input proposto durante la dimostrazione.
 |---|---|---|---|
 | S1 | FATTO | Clone pulito e setup completo | 2–3 ore |
 | S2 | FATTO | Formula nuova → quattro motori → dossier e PDF | 4–6 ore |
-| S3 | IN CORSO | Suite breve commentata e regressioni della demo | 2–3 ore |
-| S4 | TODO | Documentazione più chiara e utile alla difesa | 2–3 ore |
+| S3 | FATTO | Suite breve commentata e regressioni della demo | 2–3 ore |
+| S4 | IN CORSO | Documentazione più chiara e utile alla difesa | 2–3 ore |
 | S5 | TODO | Prova isolata, offline e sul computer dell'esame | 3–4 ore |
 | S6 | TODO | PR, freeze, pubblicazione e verifica dal tag | 1–2 ore |
 
@@ -50,10 +50,10 @@ Totale stimato: **14–21 ore**, più **2–4 ore di riserva**. Sono stime di la
 con verifica e revisione, non garanzie; download, CI e ambiente possono
 allungare il calendario. S2 contiene la maggiore incertezza tecnica.
 
-Calendario obiettivo aggiornato il 19 settembre: chiusura S2 sabato 19, poi
-S3/S4; S5 e S6 domenica 20, inclusa la prova sul computer dell'esame.
+Calendario obiettivo aggiornato il 20 settembre: S3 chiusa; restano S4, S5
+e S6, inclusa la prova sul computer dell'esame.
 La QA di S2 ha richiesto correzioni sui nuovi input e il margine è diminuito.
-Stima residua **dopo S2: 8–12 ore effettive**, più 2–4 ore di riserva e attese
+Stima residua **dopo S3: 6–9 ore effettive**, più 2–4 ore di riserva e attese
 esterne. La release verificata il 20 resta un obiettivo, non un esito garantito;
 la prova sul computer dell'esame e la verifica dal tag pubblico sono necessarie.
 Il calendario non anticipa l'autorizzazione alle singole sessioni o alla
@@ -182,6 +182,14 @@ l'intera suite del progetto nel comando dimostrativo.
 **Completamento:** controlli comprensibili, fallimenti riconoscibili e durata
 misurata. L'obiettivo di **30–60 secondi dopo il setup** riguarda questa suite,
 non il dossier; non diventa una soglia temporale della CI.
+
+**Chiusura S3 verificata il 20 settembre:** codice `3722f70`, review senza
+finding residui, 31 test mirati verdi in 25.119 s. Due esecuzioni reali di
+`make demo-check` con rete e renderer nascosti: 6/6 controlli in 6.274 e
+6.275 s complessivi, directory distinte e prima run preservata. I 30–60 s
+non erano un minimo; nessuna attesa aggiunta. Corretto anche il default
+TIMEOUT Make per entrambi i comandi. Fonti: piano S3 del 19 settembre e
+`build/exam-ready-s3/handoff-final.md`.
 
 ## S4 — Documentazione leggibile e utile alla difesa
 
