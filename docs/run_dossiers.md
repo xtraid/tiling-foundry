@@ -3,104 +3,40 @@ layout: page
 title: Observed-run dossiers and example index
 permalink: /run-dossiers/
 page_class: reference
-description: Opt-in v1 diagnostic reports and v2 multi-engine captures built from hash-bound traces, summaries, witnesses, and raw run metadata.
+description: Run the offline demo and narrated checks, inspect a PDF dossier, or reproduce named v1 and v2 cases.
 section: Architecture and correctness
 document_kind: Reproduction and report contract
 status: Current implementation
-updated: 2026-09-01
+updated: 2026-09-20
 nav_order: 35
 ---
 
 # Observed-run dossiers and example index
 
-The named-case generator dispatches closed v1 and v2 case documents to
-separate implementations. Both are explicitly opt-in and leave parsing,
-reduction, ordinary solving, snapshot export, and the default Wang renderer
-unchanged.
-
-The v1 path turns one configured native run into a self-contained directory
-with `run.json`, `report.tex`, `report.pdf`, and `assets/`. Its four diagnostic
-cases, schemas, formatter, template, initial-domain behavior, and output shape
-remain unchanged.
-
-`run.json` is the authoritative report input. It records the source and Git
-identity, environment, solver options and result, complete trace counters,
-initial-domain overrides, raw stage durations, replay scope, and SHA-256 for
-every referenced JSON or raster asset. The LaTeX document and PDF are derived
-from that one document. They do not recalculate events, witness state, timing,
-or provenance.
-
-## Example index
-
-Four strict case documents are versioned. Their classification is checked
-against the observed trace rather than trusted as prose.
-
-| Case | Configured result | Required observed shape | Case source |
-| --- | --- | --- | --- |
-| SAT end to end | SAT | complete trace, independently checked witness, square and checked hex views | [case JSON]({{ site.repository_url }}/blob/main/examples/run-cases/sat-end-to-end.json) |
-| Immediate root conflict | UNSAT | three events: root, initial conflict, result; no propagation or search | [case JSON]({{ site.repository_url }}/blob/main/examples/run-cases/unsat-root-conflict.json) |
-| Initial propagation contradiction | UNSAT | domain reductions and propagation reach an initial conflict before any decision | [case JSON]({{ site.repository_url }}/blob/main/examples/run-cases/unsat-propagation.json) |
-| Non-superficial search | UNSAT | complete depth-two run with four decisions, three conflicts, and four backtracks | [case JSON]({{ site.repository_url }}/blob/main/examples/run-cases/unsat-search.json) |
-
-The first three cases use the same small formula so the observed boundary is
-easy to compare. The two constrained UNSAT cases deliberately exercise the
-public initial-domain option: their UNSAT status describes that configured
-Wang solve, not the unconstrained source formula. The search case uses a
-separate cubic monotone input whose unconstrained optimized run reaches depth
-two before exhausting all branches.
-
-This page is only an index. The [solver trace contract]({{ '/wang-solver-trace/' | relative_url }})
-remains the canonical explanation of event semantics, truncation, and replay.
-The [reference solver component]({{ '/components/reference-solver/' | relative_url }})
-owns the public reference animation. The [static snapshot contract]({{ '/wang-explainability-snapshots/' | relative_url }})
-defines formula and region views, while the [square-to-hex reference]({{ '/wang-square-to-hex/' | relative_url }})
-defines the presentation-only port. No animation, explanation, or generated
-run narrative is copied here.
-
-## Reproduce one dossier
-
-Build the shared native library, provide pdfLaTeX, and run the sole generator:
+Run a new CM1-in-3 input through the four engines and keep the checked results,
+figures, and PDF in one dossier. From the repository root, after installing the
+[system prerequisites]({{ site.repository_url }}#quick-start):
 
 ```sh
-make shared
-uv run --frozen python tools/generate_run_dossier.py \
-  examples/run-cases/sat-end-to-end.json \
-  build/run-dossiers/sat-end-to-end \
-  --tex-engine pdflatex
+make demo-setup
+make demo-check
+make demo INPUT='path/to/new formula.cm13' TIMEOUT=300
 ```
 
-The destination must not exist. Every intermediate is written below a sibling
-staging directory, the trace bundle is validated before rendering, and the
-completed directory is installed with one rename. A failed render or TeX
-compile leaves no partial destination.
+Setup downloads the locked dependencies and checks the compiler, renderer, and
+PDF tools. The short suite checks known cases. The demo then accepts your own
+input without an expected result and prints the PDF path after the complete
+dossier succeeds. Both commands run offline after setup; each invocation keeps
+its own diagnostics.
 
-The generator calls the isolated renderer through its locked environment. A
-single replay composes the selected frames used for individual PNGs, the
-contact sheet, and the optional GIF. The PDF embeds the already-produced
-contact sheet and static square/hex PNGs; it never embeds viewer-dependent GIF
-or video content. UNSAT reports contain region views rather than inventing a
-solution.
+For SAT, the dossier includes checked witnesses. For UNSAT, it records engine
+agreement without an independent UNSAT certificate. Timeout, UNKNOWN, errors,
+and incomplete traces are failures, never substitutes for UNSAT.
 
-pdfLaTeX is invoked directly, never through a shell, with
-`-no-shell-escape`, restricted input/output policy, a private TeX home, UTC,
-and `SOURCE_DATE_EPOCH` derived from the recorded run time. The CI smoke
-installs TeX only inside its disposable runner. TeX is not a runtime or root
-Python dependency.
-
-## Timing and evidence boundary
-
-The monotonic durations for parse, region build, solve, export, render, and SAT
-witness verification are raw evidence from one environment. They are excluded
-from snapshot identity and are not performance gates. The native solver has no
-Z3-style encoding stage, so `encoding` is explicitly recorded as not applicable
-rather than reported as a fabricated zero-duration operation. Verification is
-also explicitly not applicable to UNSAT runs because the trace is diagnostic,
-not an independently checked certificate.
-
-Every example requires a complete trace. Selected frames remain a presentation
-subset of that trace. For UNSAT, `unsat_certificate` is always false: conflicts
-and trail history diagnose what the run observed but do not constitute a
-standalone mathematical proof of unsatisfiability.
+Continue with the [input format and output files](#new-cm1-in-3-input),
+[the six narrated checks](#suite-breve-commentata), or
+[the named v2 cases](#named-cases). The older
+[single-solver diagnostic cases](#example-index) remain available below.
 
 ## Suite breve commentata
 
@@ -324,3 +260,84 @@ All v2 durations use one monotonic nanosecond clock and are labelled
 `run-specific-observation-not-a-benchmark`. They are raw facts about that
 capture, never a performance comparison. SAT-only checker timings are null for
 UNSAT rather than fabricated as zero.
+
+## Example index
+
+The v1 reports describe one configured native run. Each completed directory
+contains `run.json`, `report.tex`, `report.pdf`, and `assets/`. The four cases
+below retain their existing schemas, initial-domain behavior, and output shape.
+
+`run.json` records the source and Git identity, environment, solver options and
+result, complete trace counters, initial-domain overrides, raw stage durations,
+replay scope, and SHA-256 for each referenced JSON or raster asset. The PDF uses
+that recorded data; it does not recalculate events, witness state, timing, or
+provenance.
+
+Four strict case documents are versioned. Their classification is checked
+against the observed trace rather than trusted as prose.
+
+| Case | Configured result | Required observed shape | Case source |
+| --- | --- | --- | --- |
+| SAT end to end | SAT | complete trace, independently checked witness, square and checked hex views | [case JSON]({{ site.repository_url }}/blob/main/examples/run-cases/sat-end-to-end.json) |
+| Immediate root conflict | UNSAT | three events: root, initial conflict, result; no propagation or search | [case JSON]({{ site.repository_url }}/blob/main/examples/run-cases/unsat-root-conflict.json) |
+| Initial propagation contradiction | UNSAT | domain reductions and propagation reach an initial conflict before any decision | [case JSON]({{ site.repository_url }}/blob/main/examples/run-cases/unsat-propagation.json) |
+| Non-superficial search | UNSAT | complete depth-two run with four decisions, three conflicts, and four backtracks | [case JSON]({{ site.repository_url }}/blob/main/examples/run-cases/unsat-search.json) |
+
+The first three cases use the same small formula so the observed boundary is
+easy to compare. The two constrained UNSAT cases deliberately exercise the
+public initial-domain option: their UNSAT status describes that configured
+Wang solve, not the unconstrained source formula. The search case uses a
+separate cubic monotone input whose unconstrained optimized run reaches depth
+two before exhausting all branches.
+
+The [solver trace contract]({{ '/wang-solver-trace/' | relative_url }})
+remains the canonical explanation of event semantics, truncation, and replay.
+The [reference solver component]({{ '/components/reference-solver/' | relative_url }})
+owns the public reference animation. The [static snapshot contract]({{ '/wang-explainability-snapshots/' | relative_url }})
+defines formula and region views, while the [square-to-hex reference]({{ '/wang-square-to-hex/' | relative_url }})
+defines the presentation-only port.
+
+## Reproduce one dossier
+
+Build the shared native library, provide pdfLaTeX, and run the sole generator:
+
+```sh
+make shared
+uv run --frozen python tools/generate_run_dossier.py \
+  examples/run-cases/sat-end-to-end.json \
+  build/run-dossiers/sat-end-to-end \
+  --tex-engine pdflatex
+```
+
+The destination must not exist. Every intermediate is written below a sibling
+staging directory, the trace bundle is validated before rendering, and the
+completed directory is installed with one rename. A failed render or TeX
+compile leaves no partial destination.
+
+The generator calls the isolated renderer through its locked environment. A
+single replay composes the selected frames used for individual PNGs, the
+contact sheet, and the optional GIF. The PDF embeds the already-produced
+contact sheet and static square/hex PNGs; it never embeds viewer-dependent GIF
+or video content. UNSAT reports contain region views rather than inventing a
+solution.
+
+pdfLaTeX is invoked directly, never through a shell, with
+`-no-shell-escape`, restricted input/output policy, a private TeX home, UTC,
+and `SOURCE_DATE_EPOCH` derived from the recorded run time. The CI smoke
+installs TeX only inside its disposable runner. TeX is not a runtime or root
+Python dependency.
+
+## Timing and evidence boundary
+
+The monotonic durations for parse, region build, solve, export, render, and SAT
+witness verification are raw evidence from one environment. They are excluded
+from snapshot identity and are not performance gates. The native solver has no
+Z3-style encoding stage, so `encoding` is explicitly recorded as not applicable
+rather than reported as a fabricated zero-duration operation. Verification is
+also explicitly not applicable to UNSAT runs because the trace is diagnostic,
+not an independently checked certificate.
+
+Every example requires a complete trace. Selected frames remain a presentation
+subset of that trace. For UNSAT, `unsat_certificate` is always false: conflicts
+and trail history diagnose what the run observed but do not constitute a
+standalone mathematical proof of unsatisfiability.

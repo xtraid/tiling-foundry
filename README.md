@@ -14,6 +14,7 @@ presentation boundaries visible enough to audit and measure. The previous
 experimental codebase remains frozen under `legacy/`.
 
 **Read:** [Documentation](https://xtraid.github.io/tiling-foundry/) ·
+[Presentazione](https://xtraid.github.io/tiling-foundry/presentazione/) ·
 [Pipeline](https://xtraid.github.io/tiling-foundry/pipeline/) ·
 [Worked example](https://xtraid.github.io/tiling-foundry/worked-example/) ·
 [Reference](https://xtraid.github.io/tiling-foundry/reference/) ·
@@ -28,9 +29,10 @@ proof into software exposes practical questions: which representation owns a
 claim, how the reduction is checked apart from search, how independent engines
 are compared, and what evidence is needed before parallelism.
 
-Tiling Foundry answers those questions with explicit ownership, an executable
-reference solver, differential tests, independent oracles and verifiers, and
-reproducible captures.
+The repository implements the construction, two serial search paths, and
+separate Boolean and Wang checks. Reproducible runs connect each result to its
+input, witnesses, and diagnostics. These tests check the software; the theorem
+and its proof belong to the [Yang–Zhang paper](#primary-reference).
 
 ## Quick start
 
@@ -197,11 +199,11 @@ follows one named SAT source through the same contracts and checks.
 
 ## Next milestones
 
-The visual documentation and Presentazione tour are integrated. The next
-milestone is **v1.0.0 Exam Ready**: a clean-clone setup, a simple command that
-turns a new supported formula into a verified dossier and PDF, a short narrated
-test suite, and clearer documentation. `make demo-setup` prepares the full
-environment; the direct-input command and narrated suite are planned work.
+The next milestone is **v1.0.0 Exam Ready**. `make demo-setup` prepares the
+environment, `make demo INPUT=...` produces a checked dossier and PDF, and
+`make demo-check` runs the short narrated suite. Remaining work includes the
+full rehearsal on the presentation computer and publication of the verified
+release.
 
 **Release checkpoint:** publish the tag and GitHub Release, then verify the
 documented commands from a fresh clone of that tag and open the resulting
@@ -212,9 +214,9 @@ The [Exam Ready plan](docs/plans/2026-09-15-exam-ready-v1.0.md) records the six
 sessions and acceptance criteria. After the release and project defense, work
 resumes in this order:
 
-1. T99: split fast, integration, and evidence verification into reusable CI
+1. split fast, integration, and evidence verification into reusable CI
    levels;
-2. T100: perform a behavior-preserving structural cleanup of the serial
+2. perform a behavior-preserving structural cleanup of the serial
    solver;
 3. collect a new serial baseline, hard-UNSAT evidence, and the public option
    matrix;

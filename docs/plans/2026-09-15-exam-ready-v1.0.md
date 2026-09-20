@@ -1,9 +1,9 @@
 # Roadmap v1.0.0 — Exam Ready
 
 Data: 15 settembre 2026. **Release: TODO.** Scope concordato per preparare la
-difesa del progetto. **S1–S3 sono FATTO**, con setup isolato, nuovi dossier
-SAT/UNSAT e suite breve offline verificati. S4 è IN CORSO; S5–S6 e la
-pubblicazione restano da eseguire.
+difesa del progetto. **S1–S4 sono FATTO**, con setup isolato, nuovi dossier
+SAT/UNSAT, suite breve offline e documentazione revisionata e verificata.
+S5–S6 e la pubblicazione restano da eseguire.
 
 L'obiettivo è poter clonare una versione precisa, inserire una formula nuova,
 eseguire il progetto con pochi comandi e mostrare un dossier completo con PDF.
@@ -42,7 +42,7 @@ con l'input proposto durante la dimostrazione.
 | S1 | FATTO | Clone pulito e setup completo | 2–3 ore |
 | S2 | FATTO | Formula nuova → quattro motori → dossier e PDF | 4–6 ore |
 | S3 | FATTO | Suite breve commentata e regressioni della demo | 2–3 ore |
-| S4 | IN CORSO | Documentazione più chiara e utile alla difesa | 2–3 ore |
+| S4 | FATTO | Documentazione più chiara e utile alla difesa | 2–3 ore |
 | S5 | TODO | Prova isolata, offline e sul computer dell'esame | 3–4 ore |
 | S6 | TODO | PR, freeze, pubblicazione e verifica dal tag | 1–2 ore |
 
@@ -50,10 +50,10 @@ Totale stimato: **14–21 ore**, più **2–4 ore di riserva**. Sono stime di la
 con verifica e revisione, non garanzie; download, CI e ambiente possono
 allungare il calendario. S2 contiene la maggiore incertezza tecnica.
 
-Calendario obiettivo aggiornato il 20 settembre: S3 chiusa; restano S4, S5
+Calendario obiettivo aggiornato il 20 settembre: S4 chiusa; restano S5
 e S6, inclusa la prova sul computer dell'esame.
 La QA di S2 ha richiesto correzioni sui nuovi input e il margine è diminuito.
-Stima residua **dopo S3: 6–9 ore effettive**, più 2–4 ore di riserva e attese
+Stima residua **dopo S4: 4–6 ore effettive**, più 2–4 ore di riserva e attese
 esterne. La release verificata il 20 resta un obiettivo, non un esito garantito;
 la prova sul computer dell'esame e la verifica dal tag pubblico sono necessarie.
 Il calendario non anticipa l'autorizzazione alle singole sessioni o alla
@@ -207,6 +207,21 @@ Mantenere le etichette semantiche e le distinzioni necessarie alla correttezza.
 
 **Completamento:** un lettore segue il percorso senza conoscere la storia dei
 task; comandi, link, figure e pagine modificate passano i controlli pertinenti.
+
+**Chiusura verificata il 20 settembre:** sei pagine revisionate, con problema,
+contributo e percorso demo in apertura, suite/v2 prima dei diagnostici v1 e
+distinzione esplicita fra teorema, implementazione e prove. Review indipendente
+senza finding; WIP README dell'utente, ancore, include, asset e comandi
+preservati. Pages 41 route, 26 test checker, build Jekyll offline e verifica
+di 41 pagine HTML/929 riferimenti verdi. QA browser delle cinque pagine a
+1440 e 390 px, movimento normale/ridotto: 20 combinazioni coperte, più sei
+controlli mirati; lettura visiva desktop/mobile senza finding residui.
+Due misure premature delle ancore sono state ricontrollate dopo lo scorrimento;
+la figura home è stata verificata dopo decodifica, senza modifiche al sito.
+Nessun codice, contratto, renderer o lock modificato. Fonti:
+[piano S4](2026-09-20-exam-ready-s4.md) e
+`build/exam-ready-s4/handoff-final.md`. Prova d'esame e pubblicazione restano
+S5 e S6.
 
 ## S5 — Prova generale e verifica dell'ambiente d'esame
 
