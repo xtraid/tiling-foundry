@@ -79,6 +79,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends texlive-latex-base
 
+      - name: Set up the documented demo
+        run: make demo-setup
+
+      - name: Run the narrated checks and a new-input PDF demo
+        env:
+          UV_OFFLINE: "1"
+          UV_PYTHON_DOWNLOADS: never
+        run: |
+          make demo-check
+          make demo INPUT=tests/instances/demo_sat.cm13 TIMEOUT=300
+
       - name: Compile opt-in run dossier without shell escape
         run: make run-dossier-smoke
 
