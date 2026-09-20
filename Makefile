@@ -6,6 +6,8 @@ VALGRIND ?= valgrind
 PAGES_BUILD_DIR ?= build/pages
 UV_CACHE_DIR ?= $(CURDIR)/.uv-cache
 export UV_CACHE_DIR
+# Set the default before unexport, which otherwise defines an empty variable.
+TIMEOUT ?= 300
 # Command-line values are otherwise expanded for Make's implicit environment,
 # even by parse-time $(shell ...) calls. Export only the raw demo copies below.
 unexport INPUT TIMEOUT
@@ -111,7 +113,6 @@ demo-setup:
 	@$(PYTHON) tools/demo_setup.py verify
 
 # Pass raw values through the environment: filenames are not shell/Make code.
-TIMEOUT ?= 300
 demo: export TILING_DEMO_INPUT = $(value INPUT)
 demo: export TILING_DEMO_TIMEOUT = $(value TIMEOUT)
 demo:

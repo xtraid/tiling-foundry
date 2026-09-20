@@ -4,8 +4,11 @@ import contextlib
 import importlib
 import importlib.util
 import io
+import os
 from pathlib import Path
+import shlex
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -242,6 +245,50 @@ class DemoCheckTests(unittest.TestCase):
             self.assertIn("finite and positive", completed.stderr)
             self.assertNotIn("diagnostics=", completed.stdout)
             self.assertFalse(marker.exists())
+
+    def test_make_defaults_to_300_seconds_for_both_demo_commands(self):
+        # Exercise Make's actual export and each CLI's argparse conversion;
+        # stop only at supervision so this regression needs no PDF generation.
+        with tempfile.TemporaryDirectory() as name:
+            wrapper = Path(name) / "capture_timeout.py"
+            wrapper.write_text(
+                "import importlib, pathlib, sys\n"
+                "sys.path.insert(0, str(pathlib.Path.cwd()))\n"
+                "from tools import demo\n"
+                "entry = pathlib.Path(sys.argv[1]).stem\n"
+                "command = importlib.import_module('tools.' + entry)\n"
+                "def capture(*args, **kwargs):\n"
+                "    print('captured-timeout=' + str(kwargs['timeout']), flush=True)\n"
+                "    return 73\n"
+                "demo._supervise = capture\n"
+                "output = pathlib.Path(__file__).parent / (entry + '-run')\n"
+                "raise SystemExit(command.main(['--output', str(output)]))\n"
+            )
+            environment = os.environ.copy()
+            for key in ("TIMEOUT", "TILING_DEMO_TIMEOUT", "INPUT", "TILING_DEMO_INPUT", "MAKEFLAGS", "MAKEOVERRIDES"):
+                environment.pop(key, None)
+            for target in ("demo", "demo-check"):
+                with self.subTest(target=target):
+                    completed = subprocess.run(
+                        ["make", "--no-print-directory", target,
+                         "INPUT=" + str(ROOT / "tests/instances/pipeline_sat.cm13"),
+                         "PYTHON=" + shlex.join([sys.executable, str(wrapper)])],
+                        cwd=ROOT, env=environment, capture_output=True, text=True, timeout=10,
+                    )
+                    self.assertIn("captured-timeout=300.0", completed.stdout, completed.stdout + completed.stderr)
+                    self.assertIn("Error 73", completed.stderr)
+
+    def test_make_rejects_explicit_empty_timeout_for_both_demo_commands(self):
+        for target in ("demo", "demo-check"):
+            with self.subTest(target=target):
+                completed = subprocess.run(
+                    ["make", "--no-print-directory", target,
+                     "INPUT=" + str(ROOT / "tests/instances/pipeline_sat.cm13"), "TIMEOUT="],
+                    cwd=ROOT, capture_output=True, text=True, timeout=10,
+                )
+                self.assertNotEqual(completed.returncode, 0)
+                self.assertIn("finite and positive", completed.stderr)
+                self.assertNotIn("diagnostics=", completed.stdout)
 
 
 if __name__ == "__main__":
