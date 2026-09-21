@@ -250,6 +250,33 @@ def test_builder_preserves_noncanonical_region_capture_scope():
     ).size == (1976, 828)
 
 
+def test_builder_fits_all_labels_at_the_fifteen_signal_boundary(monkeypatch):
+    from wang_trace import load_trace_bundle
+
+    bundle = load_trace_bundle(
+        ROOT / "docs/assets/presentazione/search-unsat/reference-manifest.json"
+    )
+    signals = bundle.explanation.reduction.source_signals
+    assert len(signals) == 15
+    labels = []
+    original_centered_text = wang_algorithm_animation.centered_text
+
+    def check_label(draw, box, text, **kwargs):
+        bounds = draw.textbbox((0, 0), text, font=kwargs["font"])
+        assert bounds[2] - bounds[0] <= box[2] - box[0], text
+        assert bounds[3] - bounds[1] <= box[3] - box[1], text
+        labels.append(text)
+        return original_centered_text(draw, box, text, **kwargs)
+
+    monkeypatch.setattr(wang_algorithm_animation, "centered_text", check_label)
+    image = Image.new("RGB", (1976, 828), "white")
+    wang_algorithm_animation._draw_signal_order(
+        ImageDraw.Draw(image), y=140, label="source", signals=signals
+    )
+    assert len(labels) == 15
+    assert {"r #12", "r #13", "r #14"}.issubset(labels)
+
+
 def test_builder_summarizes_a_valid_44_variable_signal_strip():
     bundle = load_explainability_bundle(BUILDER_MANIFEST)
     reduction = bundle.reduction

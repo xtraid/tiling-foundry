@@ -3,7 +3,7 @@
 Data: 15 settembre 2026. **Release: TODO.** Scope concordato per preparare la
 difesa del progetto. **S1–S4 sono FATTO**, con setup isolato, nuovi dossier
 SAT/UNSAT, suite breve offline e documentazione revisionata e verificata.
-S5–S6 e la pubblicazione restano da eseguire.
+S5 è IN CORSO; S6 e la pubblicazione restano da eseguire.
 
 L'obiettivo è poter clonare una versione precisa, inserire una formula nuova,
 eseguire il progetto con pochi comandi e mostrare un dossier completo con PDF.
@@ -43,7 +43,7 @@ con l'input proposto durante la dimostrazione.
 | S2 | FATTO | Formula nuova → quattro motori → dossier e PDF | 4–6 ore |
 | S3 | FATTO | Suite breve commentata e regressioni della demo | 2–3 ore |
 | S4 | FATTO | Documentazione più chiara e utile alla difesa | 2–3 ore |
-| S5 | TODO | Prova isolata, offline e sul computer dell'esame | 3–4 ore |
+| S5 | IN CORSO | Prova isolata, offline e sul computer dell'esame | 3–4 ore |
 | S6 | TODO | PR, freeze, pubblicazione e verifica dal tag | 1–2 ore |
 
 Totale stimato: **14–21 ore**, più **2–4 ore di riserva**. Sono stime di lavoro
@@ -224,6 +224,18 @@ Nessun codice, contratto, renderer o lock modificato. Fonti:
 S5 e S6.
 
 ## S5 — Prova generale e verifica dell'ambiente d'esame
+
+**IN CORSO, aggiornamento del 21 settembre.** L'utente ha completato la prova
+locale su Omarchy al commit `7ea377e`: setup, suite offline 6/6 (12.781 s),
+dossier SAT (132.138 s) e UNSAT (69.300 s), apertura PDF, errori, timeout,
+Ctrl+C e riavvio con preservazione dei PDF precedenti superati. Evidenza
+riferita dall'utente, distinta dalla prova isolata Debian sul server.
+L'UNSAT valido è `tests/instances/pipeline_unsat_search.cm13`; il vecchio
+esempio ad hoc della checklist era fuori dominio. Il follow-up corregge
+S5-I1, le righe secondarie della legenda e le etichette routing; PDF
+ricomposti e revisionati sul server. Resta da confermare l'apertura del
+PDF corretto su Omarchy prima della chiusura S5.
+Piano operativo: [S5](2026-09-20-exam-ready-s5.md).
 
 - Ripetere esattamente i comandi della guida da clone isolato: setup con rete,
   poi demo e suite senza rete, senza dipendenze da percorsi personali.

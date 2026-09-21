@@ -208,14 +208,13 @@ def _draw_signal_order(
         )
         font_size = 16 if signal is None else 28
         font = explain_font(font_size * scale)
-        if len(signals) > 15:
-            inner_width = box_width - 8
-            while font_size > 12:
-                text_box = draw.textbbox((0, 0), text, font=font)
-                if text_box[2] - text_box[0] <= inner_width:
-                    break
-                font_size -= 1
-                font = explain_font(font_size * scale)
+        inner_width = box_width - 8
+        while font_size > 12:
+            text_box = draw.textbbox((0, 0), text, font=font)
+            if text_box[2] - text_box[0] <= inner_width:
+                break
+            font_size -= 1
+            font = explain_font(font_size * scale)
         centered_text(
             draw,
             (x + 4, y + 3, x + box_width - 4, y + 55),

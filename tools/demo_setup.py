@@ -17,6 +17,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 SYSTEM_PACKAGES = (
     "Debian 13: install build-essential python3 git texlive-latex-base; "
+    "Arch/Omarchy: install base-devel python git texlive-latex; "
     "install uv separately. "
     "See the README for the setup commands."
 )

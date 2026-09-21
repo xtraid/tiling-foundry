@@ -175,7 +175,8 @@ def test_one_composition_chain_is_byte_stable_for_png_sheet_and_gif(tmp_path):
     assert first.contact_sheet.name == "contact-sheet.png"
     with Image.open(first.frames[0]) as frame:
         assert frame.mode == "RGB"
-        assert frame.size == (1976, 828)
+        assert frame.size == (1976, 972)
+    assert {Image.open(frame).size for frame in first.frames} == {(1976, 972)}
     with Image.open(first.animation) as animation:
         assert animation.format == "GIF"
         assert animation.n_frames == 10
@@ -248,7 +249,7 @@ def test_observed_mrv_selection_is_row_major_and_deterministic(tmp_path):
     render_trace_assets(MANIFEST, second_dir, max_frames=10)
 
     assert _tree_bytes(first_dir) == _tree_bytes(second_dir)
-    assert Image.open(first.fallback).size == (1976, 828)
+    assert Image.open(first.fallback).size == (1976, 972)
 
 
 def test_active_domain_counts_exclude_inactive_positions():
@@ -273,8 +274,99 @@ def test_mrv_legend_uses_the_unresolved_grid_color(tmp_path):
 def test_decision_fallback_has_large_focused_mrv_summary_cards(tmp_path):
     rendered = render_trace_assets(MANIFEST, tmp_path / "rendered", max_frames=10)
     with Image.open(rendered.fallback) as fallback:
-        assert fallback.getpixel((1630, 660)) == EXPLAIN_SELECTED_MRV_RGB
-        assert fallback.getpixel((1804, 660)) == EXPLAIN_DECISION_RGB
+        assert fallback.getpixel((1630, 804)) == EXPLAIN_SELECTED_MRV_RGB
+        assert fallback.getpixel((1804, 804)) == EXPLAIN_DECISION_RGB
+
+
+@pytest.mark.parametrize(
+    "event_index", (1, 3, 5, 6), ids=("mrv", "propagation", "conflict", "rollback")
+)
+def test_narrow_region_keeps_summary_text_inside_canvas_and_clear_of_cards(
+    monkeypatch, event_index
+):
+    bundle = load_trace_bundle(MANIFEST)
+    initial = tuple({0: 9, 1: 384, 20: 320}.get(cell, 0) for cell in range(77))
+    events = (
+        TraceEvent(0, "root", "initial", None, 0, None, 0, None, None, None),
+        TraceEvent(1, "decision", "search", None, 1, 0, 0, 9, 1, None),
+        TraceEvent(2, "domain_reduction", "search", "decision", 1, 0, 1, 9, 1, None),
+        TraceEvent(3, "domain_reduction", "search", "propagation", 1, 1, 2, 384, 128, None),
+        TraceEvent(4, "domain_reduction", "search", "propagation", 1, 20, 3, 320, 0, None),
+        TraceEvent(5, "conflict", "search", None, 1, 20, 3, None, None, None),
+        TraceEvent(6, "backtrack", "search", None, 1, 0, 0, None, None, None),
+        TraceEvent(7, "decision", "search", None, 1, 0, 0, 9, 8, None),
+        TraceEvent(8, "domain_reduction", "search", "decision", 1, 0, 1, 9, 8, None),
+        TraceEvent(9, "result", None, None, 0, None, 1, None, None, "sat"),
+    )
+    trace = replace(
+        bundle.trace,
+        width=7,
+        height=11,
+        initial_domains=initial,
+        events=events,
+        event_capacity=len(events),
+        observed_event_count=len(events),
+        checkpoints=(),
+        checkpoint_interval=0,
+        checkpoint_capacity=0,
+    )
+    region = replace(
+        bundle.explanation.region,
+        max_x=6,
+        max_y=10,
+        active=tuple(bool(domain) for domain in initial),
+    )
+    bundle = replace(
+        bundle, trace=trace, explanation=replace(bundle.explanation, region=region)
+    )
+    states = replay_trace(trace)
+    event = events[event_index]
+    before = states[event_index - 1]
+    texts = []
+    legend_texts = []
+    cards = []
+    summaries = []
+    original_text = ImageDraw.ImageDraw.text
+    original_rectangle = ImageDraw.ImageDraw.rectangle
+
+    def record_text(draw, xy, text, *args, **kwargs):
+        if xy[0] == 52 and xy[1] >= 600:
+            texts.append((text, draw.textbbox(xy, text, font=kwargs["font"])))
+        if xy[0] in (304, 356):
+            legend_texts.append((text, draw.textbbox(xy, text, font=kwargs["font"])))
+        return original_text(draw, xy, text, *args, **kwargs)
+
+    def record_rectangle(draw, xy, *args, **kwargs):
+        if xy[0] == 28 and xy[1] >= 600 and xy[2] - xy[0] > 100:
+            summaries.append(xy)
+        if xy[0] > 52 and xy[1] > 600 and xy[2] - xy[0] > 100:
+            cards.append(xy)
+        return original_rectangle(draw, xy, *args, **kwargs)
+
+    monkeypatch.setattr(ImageDraw.ImageDraw, "text", record_text)
+    monkeypatch.setattr(ImageDraw.ImageDraw, "rectangle", record_rectangle)
+    frame = wang_trace_render._compose_frame(
+        bundle,
+        event,
+        before if event.kind == "decision" else states[event_index],
+        before,
+        event_index,
+    )
+
+    assert len(texts) >= 2 and len(cards) >= 2
+    assert len(summaries) == 1 and len(legend_texts) >= 5
+    for text, box in legend_texts:
+        assert box[3] < summaries[0][1], text
+    for text, box in texts:
+        assert 0 <= box[0] < box[2] < frame.width, text
+        assert 0 <= box[1] < box[3] < frame.height, text
+        for card in cards:
+            assert (
+                box[2] <= card[0]
+                or card[2] <= box[0]
+                or box[3] <= card[1]
+                or card[3] <= box[1]
+            ), text
 
 
 def test_sat_selection_keeps_a_decision_restriction_and_its_continuation():
@@ -308,8 +400,8 @@ def test_trace_story_facts_remain_readable_at_390_px(tmp_path):
     propagation = tmp_path / "rendered/frame-002519.png"
     assert propagation in rendered.frames
     with Image.open(propagation) as frame:
-        assert _display_ink_height(frame, (52, 676, 1400, 734)) >= 8
-        assert _display_ink_height(frame, (52, 726, 1400, 784)) >= 8
+        assert _display_ink_height(frame, (52, 820, 1400, 878)) >= 8
+        assert _display_ink_height(frame, (52, 882, 1400, 944)) >= 8
 
     conflict = _search_story_panel(bundle, 2)
     assert _display_ink_height(conflict, (52, 828, 1400, 900)) >= 8

@@ -51,6 +51,17 @@ sudo apt-get install --no-install-recommends \
   build-essential python3 git ca-certificates curl texlive-latex-base
 ```
 
+On Arch Linux / Omarchy, install the equivalent prerequisites:
+
+```sh
+sudo pacman -Syu --needed base-devel python git ca-certificates curl texlive-latex
+```
+
+Arch's [`texlive-latex`](https://archlinux.org/packages/extra/any/texlive-latex/)
+pulls in `texlive-basic` and `texlive-bin` and supplies the LaTeX packages used
+by the report. If setup reports `pdflatex is missing`, install this package,
+check `pdflatex --version`, then rerun `make demo-setup` while online.
+
 If `uv` is not installed, download and inspect the standalone installer before
 running it. The version used for the setup check is 0.12.1:
 
