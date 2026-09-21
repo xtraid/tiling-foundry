@@ -1,12 +1,15 @@
 # Exam Ready S5 — prova generale e computer d'esame
 
-**Stato: IN CORSO.** Base `04a2919`, branch `feature/exam-ready-v1.0`.
+**Stato: FATTO.** Codice finale verificato `0215b73`, base `04a2919`,
+branch `feature/exam-ready-v1.0`.
 Scope autorizzato dal continua dell'utente il 20 settembre. Coordinatore
 `/root`, responsabile CI `/root/exam_s5_rehearsal`, review distinta prima
 del checkpoint. S6 resta successiva.
 
 L'utente ha eseguito la demo direttamente sul proprio PC Omarchy Linux
 al commit `7ea377e`, con esiti ricevuti il 21 settembre e registrati sotto.
+Ha poi confermato il commit `0215b73` e l'apertura del nuovo dossier UNSAT,
+con tutti i testi leggibili e senza sovrapposizioni o tagli.
 La prova Debian sul server e la verifica della macchina d'esame sono evidenze
 separate; entrambe vanno registrate senza estendere i risultati da un host
 all'altro. Il piano Exam Ready principale resta il criterio di accettazione.
@@ -39,7 +42,7 @@ all'altro. Il piano Exam Ready principale resta il criterio di accettazione.
 - [x] Gate proporzionati sul candidato e review senza finding bloccanti.
 - [x] Setup, suite, dossier e apertura PDF sul PC Omarchy; tempi registrati.
 - [x] Materiali offline, hash, handoff e checkpoint locale delle correzioni.
-- [ ] Apertura del PDF corretto su Omarchy, dopo il riscontro al vecchio commit.
+- [x] Apertura del PDF corretto su Omarchy, dopo il riscontro al vecchio commit.
 
 ## Gate
 
@@ -49,9 +52,8 @@ invariati, compresa QA Pages S4; verificare eventuali sezioni documentali
 nuove. Nessuna nuova campagna native/sanitizer/Valgrind per cambi soltanto
 CI e documentali. La CI corrente conserva i propri job fino a T99.
 
-La prova reale sul PC è acquisita. Il follow-up chiude i difetti visuali sul
-server; resta da aprire il PDF corretto sul laptop. S5 resta IN CORSO fino
-a quel riscontro. La pubblicazione verificata dal tag è S6.
+La prova reale sul PC e l'apertura del PDF corretto sono acquisite: S5 è
+FATTO. La pubblicazione verificata dal tag resta S6, ancora TODO.
 
 ## Riscontro della macchina d'esame — 21 settembre
 
@@ -158,5 +160,22 @@ non sostituisce i 69.300 s riferiti su Omarchy.
 Copia comoda del PDF corretto sul server:
 `~/dossiers/tiling-foundry-unsat-corrected-20260921.pdf`.
 SHA-256 `ef3a444fdd2f6ad88c4c8f33b5dc2f5174ea4f1dd84d4b635651bee12b0c2c7d`.
-Questa copia deve ancora essere aperta sul laptop: il riscontro originale
-dell'utente riguarda la versione precedente del renderer.
+Sul laptop l'utente ha rigenerato e aperto il dossier dal codice corretto,
+come registrato nella conferma finale seguente.
+
+## Chiusura S5 — conferma finale Omarchy
+
+L'utente conferma esplicitamente HEAD `0215b73` e il PDF
+`build/demo/run-nq7tup8a/dossier/report.pdf` completamente leggibile,
+senza etichette o legende sovrapposte/tagliate. La nuova demo UNSAT termina
+con validazione finale riuscita in **66.289 s reali** sul laptop; l'hash
+input è `ea2b8feb6eb8f4e722f1ec9021445c84858120c8567d42528631bdfb77400a94`.
+La trascrizione attesta questa demo; non viene usata come esito di un nuovo
+`make check` completo. La prova offline iniziale resta quella sopra a `7ea377e`.
+
+Fonte: `build/exam-ready-s5/omarchy-followup-20260921T134347Z/`, file
+`omarchy-rerun-nq7tup8a.json`, `omarchy-final-confirmation.json` e
+`handoff-final.md`. I vecchi percorsi `build/demo/` del laptop sono storici:
+l'utente ha eseguito `make clean` prima della nuova run. Per S6 verificare
+nuovamente l'inventario dei materiali offline della versione pubblicata.
+S5 è FATTO; S6, tag e release rimangono TODO.
