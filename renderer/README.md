@@ -1,522 +1,205 @@
-# PAP Render
+# Tiling Foundry renderer
 
-[![CI](https://github.com/xtraid/PAP_render/actions/workflows/ci.yml/badge.svg)](https://github.com/xtraid/PAP_render/actions/workflows/ci.yml)
+The renderer turns Tiling Foundry artifacts into figures that explain the
+Yang–Zhang construction, the solver search, and the final tiling. It reads
+versioned JSON snapshots and traces, then produces static PNGs and animations
+used by the project documentation and run dossiers.
 
-A command-line pixel art renderer that composites a scene from a tile-based background and a list of sprites, exporting the result as a PNG image.
+The focus is making each stage inspectable: which formula was parsed, how its
+region was built, what the native solver did, and how a verified witness maps
+to square, generalized, and hex views.
 
-**Status**: feature-complete. The code works and is tested; any future changes will be refactoring, cleanup, or optimization.
+**Read:** [Project overview](../README.md) ·
+[Static snapshots](../docs/wang_explainability_snapshots.md) ·
+[Reduction explanation](../docs/wang_reduction_explanation.md) ·
+[Solver traces](../docs/wang_solver_trace.md) ·
+[Run dossiers](../docs/run_dossiers.md)
 
-Tiling Foundry also supplies a separate presentation-only Wang backend. Its
-default square path and explicit checked `--hex` view consume the same
-versioned square JSON without importing the solver or changing this legacy
-pixel-art pipeline.
+## How the pipeline works
 
-## Output
+The root project owns parsing, construction, solving, and witness verification.
+This directory consumes the exported data in a separate Python environment;
+it does not load `libwang.so` or import Z3.
 
-![example render](output/example.png)
-
-## Overview
-
-- 16-color indexed palette (4 bit per pixel)
-- Tile sheet: 64 tiles of 32×32 pixels in a 256×256 image
-- Sprite sheet: 16 sprites of 64×64 pixels in a 256×256 image
-- Frame buffer: 640×480 pixels (tile map 15×20)
-- Sprite transformations: flip on x/y axis, rotation by 90/180/270 degrees
-- Transparency via a designated palette index
-
-## Usage
-
-```bash
-python main.py <palette.json> <scene.json> <tiles.bin> <sprites.bin> <output.png>
+```text
+.cm13 --> parser --> Formula --> Yang–Zhang builder --> Region + TILESET
+                       |                  |
+                       +------ snapshots + construction provenance
+                                          |
+                    native solvers -------+--> observed event traces
+                    Z3 checks ------------+--> encoding summaries
+                    witness verification -+--> verified solution
+                                          |
+                                          v
+                              versioned JSON artifacts
+                                          |
+                              schema / hash / identity checks
+                                          |
+                              static views / offline replay
+                                          |
+                              PNG frames + contact sheet + GIF
+                                          |
+                              documentation / run dossier / PDF
 ```
 
-| Argument | Description |
-|---|---|
-| `palette.json` | 16 RGB colors |
-| `scene.json` | transparent index, tile map, sprite list |
-| `tiles.bin` | packed binary tile sheet (32768 bytes) |
-| `sprites.bin` | packed binary sprite sheet (32768 bytes) |
-| `output.png` | rendered output |
+1. **Capture the construction.** The exporter copies the parsed formula, the
+   fixed 23-tile set, and the unassigned region into snapshots. Optional native
+   provenance records signals, their permutation, and gadget spans so the
+   renderer can explain the reduction without rebuilding it.
+2. **Record the search.** The reference and optimized native solvers can export
+   observed events, including propagation, decisions, conflicts, and
+   backtracks. Z3 exports separate summaries of the encoding order and returned
+   model; these do not describe its internal search.
+3. **Validate the inputs.** Manifests bind artifacts to their schemas and
+   SHA-256 hashes. Consumers check the expected fields and consistency between
+   artifacts before rendering. The trace consumer also replays and validates
+   the recorded state changes.
+4. **Compose the views.** Static renderers show the formula, tileset, region,
+   reduction, or verified solution. Trace rendering selects semantic milestones
+   from one validated replay, then draws those states as frames.
+5. **Publish the same evidence.** The animation encoder writes PNG frames, a
+   contact sheet, and a GIF. The root dossier tools reuse these assets for the
+   run report and optional PDF. UNSAT runs show an explicit not-applicable view
+   where a SAT witness would appear.
 
-### Wang diagnostic rendering
+## Quick start
 
-From this directory, render a `wang-solution-v1` square document with the
-default square geometry:
+For the full pipeline setup, follow the [root quick start](../README.md#quick-start).
+To render the committed fixtures alone, run these commands from `renderer/`:
 
-```bash
-uv run --locked python wang_square.py \
-  ../tests/fixtures/wang_solution_v1_square_sat.json \
-  output/wang-square.png
-```
-
-Use the same command and the same square document for the pointy-top axial
-view, enabled only by the explicit flag:
-
-```bash
-uv run --locked python wang_square.py \
-  ../tests/fixtures/wang_solution_v1_square_sat.json \
-  output/wang-hex.png \
-  --hex
-```
-
-Optional `--pixels-per-cell N` and `--margin N` arguments control the dynamic
-canvas. `N` is the square side in default mode and the integer hex radius in
-hex mode. Inclusive coordinate offsets, including negative origins, do not
-alter dense row-major placement. Holes use a neutral checkerboard. Each logical
-edge color receives a deterministic, distinct RGB value, so the backend does
-not collapse the contract's unbounded color IDs into the legacy 16-color
-palette.
-
-The square backend renders every active cell from its named `N`, `E`, `S`, and
-`W` edge colors. Hex mode first invokes the standard-library-only reducer and
-checker in `wang_hex_port.py`. With `(q,r)=(x,y)` and edge order
-`(E,SE,SW,W,NW,NE)`, it maps `(N,E,S,W)` to
-`(E,S,kappa,W,N,kappa)`, where `kappa=max(C)+1`, and then rasterizes the checked
-in-memory view. No hex JSON or second command is created.
-
-Both modes write the PNG with an atomic same-directory replace. Neither uses
-`metadata` to select pixels, validates source SAT correctness, or loads
-`libwang.so`/Z3. Boundary is pixel-neutral: hex mode retains and checks its
-direction-preserving translation, while default square output remains
-byte-for-byte unchanged. A successful PNG is presentation, not a proof;
-correctness remains the responsibility of the independent Tiling Foundry
-verifier before export.
-
-Add `--explain` to a verified solution to show a neutral tile center, its
-positional tile ID, colored `N,E,S,W` (or six hex) edge bands, emphasized
-exposed boundary constraints, and the numeric palette legend:
-
-```bash
-uv run --locked python wang_square.py \
-  ../tests/fixtures/wang_solution_v1_square_sat.json \
-  output/wang-square-explain.png \
-  --explain
-```
-
-Static pre-solver views consume a `wang-explain-manifest-v1` instead of a
-solution. They are inherently explanatory, so they do not use `--explain`:
-
-```bash
-uv run --locked python wang_square.py \
-  ../tests/fixtures/pipeline_sat_explain/manifest.json \
-  output/formula.png \
-  --view formula
+```sh
+uv sync --locked
 
 uv run --locked python wang_square.py \
   ../tests/fixtures/pipeline_sat_explain/manifest.json \
-  output/tileset.png \
-  --view tileset
+  output/formula.png --view formula
 
-uv run --locked python wang_square.py \
-  ../tests/fixtures/pipeline_sat_explain/manifest.json \
-  output/region.png \
-  --view region
-```
-
-`--view tileset` and `--view region` also accept `--hex`. Both invoke the pure
-square-to-hex reducer and checker before rasterization. Formula view rejects
-`--hex`; region view intentionally contains no assignment or partial solver
-state.
-
-An opt-in `wang-explain-manifest-v2` adds the construction provenance produced
-by the native Yang–Zhang builder. Render its exact source/target signals,
-adjacent-swap gadget spans, formula, and unassigned region with:
-
-```bash
 uv run --locked python wang_square.py \
   ../tests/fixtures/pipeline_sat_reduction_explain/manifest.json \
-  output/reduction.png \
-  --view reduction
-```
+  output/reduction.png --view reduction
 
-Reduction spans describe the square construction itself, so this view rejects
-`--hex`. The consumer verifies artifact hashes, formula and region identity,
-the signal permutation, and gadget bounds without importing native code or
-reconstructing builder geometry.
-
-### Generalized Yang--Zhang presentation
-
-Three explicit square-only views interpret the fixed 23 positional atomic IDs
-as the 14 generalized tiles from the Yang--Zhang construction. The semantic
-module `wang_generalized.py` contains the exact table and performs no raster,
-solver, native, or root-project import. It first guards every canonical
-`(N,E,S,W)` tuple, then recognizes only complete, correctly oriented,
-adjacent, and non-overlapping compositions.
-
-Render the 14-tile sheet and the separately labelled 23-tile atomic legend
-from an existing hash-bound tileset snapshot:
-
-```bash
-uv run --locked python wang_square.py \
-  ../tests/fixtures/pipeline_sat_explain/manifest.json \
-  output/generalized-sheet.png \
-  --view generalized-sheet
-
-uv run --locked python wang_square.py \
-  ../tests/fixtures/pipeline_sat_explain/manifest.json \
-  output/atomic-legend.png \
-  --view atomic-legend
-```
-
-Render an exact generalized overlay on the canonical verified square witness:
-
-```bash
-uv run --locked python wang_square.py \
-  ../tests/fixtures/pipeline_sat_solver_trace/solution-2273f58cda026dca73c0dfa25c960e01296ac1e34ae6accbddf5be29034d156a.json \
-  output/generalized-overlay.png \
-  --view generalized-overlay
-```
-
-The fixed decomposition is:
-
-| Generalized tile | Atomic IDs and orientation |
-|---|---|
-| `V0` | `0` above `1` above `2` |
-| `V1` | one copy of `3` |
-| `C0` | `4` |
-| `C1` | `5` above `6` |
-| `F0`, `F1` | `7`, `8` |
-| `L0`, `L1` | `9`, `10` |
-| `R0`, `R1` | `11|12`, `13|14` from left to right |
-| `X00`, `X01`, `X10`, `X11` | `15/16`, `17/18`, `19/20`, `21/22` from top to bottom |
-
-The symbolic palette keeps the paper colors `b`, `v`, `0`, `1`, `0′`
-(rendered as the font-safe label `0-prime`), `l`, and `r` separate from
-internal glues `V0:a`, `V0:b`, `C1`, `R0`, `R1`,
-`X00`, `X01`, `X10`, and `X11`; numeric color IDs remain visible as secondary
-transport labels. Multi-cell shapes receive one outer contour and a muted
-internal seam. Every atomic tile keeps its numeric ID. In particular, three
-adjacent cells carrying atomic tile `3` are three `V1` occurrences, never one
-three-cell `V1`.
-
-All three generalized views reject `--hex`: the checked Basire/Culik port is a
-one-to-one presentation of atomic tiles and does not invent generalized hex
-semantics. Generalized recognition checks only the exact atomic composition;
-Wang adjacency, boundary, and SAT verification remain explicit upstream
-preconditions, just as for the other renderer views. Without one of the new
-`--view` values, default square, `--hex`, and `--explain` output remain
-byte-for-byte unchanged.
-
-### Offline trace and algorithm animations
-
-The animation modules keep state interpretation separate from image encoding.
-`wang_trace.py` loads a hash-bound `wang-explain-manifest-v3` and independently
-replays its `observed` native events once. `wang_trace_render.py` selects and
-composes frames from those replayed states. `wang_animation.py` receives only
-completed RGB frames and writes deterministic atomic PNGs, a contact sheet,
-and a presentation-only GIF:
-
-```bash
 uv run --locked python wang_trace_render.py \
   ../tests/fixtures/pipeline_sat_solver_trace/manifest.json \
   output/solver-trace
-```
 
-The static projection of the same v3 manifest can also drive the existing
-formula, tileset, region, and reduction views. It verifies every reference by
-schema and hash but deliberately does not replay trace or solution content;
-the trace consumer remains their semantic validator. This lets the root opt-in
-dossier generator reuse one trace bundle without synthesizing a second v1/v2
-manifest. The renderer still imports neither native code nor Z3, and it does
-not own LaTeX or report metadata.
-
-Z3 uses separate `encoding-order` summaries. The same offline consumer renders
-the explicit project-owned Boolean source-order construction or Wang row-major
-construction and returned model, never an internal Z3 search or debug trace:
-
-```bash
-uv run --locked python wang_z3_summary.py \
-  ../tests/fixtures/pipeline_sat_z3/boolean-z3.json \
-  output/boolean-z3-encoding
-uv run --locked python wang_z3_summary.py \
-  ../tests/fixtures/pipeline_sat_z3/wang-z3.json \
-  output/z3-encoding
-```
-
-Three additional commands make their source semantics explicit: builder is a
-`canonical-construction`, hex is a `verified-transformation`, and optimized is
-a `didactic` overview whose dated reports, not the animation, establish
-performance. The optimized source is the closed six-entry
-`data/optimized-mechanisms-v1.json`, including the lazy MRV index.
-
-```bash
-uv run --locked python wang_algorithm_animation.py builder \
-  ../tests/fixtures/pipeline_sat_reduction_explain/manifest.json \
-  output/builder-routing
-uv run --locked python wang_algorithm_animation.py optimized \
-  output/optimized-mechanisms
-uv run --locked python wang_algorithm_animation.py hex \
+uv run --locked python wang_square.py \
   ../tests/fixtures/wang_solution_v1_square_sat.json \
-  output/square-to-hex
+  output/solution-explain.png --explain
 ```
 
-`wang_narrative.py` adds only fixed downstream compositions for verification,
-the square/generalized/hex witness sequence, the generalized sheet and legend,
-and the eight-component overview. The root shared-asset generator invokes
-these commands after validating `run.json`; no renderer imports native code,
-Z3, Pages, or LaTeX. SAT and UNSAT records use the same pipeline order, while
-UNSAT emits an explicit not-applicable presentation instead of a witness.
+The renderer uses Python 3.14 and its own `uv.lock`. Rendering existing
+artifacts does not require a native build or a new solver run.
 
-The trace frame selector is `semantic-milestones-v1`: it retains phase
-transitions, propagation, decisions, conflicts, backtracks, terminal state,
-and decision/backtrack reductions before filling the widest remaining replay
-gaps. It is deterministic and deliberately not uniform time sampling. The
-selected states are still composed from the same single validated replay used
-for PNG frames, the reduced-motion fallback, contact sheet, and GIF.
+## Exporting a new instance
 
-All loaders reject unknown fields and identity drift before rasterization. No
-animation module imports native code; trace rendering and algorithm rendering
-do not import Z3. PNG sources are the deterministic test oracles. GIFs exist
-only for presentation, and every published animation has a static fallback.
+From the repository root, build the native library and export the construction:
 
-## Input Format
-
-### palette.json
-
-Array of 16 RGB colors:
-
-```json
-[
-  [0, 0, 0],
-  [255, 0, 0],
-  ...
-]
+```sh
+make shared
+uv run --locked python tools/export_pipeline_snapshots.py \
+  tests/instances/pipeline_sat.cm13 \
+  build/explain/manifest.json --reduction-explanation
 ```
 
-### scene.json
+This parses and reduces the formula without solving it. Omit
+`--reduction-explanation` for just the formula, tileset, and region snapshots.
+To run a native solver and export its trace instead:
 
-```json
-{
-  "transparent_index": 0,
-  "tile_map": [[1, 0, 2, ...], ...],
-  "sprites": [
-    { "id": 0, "x": 100, "y": 80, "flip_x": false, "flip_y": false, "rotation": 0 }
-  ]
-}
+```sh
+uv run --locked python tools/export_solver_trace.py \
+  tests/instances/pipeline_sat.cm13 \
+  build/trace/manifest.json --solver reference
 ```
 
-- `transparent_index`: palette index (0–15) treated as transparent for all sprites
-- `tile_map`: 15×20 matrix of tile IDs (0–63)
-- `sprites`: ordered list — draw order determines z-order
+Use `--solver optimized` for the experimental variant. Pass the resulting
+manifest to `wang_trace_render.py` in the renderer environment.
 
-### .bin files
+For a complete run with all four solver results, figures, and a PDF, use the
+root orchestrator after completing the full setup:
 
-Packed binary, 256×256 pixels stored as 32768 bytes. Each byte contains 2 pixels:
-- high nibble (bits 7–4): first pixel → palette index 0–15
-- low nibble (bits 3–0): second pixel → palette index 0–15
-
-## Architecture
-
-| Class | Responsibility | Status |
-|---|---|---|
-| `Palette` | Reads and validates `palette.json`, maps index → RGB | Done |
-| `VirtualVRAM` | Loads `.bin` files, decodes nibble-packed pixels into index matrices; exposes `get_tile(id)` and `get_sprite(id)` | Done |
-| `SceneParser` | Reads and validates `scene.json`, returns `transparent_index`, `tile_map`, and `sprites` | Done |
-| `Blitter` | Composites tiles and sprites onto a 640×480 frame buffer; applies flip/rotation and transparency | Done |
-| `RenderingPipeline` | Orchestrates the full render and exports PNG | Done |
-
-Custom exceptions (`PaletteError`, `VRAMError`, `SceneError`, `BlitterException`, `RenderingException`) are raised for all invalid input cases. `FileNotFoundError` propagates with a descriptive message from all file-loading classes.
-
-## API Reference
-
-### Palette
-
-```python
-Palette(path: str)
+```sh
+uv run --locked python tools/generate_run_dossier.py \
+  examples/run-cases-v2/pipeline-sat.json \
+  build/first-dossier --pdf
 ```
 
-| Member | Type | Description |
-|---|---|---|
-| `data` | `np.ndarray (16, 3) uint8` | Full palette array |
-| `__getitem__(idx: int)` | `np.ndarray (3,) uint8` | RGB color at palette index `idx` ∈ [0, 15] |
-| `print_palette()` | `None` | Prints palette to stdout |
+The output directory must be new for each dossier. See the
+[dossier guide](../docs/run_dossiers.md) for inputs and generated artifacts.
 
-Raises `PaletteError` on invalid palette. Raises `FileNotFoundError` if file is missing.
+## What the views explain
 
----
+| View | What it shows |
+| --- | --- |
+| `--view formula` | Parsed clauses and their variable positions |
+| `--view tileset` | Atomic tiles and their edge colors |
+| `--view region` | Active cells and boundary constraints, without an assignment |
+| `--view reduction` | Native construction signals, routing, and gadget spans |
+| `--explain` | A solution with tile IDs, colored edges, boundary emphasis, and a legend |
+| `--view generalized-sheet` | The 14 generalized Yang–Zhang tiles |
+| `--view atomic-legend` | The 23 atomic tiles with their semantic labels |
+| `--view generalized-overlay` | Exact generalized compositions recognized in a square witness |
 
-### VirtualVRAM
+Static views use a manifest; solution and generalized-overlay views use a
+`wang-solution-v1` document. Manifest v1 contains the basic snapshots, v2 adds
+reduction provenance, and v3 carries the solver trace bundle. Static views can
+also read the static projection of a v3 bundle; trace semantics are checked by
+the separate trace consumer.
 
-```python
-VirtualVRAM(path_t: str, path_s: str)
-```
+Add `--hex` to solution, tileset, or region rendering for a checked
+square-to-hex presentation. The renderer applies the pure reducer and checks
+its result before drawing; it does not export a second hex JSON document.
+Formula, reduction, and generalized views remain square-only.
 
-| Member | Type | Description |
-|---|---|---|
-| `get_tile(idx: int)` | `np.ndarray (32, 32) uint8` | Palette-index matrix for tile `idx` ∈ [0, 63] |
-| `get_sprite(idx: int)` | `np.ndarray (64, 64) uint8` | Palette-index matrix for sprite `idx` ∈ [0, 15] |
+## Animations and their meaning
 
-Raises `VRAMError` on invalid file size. Raises `FileNotFoundError` if a file is missing.
+Native trace animations show observed solver events. Frame selection keeps
+semantic milestones such as phase changes, decisions, conflicts, backtracks,
+and the terminal state, then fills remaining gaps. It is deterministic and
+does not represent elapsed execution time.
 
----
+The other animations have distinct sources:
 
-### SceneParser
+| Command | Source and meaning |
+| --- | --- |
+| `wang_z3_summary.py` | Project-owned encoding order and returned model |
+| `wang_algorithm_animation.py builder` | Canonical construction from reduction provenance |
+| `wang_algorithm_animation.py hex` | Checked square-to-hex transformation |
+| `wang_algorithm_animation.py optimized` | Didactic overview of the six optimization mechanisms |
 
-```python
-SceneParser(path: str)
-```
+`wang_narrative.py` composes the verification, witness, and overview sequences
+used by the root shared-asset generator. PNG frames provide deterministic
+comparison artifacts; GIFs are presentation outputs with static fallbacks.
+Performance claims come from measured reports, not animation speed.
 
-| Member | Type | Description |
-|---|---|---|
-| `transparent_index` | `int` | Palette index treated as transparent, ∈ [0, 15] |
-| `tile_map` | `np.ndarray (15, 20) uint8` | Grid of tile IDs |
-| `sprites` | `list[dict]` | Ordered sprite list; each dict has `id`, `x`, `y`, `flip_x`, `flip_y`, `rotation` |
+## Code map
 
-Raises `SceneError` on invalid scene. Raises `FileNotFoundError` if file is missing.
+| Module | Responsibility |
+| --- | --- |
+| `wang_square.py` | Main CLI for static views and solution rendering |
+| `wang_snapshot.py` | Snapshot loading, validation, and static composition |
+| `wang_explain.py` | Shared edge bands, labels, and legends |
+| `wang_trace.py` | Trace bundle validation and offline replay |
+| `wang_trace_render.py` | Milestone selection and trace frame composition |
+| `wang_animation.py` | PNG, contact-sheet, and GIF encoding |
+| `wang_hex_port.py` | Pure square-to-hex reduction and independent checker |
+| `wang_generalized.py` / `wang_generalized_render.py` | Exact atomic grouping and generalized views |
+| `wang_z3_summary.py` | Z3 encoding-summary views |
+| `wang_algorithm_animation.py` / `wang_narrative.py` | Algorithm and pipeline compositions |
 
----
+## Verification and scope
 
-### Blitter
+A rendered image is not a correctness certificate. Witness verification takes
+place upstream; hashes bind the inputs, and replay checks trace consistency.
+An observed trace is not a standalone UNSAT proof. Generalized recognition
+checks the tile compositions, while the hex checker validates the presentation
+transformation.
 
-```python
-Blitter(vram: VirtualVRAM, asset_type: str, idx: int, transparent_index: int, buffer: np.ndarray)
-```
+Run the isolated renderer suite from this directory:
 
-| Member | Type | Description |
-|---|---|---|
-| `transparent_index` | `int` | Palette index treated as transparent |
-| `_buffer` | `np.ndarray (480, 640) uint8` | Shared frame buffer written in place |
-| `blit_tile(row: int, col: int)` | `None` | Copies tile onto buffer at tilemap cell (`row` ∈ [0,14], `col` ∈ [0,19]) |
-| `blit_sprite(x, y, flip_x, flip_y, rotation)` | `None` | Transforms and blits sprite at top-left `(x, y)`; transparent pixels are skipped |
-| `_transform(sprite_matrix, flip_x, flip_y, rotation)` | `np.ndarray (64, 64) uint8` | Applies flip then rotation to a sprite matrix |
-| `_clip(x: int, y: int)` | `tuple[tuple[slice, slice], tuple[slice, slice]]` | Returns `(dst, src)` slice pairs for a 64×64 sprite at `(x, y)` |
-
-Raises `BlitterException` on invalid arguments.
-
----
-
-### RenderingPipeline
-
-```python
-RenderingPipeline(palette_path, scene_path, tiles_path, sprites_path, output_path)
-```
-
-| Member | Type | Description |
-|---|---|---|
-| `get_buf()` | `np.ndarray (480, 640) uint8` | classmethod — creates a blank frame buffer |
-| `render()` | `None` | Runs full pipeline: compose tiles + sprites, export PNG |
-| `_compose(buf: np.ndarray)` | `None` | Fills `buf` with tiles then sprites in scene order |
-| `_export(buf: np.ndarray)` | `None` | Maps palette indexes → RGB, saves PNG via Pillow |
-
-Raises `RenderingException` on pipeline errors.
-
-## Requirements
-
-- Python ≥ 3.14
-- `Pillow` used only for PNG export
-- `numpy` arrays with `np.uint8` dtype
-
-## Project Structure
-
-```
-.
-├── main.py               # CLI entry point
-├── classes.py            # Palette, VirtualVRAM, SceneParser, Blitter, RenderingPipeline
-├── tests.py              # Test suite (144 tests, all passing)
-├── wang_square.py         # One Wang CLI: square default, explicit hex raster
-├── wang_hex_port.py       # Pure square-to-hex reducer and independent checker
-├── wang_snapshot.py       # Strict static-snapshot consumer and view compositor
-├── wang_explain.py        # Shared colored-edge and legend drawing primitives
-├── wang_trace.py          # Strict observed-trace loader and offline replay
-├── wang_trace_render.py   # Trace frame selection and composition CLI
-├── wang_z3_summary.py     # Encoding-order summary consumer and compositor
-├── wang_generalized.py    # Pure exact 14-to-23 mapping and recognizer
-├── wang_generalized_render.py # Sheet, atomic legend, and square overlay
-├── wang_animation.py      # Deterministic PNG/contact-sheet/GIF encoder
-├── wang_algorithm_animation.py # Canonical and didactic algorithm views
-├── wang_narrative.py      # Verification, witness, overview, and PDF-milestone compositions
-├── data/optimized-mechanisms-v1.json # Closed six-mechanism didactic source
-├── test_wang_square.py    # Square loader, raster, isolation, CLI, and failures
-├── test_wang_hex.py       # Port proof obligations, hex raster, golden, and CLI
-├── test_wang_snapshot.py  # Snapshot contracts, views, isolation, and goldens
-├── test_wang_trace.py     # Hash-bound replay, isolation, and byte stability
-├── test_wang_z3_summary.py # Fixed encoding summaries and byte stability
-├── test_wang_generalized.py # Exact mapping, rejection, isolation, and goldens
-├── test_wang_algorithm_animation.py # Source checks and animation goldens
-├── test_wang_narrative.py # Shared narrative compositions and accessibility fallbacks
-├── input/                # Example input files (palette, scene, tiles, sprites)
-├── output/               # Rendered PNG output goes here
-├── test_data/
-│   ├── wang_solution_v1_square_sat.png # Square golden for the Wang fixture
-│   ├── wang_solution_v1_hex_sat.png    # Pointy-top hex golden for the same fixture
-│   ├── pipeline_sat_reduction.png      # Native reduction-provenance golden
-│   ├── pipeline_sat_generalized_sheet.png # Fixed 14-tile semantic sheet
-│   ├── pipeline_sat_atomic_semantic_legend.png # Labelled 23-tile legend
-│   ├── pipeline_sat_generalized_overlay.png # Canonical witness grouping
-│   ├── palette_ok.json             # Valid 16-color palette
-│   ├── palette_wrong_count.json    # Only 3 colors (invalid)
-│   ├── palette_wrong_value.json    # Component > 255 (invalid)
-│   ├── test_boundary_values/       # Per-test directories generated at runtime
-│   ├── test_vram_load_ok/          # Each contains the files written by that test
-│   └── ...                         # (one subdirectory per test that writes files)
-└── pyproject.toml
-```
-
-## Tests
-
-```bash
+```sh
 uv run --locked pytest -q
 ```
 
-The complete isolated suite has 290 tests: the 144 preserved legacy tests
-below, 45 Wang square tests, 24 square-to-hex/hex-raster tests, 29 static
-snapshot/explainability tests, 21 generalized-presentation tests, and 20
-trace/Z3/algorithm-animation tests plus 7 narrative/semantic-selection tests.
-To run only the original upstream suite:
-
-```bash
-uv run --locked pytest tests.py -v
-```
-
-The 144 legacy tests cover all original classes:
-
-**Palette (18 tests)**
-- Happy path: load, `__getitem__` first/last, boundary values (0 and 255)
-- File errors: file not found, invalid JSON
-- Wrong color count: too few, too many, empty
-- Wrong color format: fewer than 3 components, more than 3 components
-- Out-of-range values: above 255, negative, exact 255
-- `__getitem__` bounds: index 16 and index −1
-
-**VirtualVRAM — decode (8 tests)**
-- Happy path: load, shape and dtype, all-zeros decode, all-`0xFF` decode, nibble split (`0xAB` → 10, 11)
-- File errors: tiles not found, sprites not found
-- Wrong size: tiles file too short, sprites file too short
-
-**VirtualVRAM — get_tile (7 tests)**
-- Happy path: shape and dtype, first tile (id 0) all 15, last tile (id 63) all 15
-- Isolation: tile 5 filled, tile 0 untouched
-- Errors: non-int id, id 64, id −1
-
-**VirtualVRAM — get_sprite (7 tests)**
-- Happy path: shape and dtype, first sprite (id 0) all 15, last sprite (id 15) all 15
-- Isolation: sprite 7 filled, sprite 0 untouched
-- Errors: non-int id, id 16, id −1
-
-**SceneParser (33 tests)**
-- Happy path: load, transparent_index, tile_map shape and dtype, sprites list, boundary transparent_index 15, empty sprites, sprite fields
-- File errors: file not found, invalid JSON
-- Missing keys: transparent_index, tile_map, sprites
-- transparent_index errors: not int, too high (16), negative
-- tile_map errors: wrong rows, wrong cols, jagged rows, value 64, negative value, value not int
-- sprites errors: not a list, missing field, id not int, id out of range, x/y not int, flip_x/flip_y not bool, rotation not int, rotation invalid (45)
-
-**Blitter (49 tests)**
-- init/_validate: valid tile/sprite, all error cases (asset_type, idx, transparent_index)
-- blit_tile: correct write and position, all error cases (row/col type and bounds)
-- _transform: identity, flip_x, flip_y, rotation 90/180/270, flip_x+y
-- _clip: fully inside, centered, clipping on all 4 sides, sprite fully outside frame
-- blit_sprite: all-opaque, all-transparent, mixed transparency, position, clipping on all 4 sides, fully outside frame on all 4 sides, transform+clip combined, z-order
-
-**RenderingPipeline (18 tests)**
-- get_buf: shape, dtype, all zeros, independence between calls
-- __repr__: all 5 paths present
-- _export: file created, image size 640×480, pixel color maps correctly from palette, bad output path raises RenderingException
-- _compose: tiles written, full tile_map filled, sprite over tile, transparent sprite not drawn, sprite z-order, sprite transformation applied, sprite clipping at frame edge
-- render(): output file created, output size 640×480
-
-**main.py (4 tests)**
-- `--help` exits with code 0
-- missing arguments exits with non-zero code
-- valid input runs and creates output file
-- invalid file paths propagate `FileNotFoundError`
+The original PAP Render pixel-art implementation remains in `main.py` and
+`classes.py`, with its example inputs and tests. It is separate from the Wang
+pipeline; provenance and license details are in [UPSTREAM.md](UPSTREAM.md).
