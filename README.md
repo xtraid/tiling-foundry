@@ -133,7 +133,9 @@ offline. It prints the PDF path only after the complete dossier succeeds.
 Each invocation retains its input, original name/hash and log in a new directory
 under `build/demo/`.
 
-`TIMEOUT` is a global limit in seconds, including capture, figures and PDF.
+The demo runs without a time limit by default (`TIMEOUT=none`). Set `TIMEOUT`
+to a positive number of seconds to impose a global limit, including capture,
+figures and PDF. Ctrl+C cancels an uncapped run.
 Timeout, cancellation, UNKNOWN, disagreement or an incomplete trace fail with
 diagnostics; they do not mean UNSAT. Arbitrary inputs have no completion-time
 guarantee. The [dossier guide](docs/run_dossiers.md#new-cm1-in-3-input)
@@ -347,3 +349,5 @@ the original future-facing design document and its current limitations.
 ## License
 
 See [`LICENSE`](LICENSE).
+
+The frozen [Wang-Z3 harness](legacy/harness_wangz3/) preserves the independent CM1-in-3 → Yang–Zhang → Wang/Z3 experiment, including source, dependency lockfile, sample inputs and recorded SAT/UNSAT outputs; provenance and checksums are in [FREEZE.json](legacy/harness_wangz3/FREEZE.json), under the legacy policy above.

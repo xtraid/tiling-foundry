@@ -7,7 +7,7 @@ PAGES_BUILD_DIR ?= build/pages
 UV_CACHE_DIR ?= $(CURDIR)/.uv-cache
 export UV_CACHE_DIR
 # Set the default before unexport, which otherwise defines an empty variable.
-TIMEOUT ?= 300
+TIMEOUT ?= none
 # Command-line values are otherwise expanded for Make's implicit environment,
 # even by parse-time $(shell ...) calls. Export only the raw demo copies below.
 unexport INPUT TIMEOUT

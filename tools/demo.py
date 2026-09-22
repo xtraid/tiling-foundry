@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run a CM1-in-3 input through the verified PDF pipeline under one deadline."""
+"""Run a CM1-in-3 input through the verified PDF pipeline with an optional deadline."""
 
 from __future__ import annotations
 
@@ -100,10 +100,10 @@ def _supervise(
     cwd: Path,
     env: dict[str, str],
     log_path: Path,
-    timeout: float,
+    timeout: float | None,
 ) -> int:
     """Supervise the fixed worker/toolchain group; retain merged regular-file logs."""
-    deadline = time.monotonic() + timeout
+    deadline = None if timeout is None else time.monotonic() + timeout
     pending_signal = 0
     worker = None
     pgid = None
@@ -129,7 +129,7 @@ def _supervise(
                     _emit(f"demo: cancelled by {signal.Signals(pending_signal).name}\n", stream=sys.stderr)
                     outcome = 128 + pending_signal
                     break
-                if time.monotonic() >= deadline:
+                if deadline is not None and time.monotonic() >= deadline:
                     _emit(f"demo: global timeout after {timeout:g} seconds\n", stream=sys.stderr)
                     outcome = 124
                     break
@@ -221,7 +221,9 @@ def _worker(input_path: Path, run_root: Path, event_capacity: int) -> int:
         return 1
 
 
-def _positive_timeout(value: str) -> float:
+def _positive_timeout(value: str) -> float | None:
+    if value.lower() == "none":
+        return None
     try:
         seconds = float(value)
     except ValueError as error:
@@ -278,8 +280,8 @@ def main(arguments: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--timeout", type=_positive_timeout,
-        default=os.environ.get("TILING_DEMO_TIMEOUT", "300"),
-        help="global timeout in seconds (default: 300)",
+        default=os.environ.get("TILING_DEMO_TIMEOUT", "none"),
+        help="global timeout in seconds, or none for no limit (default: none)",
     )
     parser.add_argument(
         "--event-capacity", type=_event_capacity, default=100_000,

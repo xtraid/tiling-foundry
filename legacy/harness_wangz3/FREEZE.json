@@ -1,0 +1,27 @@
+{
+  "source": "/home/manuel/Work/harness_wangz3",
+  "commit": "a98d6ea4b533d11829c715666676b09db5fc1145",
+  "frozen_on": "2026-09-22",
+  "policy": "Historical snapshot; not a dependency or formal specification of the current implementation.",
+  "sha256": {
+    ".gitignore": "ed7b84e816359d17276a801802de5c362c2c572ce3e50a8670c8362b08351380",
+    ".python-version": "a876e0b10411037a012498b9fe18d9bc1df32ed8b722a13564dc944ddcfd9135",
+    "README.md": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "main.py": "99b3f93e68a85a949550378281975058d3630b284e63b9c0b19964ee55395f4e",
+    "pyproject.toml": "686e6aa30264c1c95240630acaed29cfdc70621df359bbb3389b6c610ad4845e",
+    "result.json": "29414584552783316fc211dabe26f5a3f93004eff8326930e62b5b65c84c2bbe",
+    "result_unsat.json": "51770dfac137da78b398b27164185a768c262df4aae5147deecda1fca0e7daa3",
+    "src/harness_wangz3/__init__.py": "2377212a392613afbc82771ab77602318b0cda48173a4dbb1f9ac249c15d69f0",
+    "test.cm13": "acb6d8c96a6c6cf171d199eadad186ecd115d58b1fba1a599f1207371f6481d5",
+    "test_unsat.cm13": "e893b90512671c97bc7b14bf2c4f1b5aadd37c3707e85063579b7a646f7fe86e",
+    "tiling_solver.py": "57729202b642b185f49c7eef4f97238924e59f94ecae325568423f18956ed1a6",
+    "uv.lock": "4bf5720a72fa8139744cebe085eb835582344d4ec265c129f488501d47ce54d6",
+    "wangz3/boolean_witness.py": "51cf0e6dbb0696687c047415808f0363e6473608de2f2d8a30d31d83629a1330",
+    "wangz3/builder.py": "d17eda28857d79b1e856d45762a38a7cfa2a4c1965da8102640afd6604f7d474",
+    "wangz3/formula.py": "5053c853d70ca344fadb472573cdb6721977dccb588777179b16637030c40a94",
+    "wangz3/parser.py": "193acd90fb17a6f87a736f5acbfe0a4d712a9638f9a67fb23667ec853db4edca",
+    "wangz3/region.py": "cab5e7a94ebd377deb0563a8ed388594838141e1dc0f9aa5cdad99fc8c80ed7a",
+    "wangz3/solver.py": "4d8ca16a8d1867fd4dc69c97bcf8e2f0fc3566df35114d252f87f64d1eb11bf8",
+    "wangz3/tileset.py": "e04ca56da57cd91f15914a41d75a40d2e8dae56b8e464d95961faf85f5c9bfe7"
+  }
+}

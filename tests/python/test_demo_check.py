@@ -246,7 +246,7 @@ class DemoCheckTests(unittest.TestCase):
             self.assertNotIn("diagnostics=", completed.stdout)
             self.assertFalse(marker.exists())
 
-    def test_make_defaults_to_300_seconds_for_both_demo_commands(self):
+    def test_make_defaults_to_no_timeout_for_both_demo_commands(self):
         # Exercise Make's actual export and each CLI's argparse conversion;
         # stop only at supervision so this regression needs no PDF generation.
         with tempfile.TemporaryDirectory() as name:
@@ -275,7 +275,7 @@ class DemoCheckTests(unittest.TestCase):
                          "PYTHON=" + shlex.join([sys.executable, str(wrapper)])],
                         cwd=ROOT, env=environment, capture_output=True, text=True, timeout=10,
                     )
-                    self.assertIn("captured-timeout=300.0", completed.stdout, completed.stdout + completed.stderr)
+                    self.assertIn("captured-timeout=None", completed.stdout, completed.stdout + completed.stderr)
                     self.assertIn("Error 73", completed.stderr)
 
     def test_make_rejects_explicit_empty_timeout_for_both_demo_commands(self):

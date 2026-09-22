@@ -40,7 +40,7 @@ try:
     result = demo._supervise(
         [sys.executable, sys.argv[2], sys.argv[3], str(root)],
         cwd=pathlib.Path.cwd(), env=os.environ.copy(),
-        log_path=root / 'worker.log', timeout=float(sys.argv[5]),
+        log_path=root / 'worker.log', timeout=None if sys.argv[5] == "None" else float(sys.argv[5]),
     )
 except OSError as error:
     print(str(error), file=sys.stderr)
@@ -113,6 +113,10 @@ class DemoProcessTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("normal worker output", stdout)
         self.assertIn(b"normal worker output", log)
+
+    def test_uncapped_run_can_be_cancelled(self):
+        code, _, _, _ = self.run_tree("tree", timeout=None, signals=(signal.SIGINT,))
+        self.assertEqual(code, 128 + signal.SIGINT)
 
     def test_timeout_stops_child_and_grandchild_which_ignore_term(self):
         code, stdout, stderr, log = self.run_tree("tree")

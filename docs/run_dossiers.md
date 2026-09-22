@@ -77,8 +77,9 @@ la durata effettiva: l'obiettivo indicativo di 30–60 secondi dopo il setup non
 è una soglia CI e non introduce attese artificiali. La durata del dossier si
 misura separatamente.
 
-Il timeout globale predefinito è 300 secondi; si può cambiarlo con
-`make demo-check TIMEOUT=60`. Per scegliere una directory di diagnostica nuova:
+Per impostazione predefinita non c'è un limite di tempo (`TIMEOUT=none`);
+si può imporlo con `make demo-check TIMEOUT=60`. Ctrl+C interrompe anche
+un'esecuzione senza limite. Per scegliere una directory di diagnostica nuova:
 
 ```sh
 python3 tools/demo_check.py --output build/my-check --timeout 60
@@ -129,8 +130,8 @@ The portable name inside a new dossier is always `input.cm13`.
 
 The command prints real operations as they start. `worker.log` keeps the full
 worker output even if a slow terminal or pipe cannot display every message.
-`TIMEOUT` defaults to 300
-seconds and must be finite and positive. It covers the worker's preflight,
+`TIMEOUT` defaults to `none` (no time limit). An explicit numeric limit must
+be finite and positive, in seconds. It covers the worker's preflight,
 input copy, native/Z3 capture, checks, figures and LaTeX. Timeout or Ctrl-C stops
 the worker and its child processes; SIGTERM is also handled. The log and copied
 input survive failures, while any staging artifacts remain diagnostic only.

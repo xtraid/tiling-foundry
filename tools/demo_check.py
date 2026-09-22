@@ -197,8 +197,8 @@ def main(arguments: list[str] | None = None) -> int:
     parser.add_argument("--output", type=Path, help="new diagnostic directory (default: build/demo-check/run-*)")
     parser.add_argument(
         "--timeout", type=demo._positive_timeout,
-        default=os.environ.get("TILING_DEMO_TIMEOUT", "300"),
-        help="global timeout in seconds (default: 300)",
+        default=os.environ.get("TILING_DEMO_TIMEOUT", "none"),
+        help="global timeout in seconds, or none for no limit (default: none)",
     )
     args = parser.parse_args(arguments)
     if not sys.platform.startswith("linux"):
