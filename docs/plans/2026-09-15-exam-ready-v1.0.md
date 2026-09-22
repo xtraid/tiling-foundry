@@ -4,7 +4,7 @@ Data: 15 settembre 2026. **Release: TODO.** Scope concordato per preparare la
 difesa del progetto. **S1–S5 sono FATTO**, con setup isolato, nuovi dossier
 SAT/UNSAT, suite breve offline, documentazione revisionata e prova su Omarchy,
 inclusa la conferma del PDF corretto a `0215b73`.
-S6 e la pubblicazione restano da eseguire.
+S6 è IN CORSO; pubblicazione e verifica dal tag restano da completare.
 
 L'obiettivo è poter clonare una versione precisa, inserire una formula nuova,
 eseguire il progetto con pochi comandi e mostrare un dossier completo con PDF.
@@ -45,7 +45,7 @@ con l'input proposto durante la dimostrazione.
 | S3 | FATTO | Suite breve commentata e regressioni della demo | 2–3 ore |
 | S4 | FATTO | Documentazione più chiara e utile alla difesa | 2–3 ore |
 | S5 | FATTO | Prova isolata, offline e sul computer dell'esame | 3–4 ore |
-| S6 | TODO | PR, freeze, pubblicazione e verifica dal tag | 1–2 ore |
+| S6 | IN CORSO | PR, freeze, pubblicazione e verifica dal tag | 1–2 ore |
 
 Totale stimato: **14–21 ore**, più **2–4 ore di riserva**. Sono stime di lavoro
 con verifica e revisione, non garanzie; download, CI e ambiente possono
@@ -254,6 +254,11 @@ Piano operativo: [S5](2026-09-20-exam-ready-s5.md).
 QA conservata e revisione finale senza problemi bloccanti.
 
 ## S6 — Freeze, pubblicazione e controllo della versione distribuita
+
+**IN CORSO su autorizzazione dell'utente dopo la chiusura S5.** Sono incluse
+PR, merge, tag e release, seguiti dalla verifica del clone pubblico.
+Le quattro modifiche README dell'utente vengono incluse con revisione su
+sua conferma esplicita. Fonte operativa: `build/exam-ready-s6/handoff-current.md`.
 
 Completare PR e revisione, aggiornare i metadati di versione pertinenti e
 preparare note di release con contenuto, piattaforma verificata, comandi e

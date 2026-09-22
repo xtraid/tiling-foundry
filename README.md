@@ -3,12 +3,13 @@
 [![CI](https://github.com/xtraid/tiling-foundry/actions/workflows/ci.yml/badge.svg)](https://github.com/xtraid/tiling-foundry/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Can a fixed set of just 23 Wang tiles encode an NP-complete problem? Tiling
-Foundry turns the Yang--Zhang construction into an inspectable, tested software
-pipeline: a formula becomes a finite simply connected region, independent
-engines decide it, and separate checkers validate every published SAT witness.
+Can a fixed set of just 23 Wang tiles encode an NP-complete problem?
 
-This is a research implementation, not a general-purpose tiling library. Its
+Tiling Foundry turns the Yang–Zhang construction into an experimental framework
+for finding, cross-verifying, and explaining solutions, with an eye toward
+performance.
+
+This is not a general-purpose tiling library. Its
 main concern is keeping the mathematical reduction, search, verification, and
 presentation boundaries visible enough to audit and measure. The previous
 experimental codebase remains frozen under `legacy/`.
@@ -23,7 +24,7 @@ experimental codebase remains frozen under `legacy/`.
 
 ## Why this repository exists
 
-The 2024 Yang--Zhang result proves NP-completeness for tiling finite simply
+The 2024 Yang--Zhang result establishes NP-completeness for tiling finite simply
 connected regions with one fixed set of 23 Wang tiles. Turning that compact
 proof into software exposes practical questions: which representation owns a
 claim, how the reduction is checked apart from search, how independent engines
@@ -73,10 +74,10 @@ export PATH="$HOME/.local/bin:$PATH"
 uv --version
 ```
 
-Clone and prepare the project:
+Clone the fixed release and prepare the project:
 
 ```sh
-git clone https://github.com/xtraid/tiling-foundry.git
+git clone --branch v1.0.0 --depth 1 https://github.com/xtraid/tiling-foundry.git
 cd tiling-foundry
 make demo-setup
 ```
@@ -101,11 +102,10 @@ UV_OFFLINE=1 uv run --locked python tools/generate_run_dossier.py \
   build/first-dossier --pdf
 ```
 
-Open `build/first-dossier/report.pdf`; on a headless machine, copy that file
-to your computer. The output directory must be new for each run. `UV_OFFLINE=1`
-also reaches the renderer subprocesses, so this command needs no downloads
-after setup. It runs the four engines and checks the recorded results before
-producing the figures and PDF.
+Open `build/first-dossier/report.pdf`. The output directory must be new for each
+run. `UV_OFFLINE=1` also reaches the renderer subprocesses. The command runs
+the four engines and checks the recorded results before producing the figures
+and PDF.
 
 Run the short, narrated verification suite after setup:
 
@@ -208,13 +208,14 @@ follows one named SAT source through the same contracts and checks.
 - Parallel search is deferred until the cleaned serial baseline has new
   evidence and explicit ownership tests.
 
-## Next milestones
+## Exam Ready release and next milestones
 
-The next milestone is **v1.0.0 Exam Ready**. `make demo-setup` prepares the
+**v1.0.0 Exam Ready** provides three commands: `make demo-setup` prepares the
 environment, `make demo INPUT=...` produces a checked dossier and PDF, and
-`make demo-check` runs the short narrated suite. Remaining work includes the
-full rehearsal on the presentation computer and publication of the verified
-release.
+`make demo-check` runs the short narrated suite. The full workflow has been
+rehearsed on Debian and on an Omarchy laptop, including offline runs and PDF
+inspection. See the [release notes](RELEASE_NOTES.md) for prerequisites,
+measured rehearsal times, and limits.
 
 **Release checkpoint:** publish the tag and GitHub Release, then verify the
 documented commands from a fresh clone of that tag and open the resulting
