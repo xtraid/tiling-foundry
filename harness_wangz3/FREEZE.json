@@ -2,7 +2,7 @@
   "source": "/home/manuel/Work/harness_wangz3",
   "commit": "a98d6ea4b533d11829c715666676b09db5fc1145",
   "frozen_on": "2026-09-22",
-  "policy": "Historical snapshot; not a dependency or formal specification of the current implementation.",
+  "policy": "Frozen independent verification harness snapshot; preserved separately from legacy to retain the exact experimental version.",
   "sha256": {
     ".gitignore": "ed7b84e816359d17276a801802de5c362c2c572ce3e50a8670c8362b08351380",
     ".python-version": "a876e0b10411037a012498b9fe18d9bc1df32ed8b722a13564dc944ddcfd9135",

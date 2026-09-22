@@ -313,6 +313,7 @@ renderer/        isolated explanatory and square/hex rendering
 tests/           C, Python, fixtures, and instance regressions
 benchmarks/      fixed corpora and profiling tools
 docs/            Pages stories, maintained references, and dated evidence
+harness_wangz3/  frozen independent Wang-Z3 verification harness
 legacy/          frozen experimental code
 ```
 
@@ -329,6 +330,15 @@ GitHub Pages is the canonical long-form narrative. It separates the
 and [dated evidence](https://xtraid.github.io/tiling-foundry/evidence/).
 Development plans and the post template remain versioned under `docs/` but are
 excluded from the published site.
+
+## Frozen Wang-Z3 harness
+
+[`harness_wangz3/`](harness_wangz3/) contains the independent CM1-in-3 →
+Yang–Zhang → Wang/Z3 verification harness, preserved as a separate snapshot
+at the repository root. It includes source, dependency lockfile, sample inputs
+and recorded SAT/UNSAT outputs. The freeze preserves the exact version used
+for these experiments; provenance and file checksums are recorded in
+[`FREEZE.json`](harness_wangz3/FREEZE.json).
 
 ## Legacy policy
 
@@ -349,5 +359,3 @@ the original future-facing design document and its current limitations.
 ## License
 
 See [`LICENSE`](LICENSE).
-
-The frozen [Wang-Z3 harness](legacy/harness_wangz3/) preserves the independent CM1-in-3 → Yang–Zhang → Wang/Z3 experiment, including source, dependency lockfile, sample inputs and recorded SAT/UNSAT outputs; provenance and checksums are in [FREEZE.json](legacy/harness_wangz3/FREEZE.json), under the legacy policy above.
