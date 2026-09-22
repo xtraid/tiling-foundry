@@ -6,6 +6,7 @@ import io
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -113,31 +114,57 @@ class DemoCliTests(unittest.TestCase):
             self.assertEqual(call.kwargs["timeout"], 1.25)
             self.assertEqual({key: call.kwargs["env"][key] for key in ("UV_OFFLINE", "UV_NO_SYNC", "UV_PYTHON_DOWNLOADS")}, {"UV_OFFLINE": "1", "UV_NO_SYNC": "1", "UV_PYTHON_DOWNLOADS": "never"})
 
-    def test_make_passes_raw_metacharacters_and_preserves_malformed_input_diagnostics(self):
+    def test_worker_preserves_malformed_input_diagnostics_after_preflight(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            source = root / "malformed.cm13"
+            source.write_bytes(b"p cm13 invalid\n")
+            run = root / "run"
+            run.mkdir()
+            # Parsing does not require the optional renderer or TeX installation.
+            with patch.object(demo, "_preflight"), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()) as error:
+                code = self.worker(source, run, 100000)
+            self.assertNotEqual(code, 0)
+            self.assertIn("malformed input", error.getvalue().lower())
+            self.assertEqual((run / "input.cm13").read_bytes(), source.read_bytes())
+            self.assertEqual(json.loads((run / "input.json").read_text())["original_path"], str(source))
+            self.assertFalse((run / "dossier").exists())
+
+    def test_make_passes_raw_metacharacters_and_preserves_dependency_diagnostics(self):
         with tempfile.TemporaryDirectory(prefix="make demo input ") as name:
             root = Path(name)
+            # Exercise the same failure on hosts with and without demo setup.
+            # Keep touch available so accidental Make/shell expansion is detected.
+            commands = root / "bin"
+            commands.mkdir()
+            for command in ("make", "find", "touch", "git", "uv"):
+                executable = shutil.which(command)
+                self.assertIsNotNone(executable, command)
+                (commands / command).symlink_to(executable)
+            (commands / "python3").symlink_to(sys.executable)
+            environment = dict(os.environ, PATH=str(commands))
             marker = ROOT / ("demo-expanded-" + root.name.replace(" ", "-"))
             source = root / ("literal $(shell touch " + marker.name + ") $x `true`; #.cm13")
             source.write_bytes(b"p cm13 invalid\n")
             completed = subprocess.run(
                 ["make", "--no-print-directory", "demo", "INPUT=" + str(source), "TIMEOUT=20"],
-                cwd=ROOT, capture_output=True, text=True, timeout=30,
+                cwd=ROOT, env=environment, capture_output=True, text=True, timeout=30,
             )
             self.assertNotEqual(completed.returncode, 0)
-            self.assertIn("malformed input", (completed.stdout + completed.stderr).lower())
+            self.assertIn("missing dependency: pdflatex", completed.stdout + completed.stderr)
             diagnostic = next((line.removeprefix("diagnostics=") for line in completed.stdout.splitlines() if line.startswith("diagnostics=")), None)
             self.assertIsNotNone(diagnostic, completed.stdout + completed.stderr)
             run = Path(diagnostic)
             self.assertEqual((run / "input.cm13").read_bytes(), source.read_bytes())
             self.assertEqual(json.loads((run / "input.json").read_text())["original_path"], str(source))
-            self.assertIn("malformed input", (run / "worker.log").read_text().lower())
+            self.assertIn("missing dependency: pdflatex", (run / "worker.log").read_text())
             self.assertFalse((run / "dossier").exists())
             self.assertNotIn("dossier=", completed.stdout)
             self.assertFalse(marker.exists())
             invalid_timeout = subprocess.run(
                 ["make", "--no-print-directory", "demo", "INPUT=" + str(source),
                  "TIMEOUT=$(shell touch " + marker.name + ")"],
-                cwd=ROOT, capture_output=True, text=True, timeout=10,
+                cwd=ROOT, env=environment, capture_output=True, text=True, timeout=10,
             )
             self.assertNotEqual(invalid_timeout.returncode, 0)
             self.assertIn("finite and positive", invalid_timeout.stderr)
