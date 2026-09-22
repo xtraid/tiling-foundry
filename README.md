@@ -33,8 +33,8 @@ dossier, so disagreements are visible immediately.
 
 ## Quick start
 
-The supported development and execution platform is Linux on a POSIX
-userspace. The toolchain uses Linux/POSIX facilities including `mmap`, `/proc`,
+The project currently targets Linux. The toolchain uses Linux/POSIX facilities
+including `mmap`, `/proc`,
 Valgrind, and dynamic loading of `libwang.so`; Windows and macOS are not
 currently supported.
 
@@ -136,7 +136,12 @@ incomplete trace also stop the run with diagnostics. Some inputs may take a
 long time to solve. The [dossier guide](docs/run_dossiers.md#new-cm1-in-3-input)
 describes the input format, output and diagnostic options.
 
+The full workflow was tested on Debian and on the Omarchy laptop used for the
+presentation, including offline execution after setup.
+
 ## Current status
+
+`v1.0.0` is the version prepared and tested for the project defense.
 
 The v1.0 serial pipeline is complete. It takes a `.cm13` formula through the
 reduction, search, and checks to a reproducible dossier. For SAT results,
@@ -172,7 +177,7 @@ The reference solver and its optimized variant search that same region using
 the same strategy. Every returned witness is checked before rendering.
 
 ```text
-                         +--> Boolean Z3 --> assignment check
+                         +--> Boolean Z3 --> result / assignment check
 .cm13 --> parser --> Formula
                          +--> Yang--Zhang --> Region + TILESET
                                                 |--> reference solver --+
@@ -220,19 +225,6 @@ NP-completeness proof is due to [Yang and Zhang](#primary-reference).
 - A trace records observed events. It is not a standalone UNSAT certificate.
 - The square-to-hex port is a checked one-to-one presentation of an already
   verified square witness, not another solver or solution schema.
-
-## Exam Ready release
-
-**v1.0.0 Exam Ready** provides three commands: `make demo-setup` prepares the
-environment, `make demo INPUT=...` produces a checked dossier and PDF, and
-`make demo-check` runs the short narrated suite. The full workflow has been
-rehearsed on Debian and on an Omarchy laptop, including offline runs and PDF
-inspection. See the [release notes](RELEASE_NOTES.md) for prerequisites,
-measured rehearsal times, and limits.
-
-Parallel execution remains future work. See the
-[Exam Ready plan](docs/plans/2026-09-15-exam-ready-v1.0.md) for acceptance
-criteria and the development plan.
 
 ## Build, test, and reproduce
 

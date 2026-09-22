@@ -37,11 +37,11 @@ describes the full format and output.
 - `make demo-setup` checks C17, the real PDF template, Z3, rendering and fonts,
   and prepares both locked Python environments.
 - `make demo-check` narrates six checks covering parsing, SAT/UNSAT, agreement
-  between four engines, and rejection of a corrupted witness.
+  between two native solvers and two Z3 checks, and rejection of a corrupted witness.
 - `make demo INPUT=...` accepts an input without an expected result. Reference,
   optimized, Boolean Z3 and Wang Z3 each run once; figures and PDF reuse the
   recorded capture. Input bytes, original name/hash and diagnostics survive.
-- SAT witnesses are independently checked. UNSAT records engine agreement
+- SAT witnesses are independently checked. UNSAT records agreement between the solvers and checks
   and marks witness-only sections not applicable. Trace is not an independent
   UNSAT certificate.
 - Timeout, UNKNOWN, disagreement, incomplete traces and cancellation are
@@ -55,8 +55,8 @@ describes the full format and output.
 The workflow was exercised on Debian and an Omarchy laptop. On Omarchy, the
 initial rehearsal at `7ea377e` measured setup at 28.644 s, the six-check suite
 at 12.781 s, SAT/PDF at 132.138 s and UNSAT/PDF at 69.300 s. After the layout
-correction, UNSAT/PDF at `0215b73` took 66.289 s and the user confirmed that
-all text was readable. These are observations on that laptop, not timing
+correction, UNSAT/PDF at `0215b73` took 66.289 s. The corrected PDF was
+inspected on the presentation laptop and all text was readable. These are observations on that laptop, not timing
 guarantees or CI performance thresholds. Published-tag acceptance is recorded
 with the GitHub Release and its accompanying evidence.
 
