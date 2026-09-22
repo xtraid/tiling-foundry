@@ -3,16 +3,13 @@
 [![CI](https://github.com/xtraid/tiling-foundry/actions/workflows/ci.yml/badge.svg)](https://github.com/xtraid/tiling-foundry/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Can a fixed set of just 23 Wang tiles encode an NP-complete problem?
+Tiling Foundry implements the Yang–Zhang reduction from CM1-in-3 SAT to tiling
+with a fixed set of 23 Wang tiles. It builds the region, searches for a tiling,
+and checks the result against Z3. Each run can produce a dossier containing
+the input, results, witnesses, and figures needed to inspect and reproduce it.
 
-Tiling Foundry turns the Yang–Zhang construction into an experimental framework
-for finding, cross-verifying, and explaining solutions, with an eye toward
-performance.
-
-This is not a general-purpose tiling library. Its
-main concern is keeping the mathematical reduction, search, verification, and
-presentation boundaries visible enough to audit and measure. The previous
-experimental codebase remains frozen under `legacy/`.
+The focus is the Yang–Zhang construction itself: building the region, solving
+it, and checking that the different views of the instance agree.
 
 **Read:** [Documentation](https://xtraid.github.io/tiling-foundry/) ·
 [Presentazione](https://xtraid.github.io/tiling-foundry/presentazione/) ·
@@ -24,16 +21,15 @@ experimental codebase remains frozen under `legacy/`.
 
 ## Why this repository exists
 
-The 2024 Yang--Zhang result establishes NP-completeness for tiling finite simply
-connected regions with one fixed set of 23 Wang tiles. Turning that compact
-proof into software exposes practical questions: which representation owns a
-claim, how the reduction is checked apart from search, how independent engines
-are compared, and what evidence is needed before parallelism.
+Yang and Zhang proved in 2024 that tiling finite simply connected regions is
+NP-complete even with one fixed set of 23 Wang tiles. The paper gives a compact
+reduction. This repository is my attempt to make that construction concrete
+enough to run, inspect, break, and check on actual CM1-in-3 instances.
 
-The repository implements the construction, two serial search paths, and
-separate Boolean and Wang checks. Reproducible runs connect each result to its
-input, witnesses, and diagnostics. These tests check the software; the theorem
-and its proof belong to the [Yang–Zhang paper](#primary-reference).
+I use the reference solver as the baseline. The experimental optimized version
+keeps the same search strategy, with six local optimizations. Boolean Z3 and
+Wang Z3 provide two further checks. A run records all four results in the same
+dossier, so disagreements are visible immediately.
 
 ## Quick start
 
@@ -104,8 +100,7 @@ UV_OFFLINE=1 uv run --locked python tools/generate_run_dossier.py \
 
 Open `build/first-dossier/report.pdf`. The output directory must be new for each
 run. `UV_OFFLINE=1` also reaches the renderer subprocesses. The command runs
-the four engines and checks the recorded results before producing the figures
-and PDF.
+the native solvers and Z3 checks before producing the figures and PDF.
 
 Run the short, narrated verification suite after setup:
 
@@ -113,9 +108,9 @@ Run the short, narrated verification suite after setup:
 make demo-check
 ```
 
-It checks parsing, known SAT and UNSAT cases, agreement between the four engines,
-and rejection of an altered witness. It stops at the first failure and prints
-the measured duration after success. See the
+It checks parsing, known SAT and UNSAT cases, agreement between all four
+results, and rejection of an altered witness. It stops at the first failure
+and prints the measured duration after success. See the
 [suite guide](docs/run_dossiers.md#suite-breve-commentata)
 for the six checks, diagnostics, and timeout options.
 
@@ -127,61 +122,61 @@ After `make demo-setup`, give the demo a CM1-in-3 file without an expected resul
 make demo INPUT='path/to/new formula.cm13' TIMEOUT=300
 ```
 
-The command copies the input, runs each of the four engines once, checks their
-results, and produces the figures and PDF using the installed environments
-offline. It prints the PDF path only after the complete dossier succeeds.
+The command copies the input, runs both native solvers and both Z3 checks,
+and produces the figures and PDF using the installed environments offline. It prints the PDF path only after the complete dossier succeeds.
 Each invocation retains its input, original name/hash and log in a new directory
 under `build/demo/`.
 
 The demo runs without a time limit by default (`TIMEOUT=none`). Set `TIMEOUT`
 to a positive number of seconds to impose a global limit, including capture,
 figures and PDF. Ctrl+C cancels an uncapped run.
-Timeout, cancellation, UNKNOWN, disagreement or an incomplete trace fail with
-diagnostics; they do not mean UNSAT. Arbitrary inputs have no completion-time
-guarantee. The [dossier guide](docs/run_dossiers.md#new-cm1-in-3-input)
+If the four results disagree, the run fails instead of guessing which one is
+right. UNSAT is never inferred from a timeout. Cancellation, UNKNOWN, and an
+incomplete trace also stop the run with diagnostics. Some inputs may take a
+long time to solve. The [dossier guide](docs/run_dossiers.md#new-cm1-in-3-input)
 describes the input format, output and diagnostic options.
 
 ## Current status
 
-The complete serial square pipeline is implemented from `.cm13` input through
-four decision paths, independently checked witnesses, versioned solution and
-trace artifacts, and square/generalized/hex presentations. Full-pipeline v2
-captures and their shared narrative assets are available, with a static PDF as
-an explicit opt-in. Parallel solving remains future work.
+The v1.0 serial pipeline is complete. It takes a `.cm13` formula through the
+reduction, search, and checks to a reproducible dossier. For SAT results,
+it verifies the witnesses before rendering square, generalized, or hex views.
+Each run keeps the input, solver results, witnesses, traces, and rendered
+figures together. A PDF report can be generated from the same data.
 
 | Capability | Status |
 | --- | --- |
 | Yang--Zhang formula-to-region construction | Implemented and tested |
-| Reference and optimized serial solvers | Implemented; the optimized path retains six isolated mechanisms |
-| Boolean Z3 and Wang Z3 oracles | Implemented with fixed, recorded construction order |
-| Independent verification | Required before SAT publication |
-| Boolean--Wang witness correspondence | Implemented with exhaustive small-formula evidence |
-| Versioned solutions, snapshots, provenance, and traces | Implemented as separate hash-bound contracts |
-| Square, generalized, and checked hex presentations | Implemented downstream of verification |
-| v1 observed-run dossiers | Implemented for four distinct SAT/UNSAT execution shapes |
-| v2 multi-engine capture, shared assets, and static PDF | Implemented; capture is atomic and PDF is opt-in |
+| Reference serial solver | Implemented and tested |
+| Experimental optimized variant | Six local optimizations of the reference search |
+| Boolean Z3 / Wang Z3 | Both working and included in dossier runs |
+| Witness verification | Runs before a SAT result is published |
+| Boolean--Wang witness correspondence | Checked exhaustively on small formulas |
+| Solutions and traces | Stored as versioned artifacts with hashes |
+| Square, generalized, and checked hex presentations | Rendered from verified witnesses |
+| v1 observed-run dossiers | Cover four SAT/UNSAT execution cases |
+| v2 dossiers | Record all four results, with shared figures and an optional PDF |
 | Native C JSON layer | Not implemented; `src/io/json.c` remains a placeholder |
-| `TaskPlan` and native OpenMP solver | Not implemented; only the build scaffold exists |
 
-Optimization claims remain tied to isolated mechanisms and dated evidence; no
-host-specific timing threshold is a general correctness claim. The
-[optimization methodology](docs/solver_performance_scope.md) defines that
-boundary.
+See the [optimization notes](docs/solver_performance_scope.md) for the
+experiments and measurements behind the optimized variant.
 
 ## Architecture
 
-The source formula follows two independent routes. Boolean Z3 decides the
-formula directly. The native Yang--Zhang builder constructs one region and
-fixed tileset shared by the reference solver, optimized solver, and Wang Z3.
-Applicable returned witnesses then pass through independent checks before any
-presentation is published.
+Boolean Z3 is the direct sanity check: it sees the original CM1-in-3 formula.
+Wang Z3 gets no such shortcut. It only sees the region produced by the
+Yang–Zhang builder and the fixed tileset, and solves it without calling the
+native solver.
+
+The reference solver and its optimized variant search that same region using
+the same strategy. Every returned witness is checked before rendering.
 
 ```text
                          +--> Boolean Z3 --> assignment check
 .cm13 --> parser --> Formula
                          +--> Yang--Zhang --> Region + TILESET
                                                 |--> reference solver --+
-                                                |--> optimized solver --+--> witness checks
+                                                |--> optimized solver --+--> result / witness checks
                                                 +--> Wang Z3 -----------+          |
                                                                                   v
                                                                 square --> generalized / hex
@@ -190,9 +185,29 @@ presentation is published.
 The [pipeline story](https://xtraid.github.io/tiling-foundry/pipeline/) explains
 the data flow and component boundaries. The
 [worked example](https://xtraid.github.io/tiling-foundry/worked-example/)
-follows one named SAT source through the same contracts and checks.
+follows a SAT instance from its source formula to the checked tiling.
 
-## Correctness boundaries and limitations
+## Small standalone harness
+
+[`harness_wangz3/`](harness_wangz3/) contains a small reimplementation of the
+CM1-in-3 → Yang–Zhang → Wang/Z3 pipeline. I kept it separate from the main
+framework so the whole reduction can be followed in one small codebase.
+The reduction code is reimplemented here, rather than imported from the main
+framework.
+
+It covers parsing, region construction, finding a Boolean witness, and encoding
+and solving the Wang instance in Z3. It does not try to match the main
+framework's features or performance.
+
+Source, locked dependencies, sample inputs, and recorded SAT/UNSAT outputs are
+included. The harness is frozen at the version used for these experiments;
+[`FREEZE.json`](harness_wangz3/FREEZE.json) records its provenance and file
+checksums.
+
+## Limits and checks
+
+The code lets you run and check the construction on concrete instances. The
+NP-completeness proof is due to [Yang and Zhang](#primary-reference).
 
 - The solver uses the 23 atomic Wang tiles with translation only; rotation and
   reflection are not allowed.
@@ -205,12 +220,8 @@ follows one named SAT source through the same contracts and checks.
 - A trace records observed events. It is not a standalone UNSAT certificate.
 - The square-to-hex port is a checked one-to-one presentation of an already
   verified square witness, not another solver or solution schema.
-- Project conventions are distinguished from claims inherited from the
-  Yang--Zhang paper.
-- Parallel search is deferred until the cleaned serial baseline has new
-  evidence and explicit ownership tests.
 
-## Exam Ready release and next milestones
+## Exam Ready release
 
 **v1.0.0 Exam Ready** provides three commands: `make demo-setup` prepares the
 environment, `make demo INPUT=...` produces a checked dossier and PDF, and
@@ -219,23 +230,9 @@ rehearsed on Debian and on an Omarchy laptop, including offline runs and PDF
 inspection. See the [release notes](RELEASE_NOTES.md) for prerequisites,
 measured rehearsal times, and limits.
 
-**Release checkpoint:** publish the tag and GitHub Release, then verify the
-documented commands from a fresh clone of that tag and open the resulting
-dossier on the presentation computer. A local freeze or merged PR alone does
-not complete this milestone.
-
-The [Exam Ready plan](docs/plans/2026-09-15-exam-ready-v1.0.md) records the six
-sessions and acceptance criteria. After the release and project defense, work
-resumes in this order:
-
-1. split fast, integration, and evidence verification into reusable CI
-   levels;
-2. perform a behavior-preserving structural cleanup of the serial
-   solver;
-3. collect a new serial baseline, hard-UNSAT evidence, and the public option
-   matrix;
-4. introduce a minimal `TaskPlan` with an equivalent serial executor;
-5. add and measure real OpenMP execution only after those gates pass.
+Parallel execution remains future work. See the
+[Exam Ready plan](docs/plans/2026-09-15-exam-ready-v1.0.md) for acceptance
+criteria and the development plan.
 
 ## Build, test, and reproduce
 
@@ -289,10 +286,10 @@ uv run --frozen python tools/generate_run_dossier.py \
   build/run-dossiers/pipeline-sat-v2
 ```
 
-With pdfLaTeX available, add `--pdf` to request the additive static v2 report. The
+With pdfLaTeX available, add `--pdf` to generate the report. The
 [run dossier guide](https://xtraid.github.io/tiling-foundry/run-dossiers/)
-documents v1 and v2 case semantics, atomic output, static input reuse, and the
-SAT/UNSAT evidence boundary.
+explains the v1 and v2 formats, how outputs are saved, and which checks run
+for SAT and UNSAT results.
 
 ## Repository layout
 
@@ -313,32 +310,23 @@ renderer/        isolated explanatory and square/hex rendering
 tests/           C, Python, fixtures, and instance regressions
 benchmarks/      fixed corpora and profiling tools
 docs/            Pages stories, maintained references, and dated evidence
-harness_wangz3/  frozen independent Wang-Z3 verification harness
+harness_wangz3/  small standalone CM1-in-3 / Yang–Zhang / Wang-Z3 harness
 legacy/          frozen experimental code
 ```
 
-The C parser is canonical for native input. Python adapters copy data across
-the ABI and do not expose C pointers. The cross-check layer coordinates
-Boolean/Wang witness relations without moving oracle concepts into the core.
+The native code reads formulas through the C parser. Python adapters copy
+data across the ABI without exposing C pointers. The code in `src/crosscheck/`
+connects Boolean assignments to Wang tilings.
 
 ## Documentation
 
-GitHub Pages is the canonical long-form narrative. It separates the
+The longer explanations live on GitHub Pages: the
 [pipeline](https://xtraid.github.io/tiling-foundry/pipeline/),
 [component stories](https://xtraid.github.io/tiling-foundry/components/tileset/),
-[maintained reference](https://xtraid.github.io/tiling-foundry/reference/),
+[reference documentation](https://xtraid.github.io/tiling-foundry/reference/),
 and [dated evidence](https://xtraid.github.io/tiling-foundry/evidence/).
 Development plans and the post template remain versioned under `docs/` but are
 excluded from the published site.
-
-## Frozen Wang-Z3 harness
-
-[`harness_wangz3/`](harness_wangz3/) contains the independent CM1-in-3 →
-Yang–Zhang → Wang/Z3 verification harness, preserved as a separate snapshot
-at the repository root. It includes source, dependency lockfile, sample inputs
-and recorded SAT/UNSAT outputs. The freeze preserves the exact version used
-for these experiments; provenance and file checksums are recorded in
-[`FREEZE.json`](harness_wangz3/FREEZE.json).
 
 ## Legacy policy
 
