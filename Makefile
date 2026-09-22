@@ -6,6 +6,11 @@ VALGRIND ?= valgrind
 PAGES_BUILD_DIR ?= build/pages
 UV_CACHE_DIR ?= $(CURDIR)/.uv-cache
 export UV_CACHE_DIR
+# Set the default before unexport, which otherwise defines an empty variable.
+TIMEOUT ?= 300
+# Command-line values are otherwise expanded for Make's implicit environment,
+# even by parse-time $(shell ...) calls. Export only the raw demo copies below.
+unexport INPUT TIMEOUT
 
 CPPFLAGS ?= -Iinclude
 CFLAGS ?= -std=c17 -Wall -Wextra -Wpedantic -O2
@@ -84,7 +89,7 @@ SERIAL_LIBRARY := $(LIB_DIR)/libwang.a
 SHARED_LIBRARY := $(LIB_DIR)/libwang.so
 OPENMP_LIBRARY := $(LIB_DIR)/libwang_openmp.a
 
-.PHONY: all setup serial shared openmp check c-check python-check pages-check \
+.PHONY: all setup demo-setup demo demo-check serial shared openmp check c-check python-check pages-check \
 	generated-pages-check \
 	strict-check sanitizer-check analyzer-check valgrind-check \
 	cachegrind-check benchmark benchmark-smoke benchmark-compare \
@@ -96,6 +101,26 @@ all: serial shared
 
 setup:
 	$(UV) sync --frozen
+
+# Keep these steps in one recipe: missing prerequisites must stop setup even -j.
+demo-setup: export DEMO_SETUP_CC = $(CC)
+demo-setup: export DEMO_SETUP_UV = $(UV)
+demo-setup:
+	@$(PYTHON) tools/demo_setup.py preflight
+	$(UV) sync --locked
+	$(UV) sync --locked --directory renderer
+	$(MAKE) shared
+	@$(PYTHON) tools/demo_setup.py verify
+
+# Pass raw values through the environment: filenames are not shell/Make code.
+demo: export TILING_DEMO_INPUT = $(value INPUT)
+demo: export TILING_DEMO_TIMEOUT = $(value TIMEOUT)
+demo:
+	@$(PYTHON) tools/demo.py
+
+demo-check: export TILING_DEMO_TIMEOUT = $(value TIMEOUT)
+demo-check:
+	@$(PYTHON) tools/demo_check.py
 
 serial: $(SERIAL_LIBRARY)
 

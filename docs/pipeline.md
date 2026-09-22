@@ -9,9 +9,12 @@ description: Component order, data flow, independence, and trust boundaries from
 
 # The complete pipeline
 
-Tiling Foundry keeps construction, decision, verification, and presentation as
-separate responsibilities. A result is useful only when its source identity,
-component boundary, and independent checks remain visible.
+A CM1-in-3 formula enters four decision paths. When they agree on SAT, their
+returned witnesses must pass independent checks. When they agree on UNSAT,
+the run records that result without claiming an independent UNSAT certificate.
+The dossier and optional PDF reuse the recorded input, results, and checks.
+Use the [demo guide]({{ '/run-dossiers/#new-cm1-in-3-input' | relative_url }})
+to run a new formula through this sequence.
 
 {% include narrative-animation.html asset_id="pipeline_overview" animation="/assets/narrative/pipeline-overview/trace.gif" fallback="/assets/narrative/pipeline-overview/frame-07.png" contact_sheet="/assets/narrative/pipeline-overview/contact-sheet.png" alt="The captured formula moves through Boolean Z3, Yang-Zhang reduction, both native solvers, Wang Z3, verification, and presentation." width="1080" height="620" label="observed" caption="One validated v2 capture in fixed component order." source="wang-run-dossier-v2#named-components" %}
 
@@ -23,7 +26,9 @@ the formula directly. Independently, the
 [Yang–Zhang component]({{ '/components/yang-zhang/' | relative_url }}) constructs
 a finite region over the fixed [tile vocabulary]({{ '/components/tileset/' | relative_url }}).
 The reference solver, optimized solver, and Wang Z3 oracle consume that same
-hash-bound region and tileset.
+region and tileset, identified by their hashes. The paper proves the reduction's
+equivalence; the builder implements it, and the tests check that implementation
+on concrete inputs.
 
 | Step | Input | Output | Relationship |
 | --- | --- | --- | --- |
@@ -48,6 +53,7 @@ they do not trust a raster.
 - `SAT` is accepted only with the applicable witness checks.
 - `UNSAT` from a solver is a terminal observation, not a standalone certificate.
 - `UNKNOWN` is preserved where an oracle can return it; it is never rewritten as UNSAT.
+- Timeout, errors, disagreement, or incomplete traces stop the demo; none means UNSAT.
 - Trace replay presents recorded semantic events but does not solve again.
 - Generalized and hex views are downstream transformations, not new solvers.
 

@@ -355,11 +355,13 @@ def validate_run_dossier_v2(document: object) -> None:
         raise PipelineSnapshotError("$.case.id: is invalid")
     _nonempty_string(case["title"], "$.case.title")
     _nonempty_string(case["purpose"], "$.case.purpose")
-    expected_status = _nonempty_string(
-        case["expected_status"], "$.case.expected_status"
-    )
-    if expected_status not in STATUSES:
-        raise PipelineSnapshotError("$.case.expected_status: must equal sat or unsat")
+    expected_status = case["expected_status"]
+    if expected_status is not None:
+        expected_status = _nonempty_string(expected_status, "$.case.expected_status")
+        if expected_status not in STATUSES:
+            raise PipelineSnapshotError(
+                "$.case.expected_status: must equal sat, unsat or null"
+            )
 
     source = _require_object(root["source"], "$.source")
     _require_exact_fields(source, frozenset({"path", "sha256"}), "$.source")
@@ -392,8 +394,11 @@ def validate_run_dossier_v2(document: object) -> None:
         "optimized": _validate_native_record(root["optimized"], "$.optimized", "optimized"),
         "wang_z3": _validate_z3_record(root["wang_z3"], "$.wang_z3", wang=True),
     }
-    if any(status != expected_status for status in statuses.values()):
+    observed_status = statuses["reference"]
+    if any(status != observed_status for status in statuses.values()):
         raise PipelineSnapshotError("engine status mismatch")
+    if expected_status is not None and expected_status != observed_status:
+        raise PipelineSnapshotError("known expected status mismatch")
 
     reduction = _require_object(root["reduction"], "$.reduction")
     _require_exact_fields(
@@ -425,9 +430,9 @@ def validate_run_dossier_v2(document: object) -> None:
         _validate_check(
             verification[name],
             f"$.verification.{name}",
-            performed=expected_status == "sat",
+            performed=observed_status == "sat",
         )
-    if expected_status == "sat":
+    if observed_status == "sat":
         expected_check_digests = {
             "boolean_z3_assignment": root["boolean_z3"]["witness_sha256"],
             "reference_tiling": root["reference"]["witness_sha256"],
@@ -463,18 +468,16 @@ def validate_run_dossier_v2(document: object) -> None:
         ),
         "$.agreement",
     )
-    for name in (
-        "expected_status",
-        "boolean_z3_status",
-        "reference_status",
-        "optimized_status",
-        "wang_z3_status",
-    ):
-        if agreement[name] != expected_status:
-            raise PipelineSnapshotError(f"$.agreement.{name}: disagrees with case")
+    if agreement["expected_status"] != expected_status:
+        raise PipelineSnapshotError("$.agreement.expected_status: disagrees with case")
+    for engine, status in statuses.items():
+        if agreement[f"{engine}_status"] != status:
+            raise PipelineSnapshotError(
+                f"$.agreement.{engine}_status: disagrees with engine"
+            )
     if agreement["all_status_equal"] is not True or agreement["passed"] is not True:
         raise PipelineSnapshotError("$.agreement: engine disagreement is a failure")
-    expected_witness_validity = True if expected_status == "sat" else None
+    expected_witness_validity = True if observed_status == "sat" else None
     if agreement["sat_witnesses_valid"] is not expected_witness_validity:
         raise PipelineSnapshotError("$.agreement.sat_witnesses_valid: is inconsistent")
 
@@ -495,7 +498,7 @@ def validate_run_dossier_v2(document: object) -> None:
             item["relationship"], relationship, f"$.presentation.{name}.relationship"
         )
         if _boolean(item["applicable"], f"$.presentation.{name}.applicable") is not (
-            expected_status == "sat"
+            observed_status == "sat"
         ):
             raise PipelineSnapshotError(f"$.presentation.{name}.applicable: disagrees")
         expected_artifact = f"{name}_presentation"
@@ -518,7 +521,7 @@ def validate_run_dossier_v2(document: object) -> None:
     for name in _TIMING_FIELDS - {"clock", "identity"}:
         elapsed = _nullable_nonnegative(timings[name], f"$.timings.{name}")
         if name in nullable:
-            if (elapsed is None) != (expected_status == "unsat"):
+            if (elapsed is None) != (observed_status == "unsat"):
                 raise PipelineSnapshotError(
                     f"$.timings.{name}: applicability disagrees"
                 )
@@ -534,10 +537,10 @@ def validate_run_dossier_v2(document: object) -> None:
         if raw is None:
             if not may_be_null:
                 raise PipelineSnapshotError(f"$.artifacts.{name}: is required")
-            if name.endswith("_solution") and expected_status == "sat":
+            if name.endswith("_solution") and observed_status == "sat":
                 raise PipelineSnapshotError(f"$.artifacts.{name}: SAT requires a solution")
             continue
-        if name.endswith("_solution") and expected_status == "unsat":
+        if name.endswith("_solution") and observed_status == "unsat":
             raise PipelineSnapshotError(f"$.artifacts.{name}: UNSAT forbids a solution")
         item = _require_object(raw, f"$.artifacts.{name}")
         _require_exact_fields(item, _ARTIFACT_FIELDS, f"$.artifacts.{name}")
@@ -598,7 +601,7 @@ def validate_run_dossier_v2(document: object) -> None:
         )
     for solver in ("reference", "optimized"):
         solution = artifacts[f"{solver}_solution"]
-        if expected_status == "sat" and solution["sha256"] != root[solver]["solution_sha256"]:
+        if observed_status == "sat" and solution["sha256"] != root[solver]["solution_sha256"]:
             raise PipelineSnapshotError(
                 f"$.artifacts.{solver}_solution.sha256: cross-field mismatch"
             )

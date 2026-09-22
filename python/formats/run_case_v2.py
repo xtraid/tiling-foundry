@@ -39,7 +39,7 @@ class MultiEngineRunCase:
     title: str
     purpose: str
     source: str
-    expected_status: str
+    expected_status: str | None
     reference_trace: TraceConfiguration
     optimized_trace: TraceConfiguration
 
@@ -118,11 +118,11 @@ def load_run_case_v2(
         raise PipelineSnapshotError(
             f"$.source: repository input does not exist: {source}"
         )
-    expected_status = _nonempty_string(
-        document["expected_status"], "$.expected_status"
-    )
-    if expected_status not in _STATUSES:
-        raise PipelineSnapshotError("$.expected_status: must equal sat or unsat")
+    expected_status = document["expected_status"]
+    if expected_status is not None:
+        expected_status = _nonempty_string(expected_status, "$.expected_status")
+        if expected_status not in _STATUSES:
+            raise PipelineSnapshotError("$.expected_status: must equal sat, unsat or null")
     return MultiEngineRunCase(
         identifier=identifier,
         title=title,

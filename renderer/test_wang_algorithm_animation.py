@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import io
 from pathlib import Path
+import re
 
 from PIL import Image, ImageDraw
 
@@ -116,6 +118,79 @@ def test_builder_animation_uses_versioned_provenance_and_is_byte_stable(tmp_path
     assert frame(bundle, 2).tobytes() != frame(crossover_changed, 2).tobytes()
 
 
+def _dense_builder_layout():
+    """Layout-only fixture with the 23 spans from the new 144x11 SAT capture."""
+    bundle = load_explainability_bundle(BUILDER_MANIFEST)
+    reduction = bundle.reduction
+    crossover = next(g for g in reduction.gadgets if g.kind == "crossover")
+    edges = (3, 7, 10, 12, 13, 21, 28, 34, 39, 43, 46, 48,
+             53, 57, 66, 74, 81, 87, 94, 103, 111, 121, 130, 140)
+    rows = (3, 2, 1, 0, 7, 6, 5, 4, 3, 2, 1, 4, 3, 8, 7, 6, 5, 6, 8, 7, 9, 8, 9)
+    gadgets = tuple(g for g in reduction.gadgets if g.kind in {"variable", "left_forward"})
+    gadgets += tuple(
+        replace(crossover, ordinal=i, x_begin=edges[i], x_end=edges[i + 1], swap_row=row)
+        for i, row in enumerate(rows)
+    )
+    region = replace(
+        bundle.region, max_x=143, active=(True,) * (144 * 11),
+        boundary=((None, None, None, None),) * (144 * 11),
+    )
+    return replace(bundle, region=region, reduction=replace(reduction, width=144, gadgets=gadgets))
+
+
+def _record_builder_text(monkeypatch):
+    records = []
+    original = ImageDraw.ImageDraw.text
+
+    def draw_and_record(draw, xy, text, *args, **kwargs):
+        bbox = draw.multiline_textbbox(
+            xy, text, font=kwargs.get("font"),
+            stroke_width=kwargs.get("stroke_width", 0),
+            spacing=kwargs.get("spacing", 4),
+        )
+        records.append((text, bbox))
+        return original(draw, xy, text, *args, **kwargs)
+
+    monkeypatch.setattr(ImageDraw.ImageDraw, "text", draw_and_record)
+    return records
+
+
+def test_builder_overflowing_swap_list_reports_count_and_omission_inside_panel(monkeypatch):
+    records = _record_builder_text(monkeypatch)
+    frame = wang_algorithm_animation._builder_frame(_dense_builder_layout(), 0)
+    evidence, bbox = next(
+        (text, bbox) for text, bbox in records
+        if text.startswith("source signals:") and "adjacent swaps:" in text
+    )
+    assert bbox[2] <= frame.width - 36
+    assert "adjacent swaps: 23" in evidence
+    assert "omitted" in evidence
+
+
+def test_builder_crowded_overview_has_no_colliding_labels_and_keeps_single_swap(monkeypatch):
+    records = _record_builder_text(monkeypatch)
+    bundle = _dense_builder_layout()
+    wang_algorithm_animation._builder_frame(bundle, 3)
+    boxes = [bbox for text, bbox in records if re.fullmatch(r"X\d+:s\d+", text)]
+    assert all(left[2] <= right[0] for left, right in zip(boxes, boxes[1:]))
+    assert any("23 crossover labels omitted" in text for text, _ in records)
+    assert any("23 validated adjacent swaps" in text for text, _ in records)
+    records.clear()
+    wang_algorithm_animation._builder_frame(bundle, 2)
+    assert any(text == "X0: swap rows 3/4" for text, _ in records)
+
+
+def test_builder_fitting_frames_keep_canonical_png_bytes():
+    bundle = load_explainability_bundle(BUILDER_MANIFEST)
+    for stage in range(6):
+        frame = wang_algorithm_animation._builder_frame(bundle, stage)
+        encoded = io.BytesIO()
+        frame.save(encoded, format="PNG", optimize=False, compress_level=9)
+        assert encoded.getvalue() == (
+            GOLDENS / "region-construction" / f"frame-{stage:02d}.png"
+        ).read_bytes()
+
+
 def test_builder_final_panel_distinguishes_region_and_boundary_states():
     bundle = load_explainability_bundle(BUILDER_MANIFEST)
     frame = getattr(wang_algorithm_animation, "_builder_frame")(bundle, 5)
@@ -173,6 +248,33 @@ def test_builder_preserves_noncanonical_region_capture_scope():
     assert getattr(wang_algorithm_animation, "_builder_frame")(
         wide_bundle, 5
     ).size == (1976, 828)
+
+
+def test_builder_fits_all_labels_at_the_fifteen_signal_boundary(monkeypatch):
+    from wang_trace import load_trace_bundle
+
+    bundle = load_trace_bundle(
+        ROOT / "docs/assets/presentazione/search-unsat/reference-manifest.json"
+    )
+    signals = bundle.explanation.reduction.source_signals
+    assert len(signals) == 15
+    labels = []
+    original_centered_text = wang_algorithm_animation.centered_text
+
+    def check_label(draw, box, text, **kwargs):
+        bounds = draw.textbbox((0, 0), text, font=kwargs["font"])
+        assert bounds[2] - bounds[0] <= box[2] - box[0], text
+        assert bounds[3] - bounds[1] <= box[3] - box[1], text
+        labels.append(text)
+        return original_centered_text(draw, box, text, **kwargs)
+
+    monkeypatch.setattr(wang_algorithm_animation, "centered_text", check_label)
+    image = Image.new("RGB", (1976, 828), "white")
+    wang_algorithm_animation._draw_signal_order(
+        ImageDraw.Draw(image), y=140, label="source", signals=signals
+    )
+    assert len(labels) == 15
+    assert {"r #12", "r #13", "r #14"}.issubset(labels)
 
 
 def test_builder_summarizes_a_valid_44_variable_signal_strip():

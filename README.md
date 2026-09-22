@@ -3,17 +3,19 @@
 [![CI](https://github.com/xtraid/tiling-foundry/actions/workflows/ci.yml/badge.svg)](https://github.com/xtraid/tiling-foundry/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Can a fixed set of just 23 Wang tiles encode an NP-complete problem? Tiling
-Foundry turns the Yang--Zhang construction into an inspectable, tested software
-pipeline: a formula becomes a finite simply connected region, independent
-engines decide it, and separate checkers validate every published SAT witness.
+Can a fixed set of just 23 Wang tiles encode an NP-complete problem?
 
-This is a research implementation, not a general-purpose tiling library. Its
+Tiling Foundry turns the Yang–Zhang construction into an experimental framework
+for finding, cross-verifying, and explaining solutions, with an eye toward
+performance.
+
+This is not a general-purpose tiling library. Its
 main concern is keeping the mathematical reduction, search, verification, and
 presentation boundaries visible enough to audit and measure. The previous
 experimental codebase remains frozen under `legacy/`.
 
 **Read:** [Documentation](https://xtraid.github.io/tiling-foundry/) ·
+[Presentazione](https://xtraid.github.io/tiling-foundry/presentazione/) ·
 [Pipeline](https://xtraid.github.io/tiling-foundry/pipeline/) ·
 [Worked example](https://xtraid.github.io/tiling-foundry/worked-example/) ·
 [Reference](https://xtraid.github.io/tiling-foundry/reference/) ·
@@ -22,15 +24,16 @@ experimental codebase remains frozen under `legacy/`.
 
 ## Why this repository exists
 
-The 2024 Yang--Zhang result proves NP-completeness for tiling finite simply
+The 2024 Yang--Zhang result establishes NP-completeness for tiling finite simply
 connected regions with one fixed set of 23 Wang tiles. Turning that compact
 proof into software exposes practical questions: which representation owns a
 claim, how the reduction is checked apart from search, how independent engines
 are compared, and what evidence is needed before parallelism.
 
-Tiling Foundry answers those questions with explicit ownership, an executable
-reference solver, differential tests, independent oracles and verifiers, and
-reproducible captures.
+The repository implements the construction, two serial search paths, and
+separate Boolean and Wang checks. Reproducible runs connect each result to its
+input, witnesses, and diagnostics. These tests check the software; the theorem
+and its proof belong to the [Yang–Zhang paper](#primary-reference).
 
 ## Quick start
 
@@ -39,18 +42,102 @@ userspace. The toolchain uses Linux/POSIX facilities including `mmap`, `/proc`,
 Valgrind, and dynamic loading of `libwang.so`; Windows and macOS are not
 currently supported.
 
-Install a C17 compiler, `make`, OpenMP support, and
-[`uv`](https://docs.astral.sh/uv/), then run:
+For the full dossier, install a C17 compiler, `make`, Python 3.11 or newer,
+Git, [`uv`](https://docs.astral.sh/uv/getting-started/installation/), and
+pdfLaTeX. On Debian 13, the system packages are:
 
 ```sh
-git clone https://github.com/xtraid/tiling-foundry.git
-cd tiling-foundry
-make check
+sudo apt-get update
+sudo apt-get install --no-install-recommends \
+  build-essential python3 git ca-certificates curl texlive-latex-base
 ```
 
-`make check` builds the serial executable and shared library, runs the C and
-core Python tests, builds the OpenMP scaffold, and exercises both serial solver
-paths. It does not require a GPU.
+On Arch Linux / Omarchy, install the equivalent prerequisites:
+
+```sh
+sudo pacman -Syu --needed base-devel python git ca-certificates curl texlive-latex
+```
+
+Arch's [`texlive-latex`](https://archlinux.org/packages/extra/any/texlive-latex/)
+pulls in `texlive-basic` and `texlive-bin` and supplies the LaTeX packages used
+by the report. If setup reports `pdflatex is missing`, install this package,
+check `pdflatex --version`, then rerun `make demo-setup` while online.
+
+If `uv` is not installed, download and inspect the standalone installer before
+running it. The version used for the setup check is 0.12.1:
+
+```sh
+curl -LsSf https://astral.sh/uv/0.12.1/install.sh -o /tmp/uv-install.sh
+cat /tmp/uv-install.sh
+sh /tmp/uv-install.sh
+export PATH="$HOME/.local/bin:$PATH"
+uv --version
+```
+
+Clone the fixed release and prepare the project:
+
+```sh
+git clone --branch v1.0.0 --depth 1 https://github.com/xtraid/tiling-foundry.git
+cd tiling-foundry
+make demo-setup
+```
+
+`demo-setup` checks the compiler and compiles a small PDF with the real report
+template before installing dependencies. It then builds `libwang.so` and
+checks Z3, image rendering, and fonts. A missing prerequisite stops setup with
+an error; the target does not install system packages.
+
+The two Python environments stay separate: `.venv` uses Python 3.11 or newer;
+`renderer/.venv` uses Python 3.14, selected by `renderer/.python-version`.
+Both are installed with `uv sync --locked`. The first setup needs network
+access to download packages and, when absent, the renderer's Python. Keep the
+environments and uv-managed interpreter installed for offline use. No global
+`pip` installation or GPU is needed.
+
+Generate the first complete dossier from the included SAT case:
+
+```sh
+UV_OFFLINE=1 uv run --locked python tools/generate_run_dossier.py \
+  examples/run-cases-v2/pipeline-sat.json \
+  build/first-dossier --pdf
+```
+
+Open `build/first-dossier/report.pdf`. The output directory must be new for each
+run. `UV_OFFLINE=1` also reaches the renderer subprocesses. The command runs
+the four engines and checks the recorded results before producing the figures
+and PDF.
+
+Run the short, narrated verification suite after setup:
+
+```sh
+make demo-check
+```
+
+It checks parsing, known SAT and UNSAT cases, agreement between the four engines,
+and rejection of an altered witness. It stops at the first failure and prints
+the measured duration after success. See the
+[suite guide](docs/run_dossiers.md#suite-breve-commentata)
+for the six checks, diagnostics, and timeout options.
+
+### Run a new input
+
+After `make demo-setup`, give the demo a CM1-in-3 file without an expected result:
+
+```sh
+make demo INPUT='path/to/new formula.cm13' TIMEOUT=300
+```
+
+The command copies the input, runs each of the four engines once, checks their
+results, and produces the figures and PDF using the installed environments
+offline. It prints the PDF path only after the complete dossier succeeds.
+Each invocation retains its input, original name/hash and log in a new directory
+under `build/demo/`.
+
+`TIMEOUT` is a global limit in seconds, including capture, figures and PDF.
+Timeout, cancellation, UNKNOWN, disagreement or an incomplete trace fail with
+diagnostics; they do not mean UNSAT. Arbitrary inputs have no completion-time
+guarantee. The [dossier guide](docs/run_dossiers.md#new-cm1-in-3-input)
+describes the input format, output and diagnostic options.
 
 ## Current status
 
@@ -121,19 +208,32 @@ follows one named SAT source through the same contracts and checks.
 - Parallel search is deferred until the cleaned serial baseline has new
   evidence and explicit ownership tests.
 
-## Next milestones
+## Exam Ready release and next milestones
 
-Work proceeds in this order:
+**v1.0.0 Exam Ready** provides three commands: `make demo-setup` prepares the
+environment, `make demo INPUT=...` produces a checked dossier and PDF, and
+`make demo-check` runs the short narrated suite. The full workflow has been
+rehearsed on Debian and on an Omarchy laptop, including offline runs and PDF
+inspection. See the [release notes](RELEASE_NOTES.md) for prerequisites,
+measured rehearsal times, and limits.
 
-1. freeze the current visual documentation and PDF work;
-2. T99: split fast, integration, and evidence verification into reusable CI
+**Release checkpoint:** publish the tag and GitHub Release, then verify the
+documented commands from a fresh clone of that tag and open the resulting
+dossier on the presentation computer. A local freeze or merged PR alone does
+not complete this milestone.
+
+The [Exam Ready plan](docs/plans/2026-09-15-exam-ready-v1.0.md) records the six
+sessions and acceptance criteria. After the release and project defense, work
+resumes in this order:
+
+1. split fast, integration, and evidence verification into reusable CI
    levels;
-3. T100: perform a behavior-preserving structural cleanup of the serial
+2. perform a behavior-preserving structural cleanup of the serial
    solver;
-4. collect a new serial baseline, hard-UNSAT evidence, and the public option
+3. collect a new serial baseline, hard-UNSAT evidence, and the public option
    matrix;
-5. introduce a minimal `TaskPlan` with an equivalent serial executor;
-6. add and measure real OpenMP execution only after those gates pass.
+4. introduce a minimal `TaskPlan` with an equivalent serial executor;
+5. add and measure real OpenMP execution only after those gates pass.
 
 ## Build, test, and reproduce
 
@@ -143,6 +243,12 @@ Run the core checks from the repository root:
 make clean
 make check
 ```
+
+`make check` builds the serial libraries, runs the C and core Python tests,
+builds the OpenMP scaffold, and exercises both serial solver paths. The core
+checks require a C17 compiler with OpenMP support, `make`, Python and `uv`;
+they do not require LaTeX. The full dossier setup above also prepares the
+renderer and PDF tools.
 
 The renderer is an isolated locked Python project and has its own suite:
 

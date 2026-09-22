@@ -40,6 +40,11 @@ _MARGIN: Final = 14 * EXPLAIN_RENDER_SCALE
 _HEADER: Final = 76 * EXPLAIN_RENDER_SCALE
 _LEGEND_WIDTH: Final = 210 * EXPLAIN_RENDER_SCALE
 _GAP: Final = 12 * EXPLAIN_RENDER_SCALE
+# Summary text and cards need room independent of the input region's width.
+_MIN_FRAME_WIDTH: Final = 960 * EXPLAIN_RENDER_SCALE
+# Six legend swatches plus five detail lines must fit above every summary.
+# Keep the same body height for every event so animation frames stay uniform.
+_MIN_BODY_HEIGHT: Final = 270 * EXPLAIN_RENDER_SCALE
 _UNSAT_RGB: Final = EXPLAIN_CONFLICT_RGB
 _SINGLETON_RGB: Final = EXPLAIN_SINGLETON_RGB
 _CHANGED_RGB: Final = EXPLAIN_DECISION_RGB
@@ -50,9 +55,11 @@ def _scaled(value: int) -> int:
 
 
 def _frame_height(grid_height: int) -> int:
-    return 2 * _MARGIN + _HEADER + max(
-        grid_height + _scaled(112),
-        _scaled(310),
+    return (
+        2 * _MARGIN
+        + _HEADER
+        + max(grid_height, _MIN_BODY_HEIGHT)
+        + _scaled(112)
     )
 
 
@@ -589,7 +596,9 @@ def _compose_frame(
             )
     grid_width = region.width * _CELL_SIZE
     grid_height = region.height * _CELL_SIZE
-    width = 2 * _MARGIN + grid_width + _GAP + _LEGEND_WIDTH
+    width = max(
+        _MIN_FRAME_WIDTH, 2 * _MARGIN + grid_width + _GAP + _LEGEND_WIDTH
+    )
     height = _frame_height(grid_height)
     if (
         width > MAX_CANVAS_SIDE
@@ -742,7 +751,7 @@ def _compose_frame(
             fill=EXPLAIN_MUTED_RGB,
         )
         y += _scaled(15)
-    summary_top = top + grid_height + _scaled(12)
+    summary_top = top + max(grid_height, _MIN_BODY_HEIGHT) + _scaled(12)
     if mrv_candidates:
         summary_box = (
             _MARGIN,

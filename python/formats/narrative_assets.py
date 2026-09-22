@@ -413,13 +413,17 @@ def validate_narrative_assets(
     if product not in PRODUCTS:
         raise PipelineSnapshotError("$.product: is unsupported")
     case = _require_object(manifest["case"], "$.case")
-    _require_exact_fields(
-        case, frozenset({"id", "expected_status", "source_sha256"}), "$.case"
-    )
+    case_fields = {"id", "expected_status", "source_sha256"}
+    if case.get("expected_status") is None:
+        case_fields.add("observed_status")
+    _require_exact_fields(case, frozenset(case_fields), "$.case")
     _nonempty_string(case["id"], "$.case.id")
-    status = _nonempty_string(case["expected_status"], "$.case.expected_status")
+    status_field = (
+        "observed_status" if case["expected_status"] is None else "expected_status"
+    )
+    status = _nonempty_string(case[status_field], f"$.case.{status_field}")
     if status not in {"sat", "unsat"}:
-        raise PipelineSnapshotError("$.case.expected_status: is unsupported")
+        raise PipelineSnapshotError(f"$.case.{status_field}: is unsupported")
     _require_sha256(case["source_sha256"], "$.case.source_sha256")
     if product == "canonical-pages" and case != CANONICAL_PAGES_CASE:
         raise PipelineSnapshotError(
@@ -578,11 +582,15 @@ def load_narrative_assets(
     except OSError as error:
         raise PipelineSnapshotError(f"cannot read narrative manifest: {error}") from error
     validate_narrative_assets(document, path)
-    if document["case"] != {
+    observed_status = run_document["reference"]["status"]
+    expected_case = {
         "id": run_document["case"]["id"],
         "expected_status": run_document["case"]["expected_status"],
         "source_sha256": run_document["source"]["sha256"],
-    }:
+    }
+    if expected_case["expected_status"] is None:
+        expected_case["observed_status"] = observed_status
+    if document["case"] != expected_case:
         raise PipelineSnapshotError("narrative case identity disagrees with run")
     expected_identities = {
         "source_formula": run_document["source"]["sha256"],
@@ -647,7 +655,7 @@ def load_narrative_assets(
             OPTIMIZED_MECHANISMS_SHA256,
         ),
     }
-    if run_document["case"]["expected_status"] == "sat":
+    if observed_status == "sat":
         expected_sources["witness_presentation"] = (
             "wang-solution-v1+wang-generalized-tiles-v1+checked-square-to-hex",
             witness_presentation_source_sha256(
@@ -674,7 +682,7 @@ def load_narrative_assets(
             generalized_digest,
         ),
     }
-    if run_document["case"]["expected_status"] == "sat":
+    if observed_status == "sat":
         assert solution_digest is not None
         expected_static_sources.update(
             {
@@ -707,7 +715,7 @@ def load_narrative_assets(
             )
     if (
         document["product"] == "run-specific"
-        and run_document["case"]["expected_status"] == "sat"
+        and observed_status == "sat"
     ):
         for name in ("square", "generalized", "hex"):
             narrative_artifact = document["statics"][f"{name}_presentation"][

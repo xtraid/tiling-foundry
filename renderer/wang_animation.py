@@ -99,11 +99,39 @@ def write_animation_assets(
         or sheet_height > MAX_CANVAS_SIDE
         or sheet_width * sheet_height > MAX_CANVAS_PIXELS
     ):
-        raise WangSquareRenderError("animation contact sheet exceeds canvas limits")
+        # Keep full-resolution frames/GIF; shrink only contact-sheet thumbnails.
+        # An integer search also handles very thin frames whose short side must
+        # remain at least one pixel. A square-root scale alone can exceed the
+        # area limit after clamping that short side.
+        longest = max(frame_width, frame_height)
+        lower, upper = 1, longest
+        thumbnail_size = None
+        while lower <= upper:
+            candidate = (lower + upper) // 2
+            width = max(1, frame_width * candidate // longest)
+            height = max(1, frame_height * candidate // longest)
+            if (
+                columns * width <= MAX_CANVAS_SIDE
+                and rows * height <= MAX_CANVAS_SIDE
+                and columns * width * rows * height <= MAX_CANVAS_PIXELS
+            ):
+                thumbnail_size = (width, height)
+                lower = candidate + 1
+            else:
+                upper = candidate - 1
+        if thumbnail_size is None:
+            raise WangSquareRenderError("animation contact sheet exceeds canvas limits")
+        frame_width, frame_height = thumbnail_size
+        sheet_width = columns * frame_width
+        sheet_height = rows * frame_height
     sheet = Image.new("RGB", (sheet_width, sheet_height), EXPLAIN_OUTLINE_RGB)
     for index, frame in enumerate(frames):
+        thumbnail = (
+            frame if frame.size == (frame_width, frame_height)
+            else frame.resize((frame_width, frame_height), Image.Resampling.LANCZOS)
+        )
         sheet.paste(
-            frame,
+            thumbnail,
             ((index % columns) * frame_width, (index // columns) * frame_height),
         )
     contact_path = destination / "contact-sheet.png"

@@ -22,9 +22,13 @@
       "required": ["id", "expected_status", "source_sha256"],
       "properties": {
         "id": {"type": "string", "minLength": 1},
-        "expected_status": {"enum": ["sat", "unsat"]},
+        "expected_status": {"enum": ["sat", "unsat", null]},
+        "observed_status": {"enum": ["sat", "unsat"]},
         "source_sha256": {"$ref": "#/$defs/sha256"}
-      }
+      },
+      "if": {"properties": {"expected_status": {"type": "null"}}},
+      "then": {"required": ["observed_status"]},
+      "else": {"not": {"required": ["observed_status"]}}
     },
     "identities": {
       "type": "object",

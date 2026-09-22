@@ -196,7 +196,7 @@ def _animation_metadata(
     run: dict[str, object],
 ) -> dict[str, dict[str, str]]:
     pipeline_digest = pipeline_source_sha256(identities, run)
-    search_diagnostic = run["case"]["expected_status"] == "unsat"
+    search_diagnostic = run["reference"]["status"] == "unsat"
     reference_trace_caption = (
         "Selected semantic milestones from the complete observed search "
         "diagnostic; it is not an UNSAT certificate."
@@ -512,7 +512,7 @@ def attach_narrative_assets(
             "selected_event_count": selected,
         }
 
-    if updated["case"]["expected_status"] == "sat":
+    if updated["reference"]["status"] == "sat":
         specifications = {
             "square": (
                 "observed verified square witness presentation",
@@ -649,7 +649,7 @@ def generate_narrative_assets(
             "--manifest",
             str(reference_manifest),
         ]
-        if run["case"]["expected_status"] == "sat":
+        if run["reference"]["status"] == "sat":
             reference_solution = _run_artifact(
                 run_root, run, "reference_solution"
             )
@@ -693,7 +693,7 @@ def generate_narrative_assets(
                 "renderer generalized specification disagrees with the narrative contract"
             )
 
-        status = run["case"]["expected_status"]
+        status = run["reference"]["status"]
         witness_outputs: dict[str, Path] | None = None
         if status == "sat":
             solution = _run_artifact(run_root, run, "reference_solution")
@@ -798,7 +798,11 @@ def generate_narrative_assets(
             "product": product,
             "case": {
                 "id": run["case"]["id"],
-                "expected_status": status,
+                "expected_status": run["case"]["expected_status"],
+                **(
+                    {"observed_status": status}
+                    if run["case"]["expected_status"] is None else {}
+                ),
                 "source_sha256": run["source"]["sha256"],
             },
             "identities": identities,

@@ -9,8 +9,11 @@ description: One named pipeline_sat.cm13 instance followed from source bytes to 
 
 # Worked SAT example
 
-This page follows one small three-variable CM1-in-3 SAT instance through the
-complete pipeline, from source formula to independently checked presentations.
+The input `pipeline_sat.cm13` has three variables and three clauses. All four
+engines report SAT, and the returned witnesses pass their independent checks.
+This page follows that one run from formula to square tiling and hex view.
+The [named-case command]({{ '/run-dossiers/#named-cases' | relative_url }})
+reproduces the same input through the pipeline.
 
 <details markdown="1">
 <summary>Technical provenance</summary>
@@ -32,9 +35,13 @@ view at a useful reading size; the component pages own their full explanations.
 
 ## Source formula
 
-The parser reads a canonical Cubic Monotone 1-in-3 SAT document with three
-variables and three source-order clauses. The snapshot below is bound to those
-source bytes; it is not reconstructed from a later tiling.
+Each clause requires exactly one true occurrence. The clauses are
+`(x1,x1,x2)`, `(x1,x2,x3)`, and `(x2,x3,x3)`. The assignment
+**x1 = 0, x2 = 1, x3 = 0** satisfies all three: each contains one true `x2`.
+The repeated occurrences count separately.
+
+The parser's snapshot below preserves the source clause order and is bound to
+the original file's bytes. It is not reconstructed from a later tiling.
 
 {% include narrative-static.html asset_id="formula" image="/assets/narrative/formula.png" alt="The parsed CM1-in-3 formula and its source-order clauses." width="796" height="394" label="observed" caption="Parsed formula snapshot for the named canonical source." source="cm13-formula-snapshot-v1" %}
 
@@ -55,7 +62,7 @@ native extraction. Only after those checks does the presentation layer render
 the enlarged square witness, recognize exact generalized contours, and apply
 the checked square-to-hex mapping shown in the final panel.
 
-The milestone sequence links to the owned explanations for the
+For the mechanism behind each step, read the component pages for the
 [tileset]({{ '/components/tileset/' | relative_url }}),
 [Boolean Z3]({{ '/components/boolean-z3/' | relative_url }}),
 [Yang–Zhang reduction]({{ '/components/yang-zhang/' | relative_url }}),

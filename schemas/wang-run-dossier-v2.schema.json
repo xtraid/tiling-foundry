@@ -30,7 +30,7 @@
         "id": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
         "title": {"type": "string", "minLength": 1},
         "purpose": {"type": "string", "minLength": 1},
-        "expected_status": {"enum": ["sat", "unsat"]}
+        "expected_status": {"enum": ["sat", "unsat", null]}
       }
     },
     "source": {
@@ -110,7 +110,7 @@
         "passed"
       ],
       "properties": {
-        "expected_status": {"enum": ["sat", "unsat"]},
+        "expected_status": {"enum": ["sat", "unsat", null]},
         "boolean_z3_status": {"enum": ["sat", "unsat"]},
         "reference_status": {"enum": ["sat", "unsat"]},
         "optimized_status": {"enum": ["sat", "unsat"]},

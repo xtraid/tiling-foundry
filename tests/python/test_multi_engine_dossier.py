@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 from datetime import datetime, timezone
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -107,6 +108,30 @@ class V2FigurePaginationTests(unittest.TestCase):
         self.assertEqual(image_pages, caption_pages)
 
 
+class NullableCaseContractTests(unittest.TestCase):
+    def test_case_requires_an_explicit_nullable_terminal_expectation(self) -> None:
+        original = json.loads(SAT_CASE.read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory() as name:
+            path = Path(name) / "case.json"
+            for value in (None, "sat", "unsat"):
+                with self.subTest(value=value):
+                    case = {**original, "expected_status": value}
+                    path.write_text(json.dumps(case), encoding="utf-8")
+                    self.assertEqual(load_run_case_v2(path, ROOT).expected_status, value)
+            for value in ("unknown", "", False, 0, [], {}):
+                with self.subTest(invalid=value):
+                    path.write_text(json.dumps({**original, "expected_status": value}), encoding="utf-8")
+                    with self.assertRaises(PipelineSnapshotError):
+                        load_run_case_v2(path, ROOT)
+            for case in (
+                {key: value for key, value in original.items() if key != "expected_status"},
+                {**original, "expected_status": None, "observed_status": "sat"},
+            ):
+                path.write_text(json.dumps(case), encoding="utf-8")
+                with self.assertRaises(PipelineSnapshotError):
+                    load_run_case_v2(path, ROOT)
+
+
 class MultiEngineDossierTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -128,6 +153,210 @@ class MultiEngineDossierTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls) -> None:
         cls.temporary.cleanup()
+
+    def test_absent_expectation_preserves_observed_sat_and_unsat(self) -> None:
+        for case_path, status in ((SAT_CASE, "sat"), (UNSAT_CASE, "unsat")):
+            with self.subTest(status=status):
+                case = json.loads(case_path.read_text(encoding="utf-8"))
+                case["expected_status"] = None
+                nullable_case = self.root / f"nullable-{status}.json"
+                nullable_case.write_text(json.dumps(case), encoding="utf-8")
+                self.assertIsNone(load_run_case_v2(nullable_case, ROOT).expected_status)
+                destination = self.root / f"nullable-{status}"
+                multi_engine.generate_multi_engine_dossier(nullable_case, destination)
+                run = load_run_dossier_v2(destination / "run.json")
+                self.assertIsNone(run["case"]["expected_status"])
+                self.assertIsNone(run["agreement"]["expected_status"])
+                self.assertEqual(run["reference"]["status"], status)
+                self.assertIs(run["presentation"]["square"]["applicable"], status == "sat")
+                self.assertIs(run["agreement"]["sat_witnesses_valid"], True if status == "sat" else None)
+                manifest_path = destination / "assets/narrative/manifest.json"
+                manifest = load_narrative_assets(manifest_path, run)
+                self.assertEqual(manifest["case"], {
+                    "id": case["id"], "expected_status": None,
+                    "observed_status": status, "source_sha256": run["source"]["sha256"],
+                })
+                tex = render_run_report_v2_tex(run, manifest, V2_TEMPLATE.read_text(encoding="utf-8"))
+                self.assertIn(f"Terminal status & {status.upper()}", tex)
+                self.assertIn("Expected result: not supplied", tex)
+                for field, value in (("observed_status", None), ("observed_status", "unsat" if status == "sat" else "sat"), ("expected_status", status)):
+                    changed = copy.deepcopy(manifest)
+                    if value is None:
+                        del changed["case"][field]
+                    else:
+                        changed["case"][field] = value
+                    manifest_path.write_text(json.dumps(changed), encoding="utf-8")
+                    with self.assertRaises(PipelineSnapshotError):
+                        load_narrative_assets(manifest_path, run)
+                changed = copy.deepcopy(manifest)
+                changed["case"]["expected_status"] = status
+                del changed["case"]["observed_status"]
+                manifest_path.write_text(json.dumps(changed), encoding="utf-8")
+                with self.assertRaisesRegex(PipelineSnapshotError, "case identity"):
+                    load_narrative_assets(manifest_path, run)
+                manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    def test_nullable_contract_rejects_nonterminal_disagreement_and_forged_checks(self) -> None:
+        for original in (self.sat_document, self.unsat_document):
+            run = copy.deepcopy(original)
+            run["case"]["expected_status"] = None
+            run["agreement"]["expected_status"] = None
+            validate_run_dossier_v2(run)
+            for value in ("unknown", "", False, 0, [], {}):
+                changed = copy.deepcopy(run)
+                changed["case"]["expected_status"] = value
+                with self.assertRaises(PipelineSnapshotError):
+                    validate_run_dossier_v2(changed)
+            changed = copy.deepcopy(run)
+            del changed["case"]["expected_status"]
+            with self.assertRaises(PipelineSnapshotError):
+                validate_run_dossier_v2(changed)
+            mutations = [
+                ("agreement", "reference_status", "unknown"),
+                ("agreement", "optimized_status", "unknown"),
+                ("agreement", "boolean_z3_status", "unknown"),
+                ("agreement", "wang_z3_status", "unknown"),
+                ("agreement", "expected_status", original["reference"]["status"]),
+                ("wang_z3", "status", "unknown"),
+            ]
+            for section, field, value in mutations:
+                with self.subTest(section=section, field=field):
+                    changed = copy.deepcopy(run)
+                    changed[section][field] = value
+                    with self.assertRaises(PipelineSnapshotError):
+                        validate_run_dossier_v2(changed)
+            for check in run["verification"]:
+                changed = copy.deepcopy(run)
+                changed["verification"][check]["performed"] = original["reference"]["status"] != "sat"
+                with self.assertRaises(PipelineSnapshotError):
+                    validate_run_dossier_v2(changed)
+            for solver in ("reference", "optimized"):
+                changed = copy.deepcopy(run)
+                changed["artifacts"][f"{solver}_solution"] = (
+                    None if original["reference"]["status"] == "sat"
+                    else self.sat_document["artifacts"][f"{solver}_solution"]
+                )
+                with self.assertRaises(PipelineSnapshotError):
+                    validate_run_dossier_v2(changed)
+            changed = copy.deepcopy(run)
+            changed["reference"]["trace"]["complete"] = False
+            with self.assertRaisesRegex(PipelineSnapshotError, "complete trace"):
+                validate_run_dossier_v2(changed)
+            changed = copy.deepcopy(run)
+            changed["case"]["expected_status"] = "unsat" if original["reference"]["status"] == "sat" else "sat"
+            with self.assertRaisesRegex(PipelineSnapshotError, "known expected status mismatch"):
+                validate_run_dossier_v2(changed)
+        mismatch = copy.deepcopy(self.sat_document)
+        mismatch["case"]["expected_status"] = None
+        mismatch["agreement"]["expected_status"] = None
+        mismatch["wang_z3"].update(status="unsat", cells=None, witness_sha256=None)
+        with self.assertRaisesRegex(PipelineSnapshotError, "engine status mismatch"):
+            validate_run_dossier_v2(mismatch)
+
+    def _bare_bundle(self, name: str, *, sat: bool = False) -> tuple[Path, dict]:
+        source = self.sat_directory if sat else self.unsat_directory
+        destination = self.root / name
+        shutil.copytree(source / "assets/data", destination / "assets/data")
+        run = copy.deepcopy(self.sat_document if sat else self.unsat_document)
+        for solver in ("reference", "optimized"):
+            run[solver]["trace"]["selection"] = {"performed": False, "selected_event_count": None}
+        for view in ("square", "generalized", "hex"):
+            run["presentation"][view]["artifact"] = None
+            run["artifacts"][f"{view}_presentation"] = None
+        return destination, run
+
+    def _rewrite_bundle_artifact(self, directory: Path, run: dict, name: str, document: dict) -> str:
+        path = directory / run["artifacts"][name]["path"]
+        encoded = (json.dumps(document, indent=2) + "\n").encode("utf-8")
+        path.write_bytes(encoded)
+        digest = hashlib.sha256(encoded).hexdigest()
+        run["artifacts"][name]["sha256"] = digest
+        return digest
+
+    def test_bundle_rejects_rehashed_z3_status_disagreement(self) -> None:
+        for engine in ("boolean_z3", "wang_z3"):
+            with self.subTest(engine=engine):
+                directory, run = self._bare_bundle(f"summary-status-{engine}")
+                name = f"{engine}_summary"
+                summary = json.loads((directory / run["artifacts"][name]["path"]).read_text())
+                summary["status"] = "unknown"
+                run[engine]["encoding_summary_sha256"] = self._rewrite_bundle_artifact(directory, run, name, summary)
+                (directory / "run.json").write_text(json.dumps(run), encoding="utf-8")
+                with self.assertRaisesRegex(PipelineSnapshotError, "summary status.*run"):
+                    load_run_dossier_v2(directory / "run.json")
+
+    def test_bundle_rejects_rehashed_native_source_disagreement(self) -> None:
+        directory, run = self._bare_bundle("native-source")
+        source = directory / run["artifacts"]["source_input"]["path"]
+        source.write_bytes(source.read_bytes() + b"\n")
+        digest = hashlib.sha256(source.read_bytes()).hexdigest()
+        run["source"]["sha256"] = digest
+        run["artifacts"]["source_input"]["sha256"] = digest
+        for artifact in run["artifacts"].values():
+            if artifact is not None:
+                artifact["source_sha256"] = digest
+        for engine in ("boolean_z3", "wang_z3"):
+            name = f"{engine}_summary"
+            summary = json.loads((directory / run["artifacts"][name]["path"]).read_text())
+            summary["source_formula_sha256"] = digest
+            run[engine]["encoding_summary_sha256"] = self._rewrite_bundle_artifact(directory, run, name, summary)
+        (directory / "run.json").write_text(json.dumps(run), encoding="utf-8")
+        with self.assertRaisesRegex(PipelineSnapshotError, "native source.*run"):
+            load_run_dossier_v2(directory / "run.json")
+
+    def test_bundle_rejects_rehashed_incomplete_native_trace(self) -> None:
+        for solver in ("reference", "optimized"):
+            with self.subTest(solver=solver):
+                directory, run = self._bare_bundle(f"incomplete-{solver}")
+                name = f"{solver}_trace"
+                trace = json.loads((directory / run["artifacts"][name]["path"]).read_text())
+                trace["events"] = [trace["events"][0], trace["events"][-1]]
+                trace["checkpoints"] = []
+                trace["capacity"].update(truncated=True, checkpoint_interval=0, checkpoint_capacity=0, checkpoints_truncated=False)
+                digest = self._rewrite_bundle_artifact(directory, run, name, trace)
+                run[solver]["trace"]["trace_sha256"] = digest
+                name = f"{solver}_trace_manifest"
+                manifest = json.loads((directory / run["artifacts"][name]["path"]).read_text())
+                manifest["artifacts"]["trace"]["sha256"] = digest
+                run[solver]["trace"]["manifest_sha256"] = self._rewrite_bundle_artifact(directory, run, name, manifest)
+                (directory / "run.json").write_text(json.dumps(run), encoding="utf-8")
+                with self.assertRaisesRegex(PipelineSnapshotError, "trace completeness.*run"):
+                    load_run_dossier_v2(directory / "run.json")
+
+    def test_bundle_binds_native_trace_status_and_solver(self) -> None:
+        for solver in ("reference", "optimized"):
+            for field in ("status", "solver"):
+                with self.subTest(solver=solver, field=field):
+                    directory, run = self._bare_bundle(f"trace-{solver}-{field}", sat=True)
+                    trace_name = f"{solver}_trace"
+                    trace_path = directory / run["artifacts"][trace_name]["path"]
+                    trace = json.loads(trace_path.read_text(encoding="utf-8"))
+                    manifest_name = f"{solver}_trace_manifest"
+                    manifest_path = directory / run["artifacts"][manifest_name]["path"]
+                    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                    if field == "status":
+                        trace["status"] = "unsat"
+                        trace["events"][-1]["status"] = "unsat"
+                        # UNSAT result events require an active cell. Keep the
+                        # altered trace structurally valid so this probes its
+                        # status binding to the run, beyond semantic replay.
+                        trace["events"][-1]["cell"] = next(
+                            cell for cell, domain in enumerate(trace["initial_domains"])
+                            if domain != 0
+                        )
+                        trace["solution_sha256"] = None
+                        manifest["artifacts"]["solution"] = None
+                    else:
+                        trace["solver"] = "optimized" if solver == "reference" else "reference"
+                    digest = self._rewrite_bundle_artifact(directory, run, trace_name, trace)
+                    run[solver]["trace"]["trace_sha256"] = digest
+                    manifest["artifacts"]["trace"]["sha256"] = digest
+                    run[solver]["trace"]["manifest_sha256"] = self._rewrite_bundle_artifact(
+                        directory, run, manifest_name, manifest,
+                    )
+                    (directory / "run.json").write_text(json.dumps(run), encoding="utf-8")
+                    with self.assertRaisesRegex(PipelineSnapshotError, f"trace {field}.*run"):
+                        load_run_dossier_v2(directory / "run.json")
 
     def test_native_coordinator_runs_each_solver_once_in_one_capture(self) -> None:
         case = load_run_case_v2(SAT_CASE, ROOT)

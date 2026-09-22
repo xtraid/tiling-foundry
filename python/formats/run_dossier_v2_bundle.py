@@ -59,6 +59,7 @@ def load_run_dossier_v2(path: str | Path) -> dict[str, object]:
             f"cannot read v2 dossier {run_path!s}: {error}"
         ) from error
     validate_run_dossier_v2(document)
+    observed_status = document["reference"]["status"]
     artifacts = document["artifacts"]
     assert isinstance(artifacts, dict)
     try:
@@ -125,15 +126,28 @@ def load_run_dossier_v2(path: str | Path) -> dict[str, object]:
             raise PipelineSnapshotError(
                 f"native manifest {manifest_name} identity disagrees with run"
             )
-    for solver, manifest in (
-        ("reference", reference_manifest),
-        ("optimized", optimized_manifest),
+    for solver, manifest, bundle in (
+        ("reference", reference_manifest, reference_documents),
+        ("optimized", optimized_manifest, optimized_documents),
     ):
+        if manifest["source_formula_sha256"] != document["source"]["sha256"]:
+            raise PipelineSnapshotError(f"{solver} native source identity disagrees with run")
+        trace = bundle["trace"]
+        if trace["status"] != document[solver]["status"]:
+            raise PipelineSnapshotError(f"{solver} trace status disagrees with run")
+        if trace["solver"] != solver:
+            raise PipelineSnapshotError(f"{solver} trace solver disagrees with run")
+        truncated = trace["capacity"]["truncated"]
+        if (
+            truncated != document[solver]["trace"]["truncated"]
+            or (not truncated) != document[solver]["trace"]["complete"]
+        ):
+            raise PipelineSnapshotError(f"{solver} trace completeness disagrees with run")
         trace_digest = manifest["artifacts"]["trace"]["sha256"]
         if trace_digest != document[solver]["trace"]["trace_sha256"]:
             raise PipelineSnapshotError(f"{solver} manifest trace identity mismatch")
         solution_reference = manifest["artifacts"]["solution"]
-        if document["case"]["expected_status"] == "sat":
+        if observed_status == "sat":
             if solution_reference["sha256"] != document[solver]["solution_sha256"]:
                 raise PipelineSnapshotError(
                     f"{solver} manifest solution identity mismatch"
@@ -158,6 +172,9 @@ def load_run_dossier_v2(path: str | Path) -> dict[str, object]:
     wang_summary = documents["wang_z3_summary"]
     validate_z3_encoding_summary(boolean_summary)
     validate_z3_encoding_summary(wang_summary)
+    for engine, summary in (("boolean_z3", boolean_summary), ("wang_z3", wang_summary)):
+        if summary["status"] != document[engine]["status"]:
+            raise PipelineSnapshotError(f"{engine} summary status disagrees with run")
     source_sha256 = document["source"]["sha256"]
     region_sha256 = document["reduction"]["region_sha256"]
     if boolean_summary["source_formula_sha256"] != source_sha256:
@@ -170,7 +187,7 @@ def load_run_dossier_v2(path: str | Path) -> dict[str, object]:
 
     formula = _formula_from_snapshot(reference_documents["formula"])
     region = _region_from_snapshot(reference_documents["region"])
-    if document["case"]["expected_status"] == "sat":
+    if observed_status == "sat":
         boolean_assignment = tuple(boolean_summary["model"]["assignment"])
         wang_cells = tuple(wang_summary["model"]["cells"])
         if not is_valid_assignment(formula, boolean_assignment):
@@ -250,7 +267,7 @@ def load_run_dossier_v2(path: str | Path) -> dict[str, object]:
                 raise PipelineSnapshotError(
                     f"{solver} selected event count disagrees with narrative manifest"
                 )
-        if document["case"]["expected_status"] == "sat" and any(
+        if observed_status == "sat" and any(
             document["artifacts"][f"{name}_presentation"] is None
             for name in ("square", "generalized", "hex")
         ):

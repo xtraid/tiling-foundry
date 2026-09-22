@@ -102,8 +102,11 @@ def build_run_dossier_v2(
     }
     if any(status not in STATUSES for status in statuses.values()):
         raise PipelineSnapshotError("full-pipeline dossier forbids UNKNOWN results")
-    if any(status != case.expected_status for status in statuses.values()):
+    observed_status = statuses["reference"]
+    if any(status != observed_status for status in statuses.values()):
         raise PipelineSnapshotError("engine status mismatch")
+    if case.expected_status is not None and case.expected_status != observed_status:
+        raise PipelineSnapshotError("known expected status mismatch")
     if capture.reference.trace.truncated or capture.optimized.trace.truncated:
         raise PipelineSnapshotError("full-pipeline dossier requires complete traces")
 
@@ -114,7 +117,7 @@ def build_run_dossier_v2(
     wang_cells = _validate_cells(
         wang_summary["model"]["cells"], "wang_summary.model.cells"
     )
-    if case.expected_status == "sat":
+    if observed_status == "sat":
         if boolean_assignment is None or not is_valid_assignment(
             capture.formula, boolean_assignment
         ):
@@ -144,7 +147,7 @@ def build_run_dossier_v2(
         artifacts["optimized_trace_manifest"]["sha256"],
         artifacts["optimized_trace"]["sha256"],
     )
-    if case.expected_status == "sat":
+    if observed_status == "sat":
         reference["solution_sha256"] = artifacts["reference_solution"]["sha256"]
         optimized["solution_sha256"] = artifacts["optimized_solution"]["sha256"]
 
@@ -221,24 +224,24 @@ def build_run_dossier_v2(
             "wang_z3_status": statuses["wang_z3"],
             "all_status_equal": True,
             "sat_witnesses_valid": (
-                True if case.expected_status == "sat" else None
+                True if observed_status == "sat" else None
             ),
             "passed": True,
         },
         "presentation": {
             "square": {
                 "relationship": "verified-wang-solution",
-                "applicable": case.expected_status == "sat",
+                "applicable": observed_status == "sat",
                 "artifact": None,
             },
             "generalized": {
                 "relationship": "exact-14-to-23-presentation",
-                "applicable": case.expected_status == "sat",
+                "applicable": observed_status == "sat",
                 "artifact": None,
             },
             "hex": {
                 "relationship": "checked-square-to-hex-transformation",
-                "applicable": case.expected_status == "sat",
+                "applicable": observed_status == "sat",
                 "artifact": None,
             },
         },

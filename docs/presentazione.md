@@ -9,18 +9,23 @@ description: A compact technical tour through the construction, solver states, a
 
 # Presentazione
 
-Use these concrete states and construction views when explaining how the
-project works. The [pipeline]({{ '/pipeline/' | relative_url }}) remains the
-complete component map; [Reference]({{ '/reference/' | relative_url }}) holds
-the detailed specifications and implementation guides.
+How does a formula become a region, how does search find or rule out a tiling,
+and how is a returned SAT witness checked? This tour answers those questions
+with the implemented construction and recorded solver states. To produce a
+report for a new formula, use the [demo guide]({{ '/run-dossiers/#new-cm1-in-3-input' | relative_url }}).
+The [pipeline]({{ '/pipeline/' | relative_url }}) gives the component map;
+[Reference]({{ '/reference/' | relative_url }}) holds the detailed specifications.
 
 [Construction](#yangzhang-construction) → [native solver](#native-solver) →
 [verification](#verification-dependencies) → [worked result](#one-solved-example).
 
 ## Yang–Zhang construction
 
-**φ SAT ⇔ Rφ tileable with the fixed 23-tile set.** The construction below
-belongs to the same small SAT instance used by the solver examples.
+**φ SAT ⇔ Rφ tileable with the fixed 23-tile set.** This equivalence comes
+from the Yang–Zhang reduction. The project implements its construction and
+tests the resulting software; those tests do not replace the mathematical
+proof. The view below shows the constructed region for the same small SAT
+instance used by the solver examples.
 
 Read the colored spans from left to right: a **variable** chooses a Boolean
 value; **forwarders** preserve it; **crossovers** reorder signals without
