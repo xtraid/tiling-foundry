@@ -192,6 +192,15 @@ the data flow and component boundaries. The
 [worked example](https://xtraid.github.io/tiling-foundry/worked-example/)
 follows a SAT instance from its source formula to the checked tiling.
 
+## Interactive research companion
+
+[Wang Studio](https://xtraid.github.io/wang-studio/) is an independent editor
+for subsequent tiling research, with its own repository and website. It consumes
+the [versioned browser solver package](packages/solver-web/README.md) built here
+from the reference and optimized C engines. See the
+[integration notes](docs/plans/wang_studio.md). Studio is distinct from the
+artifact renderer and requires no Python solver at runtime.
+
 ## Small standalone harness
 
 [`harness_wangz3/`](harness_wangz3/) contains a small reimplementation of the

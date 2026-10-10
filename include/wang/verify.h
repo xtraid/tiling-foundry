@@ -28,4 +28,10 @@ WangVerifyStatus wang_verify_tiling(
     size_t tile_count
 );
 
+/* Independent verification against an explicitly supplied square tileset. */
+WangVerifyStatus wang_verify_tiling_with_tileset(
+    const Region *region, const TileId *tiles, size_t tile_count,
+    const WangTile *tileset, size_t tileset_count
+);
+
 #endif /* WANG_VERIFY_H */

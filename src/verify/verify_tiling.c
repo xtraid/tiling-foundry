@@ -1,13 +1,22 @@
 #include "wang/verify.h"
 
-WangVerifyStatus wang_verify_tiling(
+WangVerifyStatus wang_verify_tiling_with_tileset(
     const Region *region,
     const TileId *tiles,
-    size_t tile_count
+    size_t tile_count,
+    const WangTile *tileset,
+    size_t tileset_count
 )
 {
-    if (region == NULL || tiles == NULL) {
+    if (region == NULL || tiles == NULL || tileset == NULL ||
+        tileset_count == 0 || tileset_count > 32u) {
         return WANG_VERIFY_INVALID_ARGUMENT;
+    }
+
+    for (size_t t = 0; t < tileset_count; ++t) {
+        for (Dir d = N; d < DIR_COUNT; ++d) {
+            if (tileset[t].edge[d] >= COLOR_COUNT) return WANG_VERIFY_INVALID_ARGUMENT;
+        }
     }
 
     if (!region_validate(region)) {
@@ -34,11 +43,11 @@ WangVerifyStatus wang_verify_tiling(
         if (tile_id == TILE_NONE) {
             return WANG_VERIFY_INCOMPLETE;
         }
-        if (tile_id >= TILE_COUNT) {
+        if (tile_id >= tileset_count) {
             return WANG_VERIFY_INVALID_TILE_ID;
         }
 
-        const WangTile *tile = &TILESET[tile_id];
+        const WangTile *tile = &tileset[tile_id];
         for (Dir dir = N; dir < DIR_COUNT; ++dir) {
             const ColorId required = cell->boundary[dir];
             if (required != COLOR_NONE && tile->edge[dir] != required) {
@@ -73,8 +82,8 @@ WangVerifyStatus wang_verify_tiling(
                     neighbor_x,
                     neighbor_y
                 );
-                const WangTile *tile = &TILESET[tiles[index]];
-                const WangTile *neighbor_tile = &TILESET[tiles[neighbor_index]];
+                const WangTile *tile = &tileset[tiles[index]];
+                const WangTile *neighbor_tile = &tileset[tiles[neighbor_index]];
 
                 if (tile->edge[dir] != neighbor_tile->edge[opposite(dir)]) {
                     return WANG_VERIFY_ADJACENCY_MISMATCH;
@@ -84,4 +93,12 @@ WangVerifyStatus wang_verify_tiling(
     }
 
     return WANG_VERIFY_VALID;
+}
+
+WangVerifyStatus wang_verify_tiling(
+    const Region *region, const TileId *tiles, size_t tile_count
+)
+{
+    return wang_verify_tiling_with_tileset(
+        region, tiles, tile_count, TILESET, TILE_COUNT);
 }

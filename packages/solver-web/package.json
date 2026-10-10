@@ -1,0 +1,8 @@
+{
+  "name": "@tiling-foundry/solver-web",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "exports": "./client.mjs",
+  "description": "Tiling Foundry reference and optimized square solvers in a dedicated browser Worker"
+}

@@ -1,0 +1,76 @@
+name: Browser solver package
+
+on:
+  push:
+    tags: ['solver-web-v*']
+  pull_request:
+    paths:
+      - 'packages/solver-web/**'
+      - 'tools/build_solver_web.py'
+      - 'tests/test_solver_web.mjs'
+      - 'include/wang/**'
+      - 'src/**'
+      - '.github/workflows/solver-web.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install the pinned Emscripten SDK outside the checkout
+        run: |
+          git clone --depth 1 --branch 4.0.23 https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          "$RUNNER_TEMP/emsdk/emsdk" install 4.0.23
+          "$RUNNER_TEMP/emsdk/emsdk" activate 4.0.23
+      - name: Build versioned package and check tag
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$REF_TYPE" = tag ]; then
+            python3 -c 'import json, os; assert os.environ["REF_NAME"] == "solver-web-v" + json.load(open("packages/solver-web/package.json"))["version"]'
+            python3 tools/build_solver_web.py --release --emcc "$RUNNER_TEMP/emsdk/upstream/emscripten/emcc"
+          else
+            python3 tools/build_solver_web.py --emcc "$RUNNER_TEMP/emsdk/upstream/emscripten/emcc"
+          fi
+      - name: Check both compiled engines against exhaustive enumeration
+        run: |
+          for package in build/solver-web/*/; do
+            node tests/test_solver_web.mjs "$package"
+          done
+      - name: Retain release archive briefly
+        uses: actions/upload-artifact@v4
+        with:
+          name: solver-web
+          path: |
+            build/solver-web/*.tar.gz
+            build/solver-web/*.sha256
+          retention-days: 1
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/solver-web-v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: solver-web
+          path: package
+      - name: Publish package assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" package/* --verify-tag --title "Browser solver ${TAG#solver-web-v}" --generate-notes
