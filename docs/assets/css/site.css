@@ -1307,3 +1307,26 @@ img {
     color: #161819 !important;
   }
 }
+
+/* Keep the browser app visible near the top of the project home. */
+.studio-entry {
+  margin-block: 2rem;
+  padding: 1.25rem;
+  border: 1px solid var(--rule-strong);
+  background: var(--black-raised);
+}
+
+.studio-entry h2 { margin-top: 0; }
+.studio-entry__link {
+  display: inline-block;
+  padding: 0.75rem 1rem;
+  border: 1px solid currentColor;
+  color: var(--ink-strong);
+  font-weight: 700;
+}
+.studio-entry__link:hover,
+.studio-entry__link:focus-visible {
+  text-decoration-thickness: 0.15em;
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}

@@ -19,6 +19,12 @@ it, and checking that the different views of the instance agree.
 [Evidence](https://xtraid.github.io/tiling-foundry/evidence/) ·
 [Run dossiers](https://xtraid.github.io/tiling-foundry/run-dossiers/)
 
+**[Open Wang Studio in your browser →](https://xtraid.github.io/wang-studio/)**
+
+Build your own regions and tilesets in the independent research editor.
+Both C solvers run in your browser; no download or installation is required.
+Square solving is available now.
+
 ## Why this repository exists
 
 Yang and Zhang proved in 2024 that tiling finite simply connected regions is
