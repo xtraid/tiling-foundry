@@ -380,6 +380,10 @@ def _local_target(
     elif baseurl and path.startswith(f"{baseurl}/"):
         path = path[len(baseurl) :]
     elif baseurl:
+        # Absolute URLs can intentionally link to another project on this host.
+        # Relative links must still stay inside this project base URL.
+        if urlsplit(value).netloc:
+            return None
         raise ValueError(f"internal URL escapes baseurl {baseurl!r}")
 
     trailing_slash = path.endswith("/")
