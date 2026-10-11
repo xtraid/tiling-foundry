@@ -43,8 +43,9 @@ One live search per Solver instance. Statuses: `running`, `paused`, `complete`,
 decimal strings too. Duplicate edge tuples are counted once, subject to initial
 domains. Palette indices are symbolic identities, even when RGB values repeat.
 
+Supported geometries: `square`, `tri-up`, `tri-side`, `hex-flat`, `hex-point`.
 Square edges are `(N,E,S,W)`, with fixed orientations. Limits are 32 tiles,
-16 used colors, 4096 active cells, 16384 bounding-box cells, and 128 palette
+16 used colors, 4096 active cells, 16384 bounding-box cells for squares, and 128 palette
 entries. `fixed` optionally pins an exact edge tuple. `required` constrains each
 side; `null` means unconstrained. Negative coordinates, holes and disconnected
 inputs are supported, but applications may impose stricter research profiles.
@@ -71,9 +72,14 @@ Stop/timeout terminates the Worker and retains the last published lower bound.
 Browser timer throttling can delay enforcement in background tabs. A closed
 page ends its computations; there is no server-side persistence.
 
-This first package exposes only runtime square enumeration. Explicit graph
-adjacency, additional geometries and generalized-piece constraints are future
-engine features, not inferred from the editor's drawing capabilities.
+Triangles use IDs `i,j,half` (half 0 or 1) and three sides; hexagons use IDs
+`i,j` and six sides. Edge order follows Studio's polygon vertex order. Triangle
+neighbors share the same side index (including inverted cells); hexagonal
+neighbors use `(side+3)%6`. Variants rotate the lattice, without implicit tile
+rotations. The input adapter builds reciprocal cell/side arcs and calls
+`wang_enumerate_graph`, sharing the existing C propagation, MRV, trail and DFS.
+Graph regions use dense active cells, without the square bounding-box limit.
+Generalized-piece constraints are not supported.
 
 Consumers should retain `manifest.json` with experiment results, pin releases,
 and update only between searches. Integrity hashes identify artifacts; a hash

@@ -171,6 +171,24 @@ int wang_enumerate_serial_tileset(
     void *userdata, WangSolverMetrics *metrics
 );
 
+/* Explicit reciprocal cell/side adjacency. -1 is an exterior side; otherwise
+ * neighbors[i * side_count + d] is the neighboring cell, and neighbor_sides
+ * gives its incident side. Dense edges are tile-major; boundary uses COLOR_NONE.
+ * Borrowed inputs, 1..6 sides, 1..4096 cells, 1..32 tiles. No rotations.
+ * Shares propagation, MRV, trail and DFS with square enumeration. */
+#define WANG_GRAPH_MAX_SIDES 6u
+typedef struct {
+    size_t cell_count;
+    size_t side_count;
+    const int32_t *neighbors;
+    const uint8_t *neighbor_sides;
+    const uint8_t *boundary;
+    const uint8_t *edges;
+} WangGraph;
+int wang_enumerate_graph(const WangGraph *graph, size_t tile_count,
+    const WangSolverOptions *options, bool reference, WangSolutionVisitor visitor,
+    void *userdata, WangSolverMetrics *metrics);
+
 /* Release the owned snapshot and reset every field. Accepts NULL. */
 void wang_solve_result_destroy(WangSolveResult *result);
 

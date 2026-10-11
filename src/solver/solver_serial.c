@@ -25,8 +25,8 @@ enum {
 };
 
 typedef struct {
-    uint32_t edge_mask[DIR_COUNT][COLOR_COUNT];
-    uint32_t compat[DIR_COUNT][WANG_RUNTIME_MAX_TILES];
+    uint32_t edge_mask[WANG_GRAPH_MAX_SIDES][COLOR_COUNT];
+    uint32_t compat[WANG_GRAPH_MAX_SIDES * WANG_GRAPH_MAX_SIDES][WANG_RUNTIME_MAX_TILES];
 } SolverTables;
 
 typedef struct {
@@ -76,6 +76,7 @@ typedef struct {
 
 typedef struct {
     const Region *region;
+    const WangGraph *graph;
     Enumeration *enumeration;
     SolverTables tables;
     uint32_t *byte_support;
@@ -823,6 +824,7 @@ static size_t neighbor_index(
     Dir dir
 )
 {
+    if (state->graph) return (size_t)state->graph->neighbors[cell_index * state->graph->side_count + dir];
     const size_t width = (size_t)state->region->width;
     switch (dir) {
     case N:
@@ -841,7 +843,7 @@ static size_t neighbor_index(
 
 static uint32_t supported_neighbor_domain(
     SolverState *state,
-    Dir dir,
+    size_t dir,
     uint32_t domain
 )
 {
@@ -893,7 +895,7 @@ static PropagateStatus propagate_queue(
             return PROPAGATE_CONFLICT;
         }
 
-        for (Dir dir = N; dir < DIR_COUNT; ++dir) {
+        for (size_t dir = 0; dir < (state->graph ? state->graph->side_count : DIR_COUNT); ++dir) {
             if ((state->neighbor_mask[cell_index] &
                  (uint8_t)(UINT8_C(1) << dir)) == 0) {
                 continue;
@@ -905,7 +907,8 @@ static PropagateStatus propagate_queue(
 
             const uint32_t supported = supported_neighbor_domain(
                 state,
-                dir,
+                state->graph ? dir * state->graph->side_count +
+                    state->graph->neighbor_sides[cell_index * state->graph->side_count + dir] : dir,
                 domain
             );
 
@@ -1488,7 +1491,17 @@ static bool initialize_domains(
                 ++state->metrics.domain_reductions;
             }
 
-            for (Dir dir = N; dir < DIR_COUNT; ++dir) {
+            for (size_t dir = 0; dir < (state->graph ? state->graph->side_count : DIR_COUNT); ++dir) {
+                if (state->graph) {
+                    const size_t side = index * state->graph->side_count + dir;
+                    if (state->graph->neighbors[side] >= 0) {
+                        state->neighbor_mask[index] |= (uint8_t)(1u << dir);
+                        state->has_neighbor_arcs = true;
+                    }
+                    const uint8_t color = state->graph->boundary[side];
+                    if (color != COLOR_NONE) domain &= state->tables.edge_mask[dir][color];
+                    continue;
+                }
                 const RegionCell *neighbor = region_cell_const(
                     state->region,
                     x + dx[dir],
@@ -1521,8 +1534,12 @@ static bool initialize_domains(
                     bool duplicate = false;
                     for (size_t u = 0; u < t; ++u) {
                         if ((unique & (UINT32_C(1) << u)) != 0 &&
-                            memcmp(state->tileset[t].edge, state->tileset[u].edge,
-                                   sizeof(state->tileset[t].edge)) == 0) {
+                            (state->graph
+                             ? memcmp(state->graph->edges + t * state->graph->side_count,
+                                      state->graph->edges + u * state->graph->side_count,
+                                      state->graph->side_count)
+                             : memcmp(state->tileset[t].edge, state->tileset[u].edge,
+                                      sizeof(state->tileset[t].edge))) == 0) {
                             duplicate = true;
                             break;
                         }
@@ -1554,6 +1571,25 @@ static bool initialize_domains(
 
 static bool verify_sat_domains(const SolverState *state)
 {
+    if (state->graph) {
+        const WangGraph *g = state->graph;
+        for (size_t i = 0; i < g->cell_count; ++i) {
+            if (!domain_is_singleton(state->domains[i])) return false;
+            const size_t t = first_set_tile(state->domains[i]);
+            for (size_t d = 0; d < g->side_count; ++d) {
+                const size_t side = i * g->side_count + d;
+                const uint8_t color = g->edges[t * g->side_count + d];
+                if (g->boundary[side] != COLOR_NONE && g->boundary[side] != color) return false;
+                const int32_t n = g->neighbors[side];
+                if (n >= 0) {
+                    if (!domain_is_singleton(state->domains[n])) return false;
+                    const size_t u = first_set_tile(state->domains[n]);
+                    if (color != g->edges[u * g->side_count + g->neighbor_sides[side]]) return false;
+                }
+            }
+        }
+        return true;
+    }
     size_t bytes;
     if (!checked_mul_size(state->cell_count, sizeof(TileId), &bytes)) {
         return false;
@@ -1653,7 +1689,8 @@ static WangSolveStatus solve_wang_core(
     WangSolveTrace *out_trace,
     const WangTile *tileset,
     size_t tileset_count,
-    Enumeration *enumeration
+    Enumeration *enumeration,
+    const WangGraph *graph
 )
 {
     if (!result_is_destroyed(out_result) ||
@@ -1684,6 +1721,7 @@ static WangSolveStatus solve_wang_core(
     SolverState state = {0};
     state.writer.fd = -1;
     state.region = region;
+    state.graph = graph;
     state.enumeration = enumeration;
     state.tileset = tileset;
     state.tileset_count = tileset_count;
@@ -1701,8 +1739,20 @@ static WangSolveStatus solve_wang_core(
     if (!solver_tables_are_valid(&state.tables, tileset, tileset_count)) {
         return WANG_SOLVE_ERROR;
     }
+    const size_t compatibility_count = graph ? graph->side_count * graph->side_count : DIR_COUNT;
+    if (graph) {
+        memset(&state.tables, 0, sizeof(state.tables));
+        for (size_t t = 0; t < tileset_count; ++t)
+            for (size_t d = 0; d < graph->side_count; ++d)
+                state.tables.edge_mask[d][graph->edges[t * graph->side_count + d]] |= UINT32_C(1) << t;
+        for (size_t d = 0; d < graph->side_count; ++d)
+            for (size_t e = 0; e < graph->side_count; ++e)
+                for (size_t t = 0; t < tileset_count; ++t)
+                    state.tables.compat[d * graph->side_count + e][t] =
+                        state.tables.edge_mask[e][graph->edges[t * graph->side_count + d]];
+    }
     if (mechanisms.use_bytewise_support) {
-        const size_t entries = DIR_COUNT * state.domain_byte_count *
+        const size_t entries = compatibility_count * state.domain_byte_count *
             WANG_SUPPORT_BYTE_VALUE_COUNT;
         state.byte_support = calloc(entries, sizeof(*state.byte_support));
         if (state.byte_support == NULL) {
@@ -1711,7 +1761,7 @@ static WangSolveStatus solve_wang_core(
         }
         /* Same bytewise union optimization; runtime tile count, no copies of
          * the search implementation and no canonical tileset dependency. */
-        for (Dir d = N; d < DIR_COUNT; ++d) {
+        for (size_t d = 0; d < compatibility_count; ++d) {
             for (size_t byte = 0; byte < state.domain_byte_count; ++byte) {
                 uint32_t *support = state.byte_support +
                     (d * state.domain_byte_count + byte) * 256u;
@@ -1979,7 +2029,7 @@ WangSolveStatus wang_solve_serial(
         },
         NULL,
         NULL,
-        TILESET, TILE_COUNT, NULL
+        TILESET, TILE_COUNT, NULL, NULL
     );
 }
 
@@ -2003,7 +2053,7 @@ WangSolveStatus wang_solve_optimized(
         },
         NULL,
         NULL,
-        TILESET, TILE_COUNT, NULL
+        TILESET, TILE_COUNT, NULL, NULL
     );
 }
 
@@ -2038,7 +2088,7 @@ WangSolveStatus wang_solve_serial_traced(
         },
         trace_options,
         &out_result->trace,
-        TILESET, TILE_COUNT, NULL
+        TILESET, TILE_COUNT, NULL, NULL
     );
 }
 
@@ -2066,7 +2116,7 @@ WangSolveStatus wang_solve_optimized_traced(
         },
         trace_options,
         &out_result->trace,
-        TILESET, TILE_COUNT, NULL
+        TILESET, TILE_COUNT, NULL, NULL
     );
 }
 
@@ -2089,7 +2139,7 @@ WangSolveStatus wang_solve_optimized_tileset(
             .deduplicate_queue = WANG_OPTIMIZED_QUEUE_DEDUP != 0,
             .index_mrv = WANG_OPTIMIZED_MRV_INDEX != 0,
         },
-        NULL, NULL, tileset, tileset_count, NULL
+        NULL, NULL, tileset, tileset_count, NULL, NULL
     );
 }
 
@@ -2113,7 +2163,7 @@ int wang_enumerate_optimized_tileset(
             .use_bytewise_support = true,
             .deduplicate_queue = WANG_OPTIMIZED_QUEUE_DEDUP != 0,
             .index_mrv = WANG_OPTIMIZED_MRV_INDEX != 0,
-        }, NULL, NULL, tileset, tileset_count, &enumeration);
+        }, NULL, NULL, tileset, tileset_count, &enumeration, NULL);
 }
 
 int wang_enumerate_serial_tileset(
@@ -2136,5 +2186,50 @@ int wang_enumerate_serial_tileset(
             .use_bytewise_support = false,
             .deduplicate_queue = false,
             .index_mrv = false,
-        }, NULL, NULL, tileset, tileset_count, &enumeration);
+        }, NULL, NULL, tileset, tileset_count, &enumeration, NULL);
+}
+
+int wang_enumerate_graph(const WangGraph *g, size_t tile_count,
+    const WangSolverOptions *options, bool reference, WangSolutionVisitor visitor,
+    void *userdata, WangSolverMetrics *metrics)
+{
+    if (metrics) *metrics = (WangSolverMetrics){0};
+    if (!g || !visitor || !g->cell_count || g->cell_count > 4096 ||
+        !g->side_count || g->side_count > WANG_GRAPH_MAX_SIDES ||
+        !tile_count || tile_count > WANG_RUNTIME_MAX_TILES ||
+        !g->neighbors || !g->neighbor_sides || !g->edges || !g->boundary ||
+        (options && (options->flags & ~WANG_SOLVE_COLLECT_METRICS))) return -1;
+    for (size_t t = 0; t < tile_count * g->side_count; ++t)
+        if (g->edges[t] >= COLOR_COUNT) return -1;
+    for (size_t i = 0; i < g->cell_count; ++i) {
+        for (size_t d = 0; d < g->side_count; ++d) {
+            const size_t side = i * g->side_count + d;
+            const int32_t n = g->neighbors[side];
+            if (g->boundary[side] != COLOR_NONE && g->boundary[side] >= COLOR_COUNT) return -1;
+            if (n == -1) continue;
+            if (n < 0 || (size_t)n >= g->cell_count || (size_t)n == i ||
+                g->neighbor_sides[side] >= g->side_count) return -1;
+            const size_t back = (size_t)n * g->side_count + g->neighbor_sides[side];
+            if (g->neighbors[back] != (int32_t)i || g->neighbor_sides[back] != d) return -1;
+        }
+    }
+    /* The dense carrier supplies active-cell bookkeeping only. Geometry and
+     * verification use the explicit graph; square entry points are unchanged. */
+    Region region = {0};
+    if (!region_init(&region, (int32_t)g->cell_count, 1)) return -1;
+    for (size_t i = 0; i < g->cell_count; ++i) region.cells[i].active = true;
+    WangTile carrier[WANG_RUNTIME_MAX_TILES] = {0};
+    Enumeration enumeration = {visitor, userdata, metrics};
+    WangSolveResult unused = {0};
+    const int result = (int)solve_wang_core(&region, options, &unused,
+        (SolverMechanisms){
+            .stack_mode = reference ? SEARCH_STACK_FIXED : SEARCH_STACK_DYNAMIC,
+            .record_initial_trail = reference,
+            .transfer_sat_domains = !reference,
+            .use_bytewise_support = !reference,
+            .deduplicate_queue = !reference && WANG_OPTIMIZED_QUEUE_DEDUP != 0,
+            .index_mrv = !reference && WANG_OPTIMIZED_MRV_INDEX != 0,
+        }, NULL, NULL, carrier, tile_count, &enumeration, g);
+    region_destroy(&region);
+    return result;
 }

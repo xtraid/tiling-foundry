@@ -23,7 +23,7 @@ FLAGS = [
     '-sASYNCIFY=1', '-sASYNCIFY_STACK_SIZE=65536',
     '-sALLOW_MEMORY_GROWTH=1', '-sMAXIMUM_MEMORY=268435456',
     '-sSTACK_SIZE=1048576', '-sFILESYSTEM=0',
-    '-sEXPORTED_FUNCTIONS=["_foundry_enumerate","_malloc","_free"]',
+    '-sEXPORTED_FUNCTIONS=["_foundry_enumerate","_foundry_enumerate_graph","_malloc","_free"]',
     '-sEXPORTED_RUNTIME_METHODS=["ccall","HEAPU8","HEAPU32"]',
 ]
 
@@ -65,7 +65,7 @@ def main():
                  'README.md', 'LICENSE', 'package.json']
     manifest = dict(
         name=descriptor['name'], version=version, api_version=1, solvers=['optimized', 'reference'],
-        runtime='wasm', geometries=['square'],
+        runtime='wasm', geometries=['square', 'tri-up', 'tri-side', 'hex-flat', 'hex-point'],
         source=dict(repository='https://github.com/xtraid/tiling-foundry', revision=revision,
                     dirty=dirty, sha256=source_hash, files=source_files),
         build=dict(compiler=compiler, flags=FLAGS),

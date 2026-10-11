@@ -53,3 +53,17 @@ int foundry_enumerate(int32_t width, int32_t height, const uint8_t *active,
     region_destroy(&region);
     return result;
 }
+
+EMSCRIPTEN_KEEPALIVE
+int foundry_enumerate_graph(int32_t count, int32_t sides, const int32_t *neighbors,
+    const uint8_t *neighbor_sides, const uint8_t *boundary, const uint8_t *edges,
+    size_t tile_count, const uint32_t *initial, int reference)
+{
+    if (count <= 0 || sides <= 0 || !initial) return -1;
+    const WangGraph graph = {(size_t)count, (size_t)sides, neighbors, neighbor_sides, boundary, edges};
+    const WangSolverOptions options = {
+        .flags = WANG_SOLVE_COLLECT_METRICS,
+        .initial_domains = initial, .initial_domain_count = (size_t)count
+    };
+    return wang_enumerate_graph(&graph, tile_count, &options, reference != 0, visit, NULL, NULL);
+}

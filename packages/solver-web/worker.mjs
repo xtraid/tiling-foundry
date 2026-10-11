@@ -72,11 +72,13 @@ async function run(payload) {
   };
   publish('running');
   try {
-    const args = [prepared.width, prepared.height, allocate(prepared.active),
+    const args = prepared.graph ? [prepared.records.size, prepared.sides, allocate(prepared.neighbors),
+      allocate(prepared.neighborSides), allocate(prepared.boundary), allocate(prepared.edges),
+      prepared.tiles.length, allocate(prepared.domains), Number(prepared.solver === 'reference')] : [prepared.width, prepared.height, allocate(prepared.active),
       allocate(prepared.boundary), allocate(prepared.edges), prepared.tiles.length,
       allocate(prepared.domains), Number(prepared.solver === 'reference')];
-    const status = await module.ccall('foundry_enumerate', 'number',
-      Array(8).fill('number'), args, {async: true});
+    const status = await module.ccall(prepared.graph ? 'foundry_enumerate_graph' : 'foundry_enumerate', 'number',
+      Array(args.length).fill('number'), args, {async: true});
     if (status !== 0) throw Error('Il motore ha interrotto la ricerca senza esaurirla.');
     publish('complete', true);
   } finally {

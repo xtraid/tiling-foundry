@@ -1,4 +1,4 @@
-import {prepare, limits} from './prepare.mjs';
+import {prepare, limits, geometries} from './prepare.mjs';
 
 const terminal = new Set(['complete', 'cancelled', 'timeout', 'expired', 'error']);
 let manifestPromise;
@@ -9,7 +9,7 @@ export async function capabilities() {
     if (manifest.api_version !== 1) throw Error('Versione del pacchetto solver non compatibile.');
     return manifest;
   }).catch(error => { manifestPromise = null; throw error; });
-  return {solver: 'optimized', solvers: ['optimized', 'reference'], runtime: 'wasm', geometries: ['square'],
+  return {solver: 'optimized', solvers: ['optimized', 'reference'], runtime: 'wasm', geometries,
     enumeration: true, duplicate_tiles: 'collapsed', ...limits,
     engine: await manifestPromise};
 }
