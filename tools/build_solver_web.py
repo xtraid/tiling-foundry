@@ -15,13 +15,13 @@ SOURCES = [
     'src/core/tile.c', 'src/core/region.c', 'src/solver/solver_serial.c',
     'src/solver/byte_support_table.c', 'src/solver/failed_leaf_trace.c',
     'src/solver/solver_event_trace.c', 'src/verify/verify_tiling.c',
-    'packages/solver-web/bridge.c',
+    'packages/solver-web/bridge.c', 'packages/solver-web/dynamic.c',
 ]
 FLAGS = [
-    '-std=c17', '-Wall', '-Wextra', '-Werror', '-O3', '-Iinclude', '--no-entry',
+    '-std=c17', '-Wall', '-Wextra', '-Werror', '-O3', '-flto', '-Iinclude', '--no-entry',
     '-sMODULARIZE=1', '-sEXPORT_ES6=1', '-sENVIRONMENT=worker,node',
     '-sASYNCIFY=1', '-sASYNCIFY_STACK_SIZE=65536',
-    '-sALLOW_MEMORY_GROWTH=1', '-sMAXIMUM_MEMORY=268435456',
+    '-sALLOW_MEMORY_GROWTH=1', '-sABORTING_MALLOC=0', '-sMAXIMUM_MEMORY=268435456',
     '-sSTACK_SIZE=1048576', '-sFILESYSTEM=0',
     '-sEXPORTED_FUNCTIONS=["_foundry_enumerate","_foundry_enumerate_graph","_malloc","_free"]',
     '-sEXPORTED_RUNTIME_METHODS=["ccall","HEAPU8","HEAPU32"]',
@@ -65,11 +65,11 @@ def main():
                  'README.md', 'LICENSE', 'package.json']
     manifest = dict(
         name=descriptor['name'], version=version, api_version=1, solvers=['optimized', 'reference'],
-        runtime='wasm', geometries=['square', 'tri-up', 'tri-side', 'hex-flat', 'hex-point'],
+        wasm_abi_version=2, runtime='wasm', geometries=['square', 'tri-up', 'tri-side', 'hex-flat', 'hex-point'],
         source=dict(repository='https://github.com/xtraid/tiling-foundry', revision=revision,
                     dirty=dirty, sha256=source_hash, files=source_files),
         build=dict(compiler=compiler, flags=FLAGS),
-        limits=dict(max_tiles=32, max_used_colors=16, max_cells=4096, max_area=16384),
+        limits=dict(max_tiles=None, max_used_colors=16, max_cells=4096, max_area=16384),
         files={name: dict(sha256=sha256(output / name), size=(output / name).stat().st_size) for name in artifacts},
     )
     (output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')

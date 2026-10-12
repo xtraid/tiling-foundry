@@ -2,7 +2,7 @@
 
 This package is built and owned by Tiling Foundry. Independent applications
 consume the versioned artifacts without copying the native solver source.
-It runs the existing reference and optimized C search mechanisms in a dedicated Web Worker.
+It runs C search in a dedicated Web Worker; native targets remain unchanged.
 No Python service, npm runtime dependencies, shared memory, cross-origin
 isolation headers, or paid compute service is required.
 
@@ -44,14 +44,16 @@ decimal strings too. Duplicate edge tuples are counted once, subject to initial
 domains. Palette indices are symbolic identities, even when RGB values repeat.
 
 Supported geometries: `square`, `tri-up`, `tri-side`, `hex-flat`, `hex-point`.
-Square edges are `(N,E,S,W)`, with fixed orientations. Limits are 32 tiles,
+Square edges are `(N,E,S,W)`, with fixed orientations. Tile cardinality is runtime-sized (`max_tiles: null`). Resource limits remain
 16 used colors, 4096 active cells, 16384 bounding-box cells for squares, and 128 palette
 entries. `fixed` optionally pins an exact edge tuple. `required` constrains each
 side; `null` means unconstrained. Negative coordinates, holes and disconnected
 inputs are supported, but applications may impose stricter research profiles.
 
 `solver` selects `optimized` (default) or `reference`. Both execute the shared
-Foundry C core with their respective mechanism flags; Python/Z3 is not part of
+Foundry C core with their respective mechanism flags for up to 32 tiles. Larger
+tilesets use the same browser-only dynamic engine for either selection; they do
+not claim the native optimized mechanisms. Python/Z3 is not part of
 this package. The two native reference/oracle paths remain available in Foundry.
 
 The package validates input and independently checks published assignments in
@@ -62,7 +64,7 @@ Counting retains a single snapshot and a counter, not a list of solutions.
 
 Asyncify suspends the existing C callback for interactive stepping, preserving
 the DFS stack and trail. Counting yields to the Worker event loop at throttled
-progress updates. This adds no alternate search implementation. Asyncify has a
+progress updates. Asyncify has a
 runtime cost; native and browser performance must be benchmarked separately.
 
 The controlling thread enforces a deadline per active segment, including when
@@ -77,10 +79,38 @@ Triangles use IDs `i,j,half` (half 0 or 1) and three sides; hexagons use IDs
 neighbors share the same side index (including inverted cells); hexagonal
 neighbors use `(side+3)%6`. Variants rotate the lattice, without implicit tile
 rotations. The input adapter builds reciprocal cell/side arcs and calls
-`wang_enumerate_graph`, sharing the existing C propagation, MRV, trail and DFS.
+the private browser bridge. Small domains share the existing C core; larger
+domains use the private dynamic propagation, MRV, trail and iterative DFS.
 Graph regions use dense active cells, without the square bounding-box limit.
-Generalized-piece constraints are not supported.
+Generalized pieces compiled into atomic edge tuples are supported; piece metadata
+is not interpreted by the solver.
 
 Consumers should retain `manifest.json` with experiment results, pin releases,
 and update only between searches. Integrity hashes identify artifacts; a hash
 does not establish trust in an otherwise untrusted download source.
+
+## Domain ABI (version 2)
+
+The public JavaScript API stays at version 1: input edge tuples and output numeric
+array indices do not change. The matched Worker/Wasm pair uses private ABI 2,
+recorded as `wasm_abi_version` in the manifest. Do not mix package artifacts.
+`foundry_enumerate_graph` takes cell-major `uint32_t` domains with
+`ceil(tile_count / 32)` words per cell. Tile `t` is bit `t % 32` in word
+`floor(t / 32)`; unused tail bits must be zero. Callback domains have the same
+layout and are borrowed until the callback returns. Counts remain cell counts,
+not word counts. The Worker copies snapshots before resuming and refreshes heap
+views after allocations/growth. It frees input buffers in `finally`.
+The historical rectangular entry point retains its single-word contract; the
+adapter routes squares larger than 32 tiles through the general graph entry.
+No tile ID is narrowed to the native `uint8_t TileId` in the dynamic engine.
+
+`dynamic.c` is linked only by `build_solver_web.py`. Native sources, headers,
+canonical tiles, builder and Makefile are unchanged. Root restrictions and
+duplicate-tuple elimination precede arc consistency. Search records changed
+words on an undo trail, selects MRV cells, and stores decisions on a heap stack.
+Every witness is checked in C and published snapshots are checked independently
+in JavaScript. Allocation/size failures return `-1`, never exhaustive UNSAT;
+Wasm malloc returns null on exhaustion. The Worker reports an error and releases
+its inputs. Current Wasm memory budget is 256 MiB; Stop/deadline terminates the
+Worker even while search has no witness. Large-cardinality performance is not
+promised to match the specialized native optimized solver.

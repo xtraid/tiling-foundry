@@ -1,5 +1,6 @@
 /* Browser ABI only. Propagation, enumeration and verification stay in Foundry. */
 #include "wang/solver.h"
+#include "dynamic.h"
 #include <emscripten.h>
 #include <string.h>
 
@@ -61,6 +62,7 @@ int foundry_enumerate_graph(int32_t count, int32_t sides, const int32_t *neighbo
 {
     if (count <= 0 || sides <= 0 || !initial) return -1;
     const WangGraph graph = {(size_t)count, (size_t)sides, neighbors, neighbor_sides, boundary, edges};
+    if (tile_count > 32) return foundry_dynamic_graph(&graph, tile_count, initial, visit, NULL);
     const WangSolverOptions options = {
         .flags = WANG_SOLVE_COLLECT_METRICS,
         .initial_domains = initial, .initial_domain_count = (size_t)count

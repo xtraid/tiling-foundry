@@ -33,7 +33,7 @@ function brute(data) {
       return;
     }
     const cell = data.cells[index], [x,y] = cell.id.split(',').map(Number);
-    for (const tile of data.tiles) {
+    for (const tile of new Map(data.tiles.map(t=>[JSON.stringify(t),t])).values()) {
       if (cell.fixed && tile.some((v,d) => v !== cell.fixed[d])) continue;
       if (cell.required.some((v,d) => v !== null && tile[d] !== v)) continue;
       if (Object.entries(placed).some(([id,other])=>keys[cell.id].some((key,d)=>{
@@ -58,7 +58,7 @@ async function enumerate(data, pause) {
   };
   module.onSolution = domains => {
     const assigned = Object.fromEntries([...prepared.indices].map(([id,index]) =>
-      [id,31-Math.clz32(module.HEAPU32[(domains>>>2)+index])]));
+      [id,Array.from({length:prepared.words},(_,w)=>module.HEAPU32[(domains>>>2)+index*prepared.words+w]).reduce((t,b,w)=>b?w*32+31-Math.clz32(b):t,-1)]));
     checkAssignments(prepared,assigned);
     results.push(JSON.stringify(data.cells.map(c => data.tiles[assigned[c.id]])));
     return pause ? 1 : 0;
@@ -133,3 +133,66 @@ for(const geometry of ['tri-up','tri-side','hex-flat','hex-point']) {
   assert.throws(()=>checkAssignments(prepare(base),{}));
 }
 console.log('PASS: all four triangular/hexagonal variants, 400 random instances against independent polygon oracle, both C engines, pause, fixed tiles, duplicates, disconnected cells and bit 31.');
+
+for (const n of [23,31,32,33,64,65,96,97,257,1025]) {
+  for (const geometry of ['square','tri-up','tri-side','hex-flat','hex-point']) {
+    const sides=geometry.startsWith('tri')?3:geometry==='square'?4:6;
+    const data={geometry,palette:Array(16).fill('#ffffff'),
+      tiles:Array.from({length:n},(_,t)=>Array.from({length:sides},(_,d)=>Math.floor(t/16**d)%16)),
+      cells:[{id:sides===3?'0,0,0':'0,0',required:Array(sides).fill(null)}]};
+    for (const solver of ['reference','optimized']) {
+      data.solver=solver;
+      assert.deepEqual(await enumerate(data),brute(data),`${geometry} ${n} enumeration`);
+      data.cells[0].fixed=data.tiles[n-1];
+      assert.deepEqual(await enumerate(data,true),brute(data),`${n} high ID fixed`);
+      data.cells[0].required[sides-1]=15;
+      assert.deepEqual(await enumerate(data),[],`${n} UNSAT`);
+      data.cells[0].required.fill(null);delete data.cells[0].fixed;
+    }
+  }
+}
+for (let trial=0;trial<100;trial++) {
+  const data=instance(Array.from({length:65},()=>Array.from({length:4},()=>random(2))));
+  for (const cell of data.cells) cell.required=Array.from({length:4},()=>random(6)===0?random(2):null);
+  const expected=brute(data);
+  for (const solver of ['reference','optimized']) assert.deepEqual(await enumerate({...data,solver}),expected,`dynamic oracle ${trial}`);
+}
+console.log('PASS: runtime cardinalities 23/31/32/33/64/65/96/97/257/1025, all geometries, SAT/UNSAT, high IDs, pause, 100 dynamic differential cases.');
+
+// Canonical fixture emitted from TILESET in src/core/tile.c, without modifying it.
+const {readFile}=await import('node:fs/promises');
+const canonical=JSON.parse(await readFile(new URL('./web_yang_zhang.json',import.meta.url)));
+assert.equal(canonical.length,23);
+for(const solver of ['reference','optimized']) {
+  const data={...instance(canonical),solver,palette:Array(16).fill('#ffffff')};
+  assert.deepEqual(await enumerate(data),brute(data),'canonical Yang–Zhang');
+  data.cells[0].required=[15,15,15,15];
+  assert.deepEqual(await enumerate(data),[],'canonical UNSAT');
+}
+console.log('PASS: canonical Yang–Zhang 23-tile SAT/UNSAT against independent oracle.');
+
+// Explicit cycles force branching: arc consistency alone cannot reject an odd
+// cycle of opposite colors. A final uniform tile provides a SAT branch after
+// failed choices, proving undo restores words before the published witness.
+for(const n of [33,64,65,96,97,257,1025])for(const sat of [false,true]) {
+  const words=Math.ceil(n/32),cells=3,ptrs=[];
+  const alloc=a=>{const p=module._malloc(a.byteLength);assert.ok(p);ptrs.push(p);module.HEAPU8.set(new Uint8Array(a.buffer),p);return p;};
+  const neighbors=Int32Array.from([2,1,0,2,1,0]),sides=Uint8Array.from([1,0,1,0,1,0]);
+  const edges=new Uint8Array(n*2),domains=new Uint32Array(cells*words);
+  edges.set([0,1,1,0,2,2],(n-3)*2);
+  for(let c=0;c<cells;c++)for(let t=n-3;t<n-(sat?0:1);t++) domains[c*words+Math.floor(t/32)]|=1<<(t%32);
+  let count=0;
+  module.onSolution=p=>{
+    count++;
+    for(let c=0;c<cells;c++)for(let w=0;w<words;w++)assert.equal(module.HEAPU32[(p>>>2)+c*words+w],w===Math.floor((n-1)/32)?(2**((n-1)%32))>>>0:0);
+    return 0;
+  };
+  try {
+    const args=[cells,2,alloc(neighbors),alloc(sides),alloc(new Uint8Array(6).fill(255)),alloc(edges),n,alloc(domains),1];
+    assert.equal(await module.ccall('foundry_enumerate_graph','number',Array(9).fill('number'),args,{async:true}),0);
+    assert.equal(count,sat?1:0);
+  }finally{ptrs.forEach(p=>module._free(p));}
+}
+assert.equal(module._malloc(300*1024*1024),0,'Wasm resource exhaustion returns null, not abort');
+const recovered=module._malloc(16);assert.ok(recovered);module._free(recovered);
+console.log('PASS: actual Wasm arc-consistent UNSAT cycles, failed branches then SAT, undo across words and recoverable memory exhaustion.');

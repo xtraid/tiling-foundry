@@ -8,6 +8,8 @@ on:
       - 'packages/solver-web/**'
       - 'tools/build_solver_web.py'
       - 'tests/test_solver_web.mjs'
+      - 'tests/test_web_dynamic.c'
+      - 'tests/web_yang_zhang.json'
       - 'include/wang/**'
       - 'src/**'
       - '.github/workflows/solver-web.yml'
@@ -47,6 +49,10 @@ jobs:
           for package in build/solver-web/*/; do
             node tests/test_solver_web.mjs "$package"
           done
+      - name: Check browser engine memory safety and allocation failures
+        run: |
+          cc -Iinclude -std=c17 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined tests/test_web_dynamic.c -o build/test_web_dynamic
+          build/test_web_dynamic
       - name: Retain release archive briefly
         uses: actions/upload-artifact@v4
         with:

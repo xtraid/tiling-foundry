@@ -1,6 +1,6 @@
 /* Input validation and independent witness checking. No search implementation. */
 export const limits = Object.freeze({
-  max_tiles: 32, max_used_colors: 16, max_cells: 4096, max_area: 16384,
+  max_tiles: null, max_used_colors: 16, max_cells: 4096, max_area: 16384,
   max_palette: 128, default_timeout_seconds: 30,
 });
 export const geometries = ['square', 'tri-up', 'tri-side', 'hex-flat', 'hex-point'];
@@ -23,7 +23,7 @@ export function adjacent(geometry, id) {
 
 export function prepare(data) {
   if (!data || !geometries.includes(data.geometry)) throw Error('Geometria non supportata.');
-  const graph = data.geometry !== 'square';
+  const graph = data.geometry !== 'square' || data.tiles?.length > 32;
   const triangle = data.geometry.startsWith('tri');
   const sides = triangle ? 3 : data.geometry.startsWith('hex') ? 6 : 4;
   const {palette, tiles, cells} = data;
@@ -38,8 +38,8 @@ export function prepare(data) {
     }
     return value;
   }
-  if (!Array.isArray(tiles) || !tiles.length || tiles.length > limits.max_tiles) {
-    throw Error('Il solver richiede da 1 a 32 tessere.');
+  if (!Array.isArray(tiles) || !tiles.length) {
+    throw Error('Il solver richiede almeno una tessera.');
   }
   tiles.forEach(t => edges(t));
   if (!Array.isArray(cells) || !cells.length || cells.length > limits.max_cells) {
@@ -74,12 +74,13 @@ export function prepare(data) {
     y0 = Math.min(y0, y); y1 = Math.max(y1, y);
   }
   const width = x1 - x0 + 1, height = y1 - y0 + 1, area = graph ? cells.length : width * height;
-  if (area > limits.max_area) throw Error('Il rettangolo della regione supera 16384 celle.');
+  if ((data.geometry === 'square' ? width * height : area) > limits.max_area) throw Error('Il rettangolo della regione supera 16384 celle.');
   if (used.size > limits.max_used_colors) throw Error('Il solver supporta al massimo 16 colori usati.');
   // Colors are symbolic palette indices. Equal RGB values remain distinct.
   const remap = new Map([...used].sort((a, b) => a - b).map((v, i) => [v, i]));
   const active = new Uint8Array(area), boundary = new Uint8Array(area * sides).fill(255);
-  const domains = new Uint32Array(area), indices = new Map();
+  const words = Math.ceil(tiles.length / 32);
+  const domains = new Uint32Array(area * words), indices = new Map();
   const neighbors = new Int32Array(area * sides).fill(-1);
   const neighborSides = new Uint8Array(area * sides);
   for (const cell of records.values()) indices.set(cell.id, graph ? indices.size : (cell.y-y0)*width+cell.x-x0);
@@ -90,7 +91,7 @@ export function prepare(data) {
     tiles.forEach((tile, t) => {
       if ((!cell.fixed || tile.every((v, d) => v === cell.fixed[d])) &&
           cell.required.every((v, d) => v === null || tile[d] === v)) {
-        domains[index] = (domains[index] | (1 << t)) >>> 0;
+        domains[index * words + Math.floor(t / 32)] |= 1 << (t % 32);
       }
     });
     adjacent(data.geometry, cell.id).forEach(([id, side], d) => {
@@ -101,7 +102,7 @@ export function prepare(data) {
       }
     });
   }
-  return {geometry: data.geometry, graph, sides, neighbors, neighborSides, width, height, active, boundary, domains, indices, records, tiles,
+  return {geometry: data.geometry, words, graph, sides, neighbors, neighborSides, width, height, active, boundary, domains, indices, records, tiles,
     edges: new Uint8Array(tiles.flat().map(v => remap.get(v))), timeout, mode, solver};
 }
 

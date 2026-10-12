@@ -26,9 +26,15 @@ async function run(payload) {
   const snapshot = pointer => {
     const result = {};
     for (const [id, index] of prepared.indices) {
-      const mask = module.HEAPU32[(pointer >>> 2) + index];
-      if (!mask || (mask & (mask - 1)) !== 0) throw Error('Dominio non singleton nella soluzione.');
-      result[id] = 31 - Math.clz32(mask);
+      let tile = -1;
+      for (let word = 0; word < prepared.words; word++) {
+        const mask = module.HEAPU32[(pointer >>> 2) + index * prepared.words + word];
+        if (!mask) continue;
+        if (tile !== -1 || (mask & (mask - 1)) !== 0) throw Error('Dominio non singleton nella soluzione.');
+        tile = word * 32 + 31 - Math.clz32(mask);
+      }
+      if (tile < 0 || tile >= prepared.tiles.length) throw Error('Indice tessera non valido.');
+      result[id] = tile;
     }
     return checkAssignments(prepared, result);
   };
