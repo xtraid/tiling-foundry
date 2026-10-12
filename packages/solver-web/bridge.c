@@ -58,11 +58,15 @@ int foundry_enumerate(int32_t width, int32_t height, const uint8_t *active,
 EMSCRIPTEN_KEEPALIVE
 int foundry_enumerate_graph(int32_t count, int32_t sides, const int32_t *neighbors,
     const uint8_t *neighbor_sides, const uint8_t *boundary, const uint8_t *edges,
-    size_t tile_count, const uint32_t *initial, int reference)
+    size_t tile_count, const uint32_t *initial, int reference, int wide_colors)
 {
     if (count <= 0 || sides <= 0 || !initial) return -1;
     const WangGraph graph = {(size_t)count, (size_t)sides, neighbors, neighbor_sides, boundary, edges};
-    if (tile_count > 32) return foundry_dynamic_graph(&graph, tile_count, initial, visit, NULL);
+    if (tile_count > 32 || count > 4096 || wide_colors) {
+        const FoundryWebGraph web = {(size_t)count, (size_t)sides, neighbors,
+            neighbor_sides, boundary, edges, wide_colors != 0};
+        return foundry_dynamic_graph(&web, tile_count, initial, visit, NULL);
+    }
     const WangSolverOptions options = {
         .flags = WANG_SOLVE_COLLECT_METRICS,
         .initial_domains = initial, .initial_domain_count = (size_t)count

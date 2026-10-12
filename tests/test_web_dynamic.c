@@ -44,7 +44,7 @@ static void ring(size_t tiles, size_t cells)
         for (size_t t = tiles - 2; t < tiles; t++)
             initial[c * words + t / 32] |= UINT32_C(1) << (t % 32);
     }
-    WangGraph g = {cells, 2, neighbors, sides, boundary, edges};
+    FoundryWebGraph g = {cells, 2, neighbors, sides, boundary, edges, false};
     calls = solutions = 0;
     fail_at = SIZE_MAX;
     assert(foundry_dynamic_graph(&g, tiles, initial, visit, NULL) == 0);
@@ -66,6 +66,38 @@ static void ring(size_t tiles, size_t cells)
     free(sides);
     free(boundary);
 }
+static void wide_colors(void)
+{
+    const int32_t neighbors[] = {1, 0};
+    const uint8_t sides[] = {0, 0};
+    uint32_t edges[] = {255, 65535};
+    uint32_t boundary[] = {UINT32_MAX, UINT32_MAX};
+    const uint32_t initial[] = {3, 3};
+    FoundryWebGraph g = {2, 1, neighbors, sides, boundary, edges, true};
+    solutions = calls = 0;
+    assert(foundry_dynamic_graph(&g, 2, initial, visit, NULL) == 0);
+    assert(solutions == 2);
+    const size_t allocations = calls;
+    for (size_t fail = 0; fail < allocations; ++fail) {
+        calls = 0;
+        fail_at = fail;
+        assert(foundry_dynamic_graph(&g, 2, initial, visit, NULL) == -1);
+    }
+    fail_at = SIZE_MAX;
+    boundary[0] = 255;
+    solutions = 0;
+    assert(foundry_dynamic_graph(&g, 2, initial, visit, NULL) == 0);
+    assert(solutions == 1); /* 255 is a color, not the wide sentinel. */
+    boundary[1] = 65535;
+    solutions = 0;
+    assert(foundry_dynamic_graph(&g, 2, initial, visit, NULL) == 0);
+    assert(solutions == 0);
+    boundary[1] = 65536;
+    assert(foundry_dynamic_graph(&g, 2, initial, visit, NULL) == -1);
+    boundary[1] = UINT32_MAX;
+    edges[1] = 65536;
+    assert(foundry_dynamic_graph(&g, 2, initial, visit, NULL) == -1);
+}
 int main(void)
 {
     const size_t counts[] = {23, 31, 32, 33, 64, 65, 96, 97, 257, 1025};
@@ -74,6 +106,7 @@ int main(void)
         ring(counts[i], 4);
     }
     ring(65, 1024); /* Grow the undo trail repeatedly; fail each realloc. */
+    wide_colors();
     puts("PASS dynamic: arc-consistent odd-cycle UNSAT, even-cycle SAT, rollback, high IDs, "
          "invalid tail bits, every allocation fault.");
 }

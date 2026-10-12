@@ -1,7 +1,8 @@
 /* Input validation and independent witness checking. No search implementation. */
 export const limits = Object.freeze({
-  max_tiles: null, max_used_colors: 16, max_cells: 4096, max_area: 16384,
-  max_palette: 128, default_timeout_seconds: 30,
+  max_tiles: null, max_used_colors: 65536, max_cells: 65536, max_area: null,
+  max_palette: 65536, default_timeout_seconds: 600, max_timeout_seconds: 2147483,
+  default_idle_timeout_seconds: 0, max_memory_bytes: 2147483648,
 });
 export const geometries = ['square', 'tri-up', 'tri-side', 'hex-flat', 'hex-point'];
 const offsets = [[0, -1], [1, 0], [0, 1], [-1, 0]];
@@ -23,7 +24,7 @@ export function adjacent(geometry, id) {
 
 export function prepare(data) {
   if (!data || !geometries.includes(data.geometry)) throw Error('Geometria non supportata.');
-  const graph = data.geometry !== 'square' || data.tiles?.length > 32;
+  let graph = data.geometry !== 'square' || data.tiles?.length > 32;
   const triangle = data.geometry.startsWith('tri');
   const sides = triangle ? 3 : data.geometry.startsWith('hex') ? 6 : 4;
   const {palette, tiles, cells} = data;
@@ -43,11 +44,12 @@ export function prepare(data) {
   }
   tiles.forEach(t => edges(t));
   if (!Array.isArray(cells) || !cells.length || cells.length > limits.max_cells) {
-    throw Error('La regione deve contenere da 1 a 4096 celle.');
+    throw Error('La regione deve contenere da 1 a 65536 celle.');
   }
   const timeout = data.timeout_seconds ?? limits.default_timeout_seconds;
-  if (typeof timeout !== 'number' || !Number.isFinite(timeout) || timeout < 1 || timeout > 120) {
-    throw Error('Tempo limite non valido (1–120 secondi).');
+  const idleTimeout = data.idle_timeout_seconds ?? limits.default_idle_timeout_seconds;
+  if ([timeout, idleTimeout].some(t => typeof t !== 'number' || !Number.isFinite(t) || t < 0 || t > limits.max_timeout_seconds)) {
+    throw Error('Tempo limite non valido (0 = senza scadenza; massimo 2147483 secondi).');
   }
   const mode = data.enumeration_mode ?? 'step';
   if (!['step', 'count'].includes(mode)) throw Error('Modalità di enumerazione non valida.');
@@ -73,12 +75,15 @@ export function prepare(data) {
     x0 = Math.min(x0, x); x1 = Math.max(x1, x);
     y0 = Math.min(y0, y); y1 = Math.max(y1, y);
   }
-  const width = x1 - x0 + 1, height = y1 - y0 + 1, area = graph ? cells.length : width * height;
-  if ((data.geometry === 'square' ? width * height : area) > limits.max_area) throw Error('Il rettangolo della regione supera 16384 celle.');
-  if (used.size > limits.max_used_colors) throw Error('Il solver supporta al massimo 16 colori usati.');
+  const width = x1 - x0 + 1, height = y1 - y0 + 1;
+  const wide = used.size > 16;
+  graph ||= wide || cells.length > 4096 || width * height > 16384;
+  const area = graph ? cells.length : width * height;
+  if (used.size > limits.max_used_colors) throw Error('Il solver supporta al massimo 65536 colori usati.');
   // Colors are symbolic palette indices. Equal RGB values remain distinct.
   const remap = new Map([...used].sort((a, b) => a - b).map((v, i) => [v, i]));
-  const active = new Uint8Array(area), boundary = new Uint8Array(area * sides).fill(255);
+  const ColorArray = wide ? Uint32Array : Uint8Array;
+  const active = new Uint8Array(area), boundary = new ColorArray(area * sides).fill(wide ? 0xffffffff : 255);
   const words = Math.ceil(tiles.length / 32);
   const domains = new Uint32Array(area * words), indices = new Map();
   const neighbors = new Int32Array(area * sides).fill(-1);
@@ -102,8 +107,8 @@ export function prepare(data) {
       }
     });
   }
-  return {geometry: data.geometry, words, graph, sides, neighbors, neighborSides, width, height, active, boundary, domains, indices, records, tiles,
-    edges: new Uint8Array(tiles.flat().map(v => remap.get(v))), timeout, mode, solver};
+  return {geometry: data.geometry, words, wide, graph, sides, neighbors, neighborSides, width, height, active, boundary, domains, indices, records, tiles,
+    edges: new ColorArray(tiles.flat().map(v => remap.get(v))), timeout, idleTimeout, mode, solver};
 }
 
 export function checkAssignments(prepared, assignments) {

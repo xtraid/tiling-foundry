@@ -17,7 +17,9 @@ python tools/build_solver_web.py
 The archive and its SHA-256 are written to `build/solver-web/`. Development
 versions include a digest of the actual source inputs; the manifest also records
 the Git revision and whether the checkout was dirty. `--release` requires a
-clean checkout and uses the version in `packages/solver-web/package.json`.
+clean checkout and Emscripten 4.0.23, and uses the version in
+`packages/solver-web/package.json`. Archive timestamps, ownership and permissions
+are normalized; rebuilding the same revision with that SDK yields identical bytes.
 
 ## Consume
 
@@ -45,14 +47,16 @@ domains. Palette indices are symbolic identities, even when RGB values repeat.
 
 Supported geometries: `square`, `tri-up`, `tri-side`, `hex-flat`, `hex-point`.
 Square edges are `(N,E,S,W)`, with fixed orientations. Tile cardinality is runtime-sized (`max_tiles: null`). Resource limits remain
-16 used colors, 4096 active cells, 16384 bounding-box cells for squares, and 128 palette
-entries. `fixed` optionally pins an exact edge tuple. `required` constrains each
+65536 used colors, 65536 active cells and 65536 palette entries. Sparse square
+regions use active-cell graphs when their bounding box exceeds the native adapter
+budget, so no bounding-box size limit applies. `fixed` optionally pins an exact edge tuple. `required` constrains each
 side; `null` means unconstrained. Negative coordinates, holes and disconnected
 inputs are supported, but applications may impose stricter research profiles.
 
-`solver` selects `optimized` (default) or `reference`. Both execute the shared
-Foundry C core with their respective mechanism flags for up to 32 tiles. Larger
-tilesets use the same browser-only dynamic engine for either selection; they do
+`solver` selects `optimized` (default) or `reference`. Within the native limits
+(up to 32 tiles, 16 used colors and 4096 cells), both execute the shared
+Foundry C core with their respective mechanism flags. Inputs exceeding those
+limits use the same browser-only dynamic engine for either selection; they do
 not claim the native optimized mechanisms. Python/Z3 is not part of
 this package. The two native reference/oracle paths remain available in Foundry.
 
@@ -69,7 +73,9 @@ runtime cost; native and browser performance must be benchmarked separately.
 
 The controlling thread enforces a deadline per active segment, including when
 the native search has found no solution. Progress never resets that deadline.
-Pause switches to a ten-minute idle expiry; Next/Count starts a new segment.
+The default active deadline is 600 seconds. `timeout_seconds: 0` disables it.
+Pause uses `idle_timeout_seconds` (default 0, no expiry); Next/Count starts a new
+active segment. Both timers accept up to 2147483 seconds.
 Stop/timeout terminates the Worker and retains the last published lower bound.
 Browser timer throttling can delay enforcement in background tabs. A closed
 page ends its computations; there is no server-side persistence.
@@ -89,10 +95,10 @@ Consumers should retain `manifest.json` with experiment results, pin releases,
 and update only between searches. Integrity hashes identify artifacts; a hash
 does not establish trust in an otherwise untrusted download source.
 
-## Domain ABI (version 2)
+## Domain and color ABI (version 3)
 
 The public JavaScript API stays at version 1: input edge tuples and output numeric
-array indices do not change. The matched Worker/Wasm pair uses private ABI 2,
+array indices do not change. The matched Worker/Wasm pair uses private ABI 3,
 recorded as `wasm_abi_version` in the manifest. Do not mix package artifacts.
 `foundry_enumerate_graph` takes cell-major `uint32_t` domains with
 `ceil(tile_count / 32)` words per cell. Tile `t` is bit `t % 32` in word
@@ -102,6 +108,10 @@ not word counts. The Worker copies snapshots before resuming and refreshes heap
 views after allocations/growth. It frees input buffers in `finally`.
 The historical rectangular entry point retains its single-word contract; the
 adapter routes squares larger than 32 tiles through the general graph entry.
+The graph entry adds a `wide_colors` argument. When true, edge and boundary
+arrays contain `uint32_t` color IDs, with `UINT32_MAX` as the unconstrained
+boundary sentinel. Otherwise byte arrays retain their previous representation.
+Color support uses runtime-sized stamp arrays, not a fixed-width color mask.
 No tile ID is narrowed to the native `uint8_t TileId` in the dynamic engine.
 
 `dynamic.c` is linked only by `build_solver_web.py`. Native sources, headers,
@@ -111,6 +121,6 @@ words on an undo trail, selects MRV cells, and stores decisions on a heap stack.
 Every witness is checked in C and published snapshots are checked independently
 in JavaScript. Allocation/size failures return `-1`, never exhaustive UNSAT;
 Wasm malloc returns null on exhaustion. The Worker reports an error and releases
-its inputs. Current Wasm memory budget is 256 MiB; Stop/deadline terminates the
+its inputs. Current Wasm linear-memory ceiling is 2 GiB (allocation can fail earlier); Stop/deadline terminates the
 Worker even while search has no witness. Large-cardinality performance is not
 promised to match the specialized native optimized solver.

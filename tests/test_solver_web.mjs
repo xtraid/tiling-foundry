@@ -67,7 +67,7 @@ async function enumerate(data, pause) {
   try {
     const args = prepared.graph ? [prepared.records.size,prepared.sides,allocate(prepared.neighbors),
       allocate(prepared.neighborSides),allocate(prepared.boundary),allocate(prepared.edges),
-      prepared.tiles.length,allocate(prepared.domains),Number(prepared.solver==='reference')] : [prepared.width,prepared.height,allocate(prepared.active),
+      prepared.tiles.length,allocate(prepared.domains),Number(prepared.solver==='reference'),Number(prepared.wide)] : [prepared.width,prepared.height,allocate(prepared.active),
       allocate(prepared.boundary),allocate(prepared.edges),prepared.tiles.length,
       allocate(prepared.domains),Number(prepared.solver==='reference')];
     assert.equal(await module.ccall(prepared.graph?'foundry_enumerate_graph':'foundry_enumerate','number',Array(args.length).fill('number'),args,{async:true}),0);
@@ -193,6 +193,39 @@ for(const n of [33,64,65,96,97,257,1025])for(const sat of [false,true]) {
     assert.equal(count,sat?1:0);
   }finally{ptrs.forEach(p=>module._free(p));}
 }
-assert.equal(module._malloc(300*1024*1024),0,'Wasm resource exhaustion returns null, not abort');
+assert.equal(module._malloc(0xffffffff),0,'Wasm resource exhaustion returns null, not abort');
 const recovered=module._malloc(16);assert.ok(recovered);module._free(recovered);
 console.log('PASS: actual Wasm arc-consistent UNSAT cycles, failed branches then SAT, undo across words and recoverable memory exhaustion.');
+
+// Cross the former color-mask and byte-sentinel boundaries on adjacent cells.
+for (const colors of [17, 33, 256, 257, 1025]) {
+  for (const geometry of ['square', 'tri-up', 'tri-side', 'hex-flat', 'hex-point']) {
+    const sides = geometry.startsWith('tri') ? 3 : geometry === 'square' ? 4 : 6;
+    const data = {geometry, palette: Array(colors).fill('#ffffff'),
+      tiles: Array.from({length: colors}, (_,t) => Array(sides).fill(t)),
+      cells: (sides === 3 ? ['0,0,0','0,0,1'] : ['0,0','1,0']).map(id =>
+        ({id, required: Array(sides).fill(null)}))};
+    for (const solver of ['reference', 'optimized']) {
+      data.solver = solver;
+      data.cells[0].fixed = data.tiles[colors-1];
+      assert.deepEqual(await enumerate(data,true), brute(data), `${geometry} ${colors} colors`);
+      data.cells[1].required[0] = 0;
+      assert.deepEqual(await enumerate(data), [], 'Wide color conflict');
+      data.cells[1].required.fill(null);
+    }
+  }
+}
+const sparse = instance([[0,0,0,0]],1,1);
+sparse.cells.push({id:'1000000,-1000000',required:[null,null,null,null]});
+assert.deepEqual(await enumerate(sparse),brute(sparse),'Sparse square bypasses rectangular budget');
+const largePalette = {...instance([[65535,65535,65535,65535]],1,1),palette:Array(65536).fill('#ffffff')};
+assert.deepEqual(await enumerate(largePalette),brute(largePalette),'Last supported palette index');
+assert.throws(()=>prepare({...largePalette,palette:Array(65537).fill('#ffffff')}),/Palette/);
+assert.throws(()=>prepare({...sparse,timeout_seconds:2147484}),/Tempo/);
+assert.throws(()=>prepare({...sparse,idle_timeout_seconds:-1}),/Tempo/);
+assert.equal(prepare({...sparse,timeout_seconds:0}).timeout,0);
+console.log('PASS: wide symbolic colors, 255 sentinel separation, adjacent SAT/UNSAT, all geometries, sparse regions and operational limits.');
+const largeRegion = instance([[0,0,0,0]],4097,1);
+assert.equal(prepare(largeRegion).graph,true);
+assert.equal((await enumerate(largeRegion)).length,1,'More than 4096 active cells');
+assert.throws(()=>prepare({...largeRegion,cells:Array(65537).fill(largeRegion.cells[0])}),/65536/);

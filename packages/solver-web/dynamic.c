@@ -10,13 +10,24 @@ typedef struct {
     size_t cell, next, mark;
 } Frame;
 typedef struct {
-    const WangGraph *g;
-    size_t tiles, words, used, capacity;
+    const FoundryWebGraph *g;
+    size_t tiles, words, used, capacity, color_count;
+    uint32_t *color_stamps, epoch;
     uint32_t *domains;
     Change *trail;
     WangSolverMetrics metrics;
 } Search;
 
+static uint32_t edge(const FoundryWebGraph *g, size_t i)
+{
+    return g->wide_colors ? ((const uint32_t *)g->edges)[i] : ((const uint8_t *)g->edges)[i];
+}
+static uint32_t boundary(const FoundryWebGraph *g, size_t i)
+{
+    uint32_t value =
+        g->wide_colors ? ((const uint32_t *)g->boundary)[i] : ((const uint8_t *)g->boundary)[i];
+    return !g->wide_colors && value == COLOR_NONE ? UINT32_MAX : value;
+}
 static void *array(size_t n, size_t size)
 {
     return n && n <= SIZE_MAX / size ? calloc(n, size) : NULL;
@@ -55,7 +66,7 @@ static void undo(Search *s, size_t mark)
  * neighbor side. Revisit all arcs until no word changes. */
 static int propagate(Search *s)
 {
-    const WangGraph *g = s->g;
+    const FoundryWebGraph *g = s->g;
     size_t before;
     do {
         before = s->used;
@@ -65,17 +76,21 @@ static int propagate(Search *s)
                 int32_t n = g->neighbors[a];
                 if (n < 0)
                     continue;
-                uint32_t colors = 0;
+                if (++s->epoch == 0) {
+                    memset(s->color_stamps, 0, s->color_count * sizeof(uint32_t));
+                    s->epoch = 1;
+                }
                 for (size_t t = 0; t < s->tiles; ++t)
                     if (has(s, (size_t)n, t))
-                        colors |= UINT32_C(1) << g->edges[t * g->side_count + g->neighbor_sides[a]];
+                        s->color_stamps[edge(g, t * g->side_count + g->neighbor_sides[a])] =
+                            s->epoch;
                 for (size_t w = 0; w < s->words; ++w) {
                     size_t i = c * s->words + w;
                     uint32_t bits = s->domains[i], kept = bits;
                     while (bits) {
                         unsigned b = (unsigned)__builtin_ctz(bits);
                         size_t t = w * 32 + b;
-                        if (!(colors & (UINT32_C(1) << g->edges[t * g->side_count + d])))
+                        if (s->color_stamps[edge(g, t * g->side_count + d)] != s->epoch)
                             kept &= ~(UINT32_C(1) << b);
                         bits &= bits - 1;
                     }
@@ -121,40 +136,48 @@ static size_t singleton(const Search *s, size_t c)
 }
 static bool verify(const Search *s, const uint32_t *initial)
 {
-    const WangGraph *g = s->g;
+    const FoundryWebGraph *g = s->g;
     for (size_t c = 0; c < g->cell_count; ++c) {
         size_t t = singleton(s, c);
         if (t >= s->tiles || !(initial[c * s->words + t / 32] & (UINT32_C(1) << (t % 32))))
             return false;
         for (size_t d = 0; d < g->side_count; ++d) {
             size_t a = c * g->side_count + d;
-            uint8_t color = g->edges[t * g->side_count + d];
-            if (g->boundary[a] != COLOR_NONE && g->boundary[a] != color)
+            uint32_t color = edge(g, t * g->side_count + d);
+            if (boundary(g, a) != UINT32_MAX && boundary(g, a) != color)
                 return false;
             if (g->neighbors[a] >= 0) {
                 size_t u = singleton(s, (size_t)g->neighbors[a]);
-                if (u >= s->tiles || color != g->edges[u * g->side_count + g->neighbor_sides[a]])
+                if (u >= s->tiles || color != edge(g, u * g->side_count + g->neighbor_sides[a]))
                     return false;
             }
         }
     }
     return true;
 }
-int foundry_dynamic_graph(const WangGraph *g, size_t tiles, const uint32_t *initial,
+int foundry_dynamic_graph(const FoundryWebGraph *g, size_t tiles, const uint32_t *initial,
                           WangSolutionVisitor visit, void *userdata)
 {
     if (!g || !initial || !visit || !tiles || tiles > SIZE_MAX - 31 || !g->cell_count ||
-        g->cell_count > 4096 || !g->side_count || g->side_count > 6 || !g->neighbors ||
-        !g->neighbor_sides || !g->boundary || !g->edges || tiles > SIZE_MAX / g->side_count)
+        g->cell_count > FOUNDRY_WEB_MAX_CELLS || !g->side_count || g->side_count > 6 ||
+        !g->neighbors || !g->neighbor_sides || !g->boundary || !g->edges ||
+        tiles > SIZE_MAX / g->side_count)
         return -1;
-    for (size_t i = 0; i < tiles * g->side_count; ++i)
-        if (g->edges[i] >= COLOR_COUNT)
+    if (tiles * g->side_count > SIZE_MAX / (g->wide_colors ? sizeof(uint32_t) : 1))
+        return -1;
+    size_t color_count = 1;
+    for (size_t i = 0; i < tiles * g->side_count; ++i) {
+        uint32_t color = edge(g, i);
+        if (color >= FOUNDRY_WEB_MAX_COLORS)
             return -1;
+        if ((size_t)color + 1 > color_count)
+            color_count = (size_t)color + 1;
+    }
     for (size_t c = 0; c < g->cell_count; ++c)
         for (size_t d = 0; d < g->side_count; ++d) {
             size_t a = c * g->side_count + d;
             int32_t n = g->neighbors[a];
-            if (g->boundary[a] != COLOR_NONE && g->boundary[a] >= COLOR_COUNT)
+            if (boundary(g, a) != UINT32_MAX && boundary(g, a) >= FOUNDRY_WEB_MAX_COLORS)
                 return -1;
             if (n == -1)
                 continue;
@@ -165,14 +188,15 @@ int foundry_dynamic_graph(const WangGraph *g, size_t tiles, const uint32_t *init
             if (g->neighbors[back] != (int32_t)c || g->neighbor_sides[back] != d)
                 return -1;
         }
-    Search s = {.g = g, .tiles = tiles, .words = (tiles + 31) / 32};
+    Search s = {.g = g, .tiles = tiles, .words = (tiles + 31) / 32, .color_count = color_count};
     if (s.words > SIZE_MAX / g->cell_count)
         return -1;
     size_t length = s.words * g->cell_count;
     s.domains = array(length, sizeof(uint32_t));
+    s.color_stamps = array(color_count, sizeof(uint32_t));
     Frame *stack = array(g->cell_count, sizeof(Frame));
     int result = -1;
-    if (!s.domains || !stack)
+    if (!s.domains || !stack || !s.color_stamps)
         goto done;
     memcpy(s.domains, initial, length * sizeof(uint32_t));
     for (size_t c = 0; c < g->cell_count; ++c) {
@@ -182,14 +206,17 @@ int foundry_dynamic_graph(const WangGraph *g, size_t tiles, const uint32_t *init
             if (has(&s, c, t)) {
                 bool keep = true;
                 for (size_t d = 0; d < g->side_count; ++d) {
-                    uint8_t color = g->boundary[c * g->side_count + d];
-                    if (color != COLOR_NONE && color != g->edges[t * g->side_count + d])
+                    uint32_t color = boundary(g, c * g->side_count + d);
+                    if (color != UINT32_MAX && color != edge(g, t * g->side_count + d))
                         keep = false;
                 }
                 /* Collapse only allowed duplicate tuples, retaining the first ID. */
                 for (size_t u = 0; keep && u < t; ++u)
-                    if (has(&s, c, u) && !memcmp(g->edges + u * g->side_count,
-                                                 g->edges + t * g->side_count, g->side_count))
+                    if (has(&s, c, u) && !memcmp((const uint8_t *)g->edges +
+                                                     u * g->side_count * (g->wide_colors ? 4 : 1),
+                                                 (const uint8_t *)g->edges +
+                                                     t * g->side_count * (g->wide_colors ? 4 : 1),
+                                                 g->side_count * (g->wide_colors ? 4 : 1)))
                         keep = false;
                 if (!keep)
                     s.domains[c * s.words + t / 32] &= ~(UINT32_C(1) << (t % 32));
@@ -246,5 +273,6 @@ done:
     free(stack);
     free(s.domains);
     free(s.trail);
+    free(s.color_stamps);
     return result;
 }
