@@ -20,6 +20,14 @@ description: From a CM1-in-3 formula to a region over 23 Wang tiles, checked sol
     checkers validate SAT witnesses, and a PDF dossier records the run.
   </p>
 
+  <aside class="studio-entry" aria-label="Online research editor">
+    <h2>Try Wang Studio</h2>
+    <p>Build your own regions and tilesets in the independent research editor.
+      Both C solvers run in your browser. Square solving is available now;
+      no download or installation is required.</p>
+    <a class="studio-entry__link" href="https://xtraid.github.io/wang-studio/">Open the editor in your browser →</a>
+  </aside>
+
   <div class="story-actions">
     <a class="text-link" href="{{ '/run-dossiers/' | relative_url }}">Run the demo</a>
     <a class="text-link" href="{{ '/presentazione/' | relative_url }}">Follow the technical tour</a>

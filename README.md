@@ -19,6 +19,12 @@ it, and checking that the different views of the instance agree.
 [Evidence](https://xtraid.github.io/tiling-foundry/evidence/) ·
 [Run dossiers](https://xtraid.github.io/tiling-foundry/run-dossiers/)
 
+**[Open Wang Studio in your browser →](https://xtraid.github.io/wang-studio/)**
+
+Build your own regions and tilesets in the independent research editor.
+Both C solvers run in your browser; no download or installation is required.
+Square solving is available now.
+
 ## Why this repository exists
 
 Yang and Zhang proved in 2024 that tiling finite simply connected regions is
@@ -191,6 +197,15 @@ The [pipeline story](https://xtraid.github.io/tiling-foundry/pipeline/) explains
 the data flow and component boundaries. The
 [worked example](https://xtraid.github.io/tiling-foundry/worked-example/)
 follows a SAT instance from its source formula to the checked tiling.
+
+## Interactive research companion
+
+[Wang Studio](https://xtraid.github.io/wang-studio/) is an independent editor
+for subsequent tiling research, with its own repository and website. It consumes
+the [versioned browser solver package](packages/solver-web/README.md) built here
+from the reference and optimized C engines. See the
+[integration notes](docs/plans/wang_studio.md). Studio is distinct from the
+artifact renderer and requires no Python solver at runtime.
 
 ## Small standalone harness
 

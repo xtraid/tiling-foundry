@@ -148,6 +148,30 @@ class GeneratedPagesTests(unittest.TestCase):
         self.assertEqual(result.errors, ())
         self.assertEqual(result.page_count, 41)
 
+    def test_sibling_project_links_and_internal_link_validation(self) -> None:
+        cases = (
+            (f"{SITE_URL}/wang-studio/", None),
+            ("//xtraid.github.io/wang-studio/", None),
+            ("/wang-studio/", "internal URL escapes baseurl"),
+            (f"{SITE_URL}{BASEURL}/missing/", "unresolved href target"),
+        )
+        for target, expected_error in cases:
+            with self.subTest(target=target), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                _valid_site(root)
+                home = root / "index.html"
+                home.write_text(
+                    home.read_text(encoding="utf-8").replace(
+                        "</main>", f'<a href="{target}">Project</a></main>'
+                    ),
+                    encoding="utf-8",
+                )
+                result = check_site(root, site_url=SITE_URL, baseurl=BASEURL)
+                if expected_error is None:
+                    self.assertEqual(result.errors, ())
+                else:
+                    self.assertIn(expected_error, "\n".join(result.errors))
+
     def test_rejects_the_known_home_regression_and_broken_links(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

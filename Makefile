@@ -126,6 +126,10 @@ serial: $(SERIAL_LIBRARY)
 
 shared: $(SHARED_LIBRARY)
 
+.PHONY: solver-web
+solver-web:
+	$(PYTHON) tools/build_solver_web.py
+
 openmp: $(OPENMP_LIBRARY)
 
 $(SERIAL_LIBRARY): $(SERIAL_OBJECTS) | $(LIB_DIR)

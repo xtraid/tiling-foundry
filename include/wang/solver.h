@@ -130,6 +130,65 @@ WangSolveStatus wang_solve_optimized(
     WangSolveResult *out_result
 );
 
+/* Runtime square-grid tilesets use the same optimized search mechanisms.
+ * Initial integration limit: 1..32 tiles, colors 0..COLOR_COUNT-1.
+ * Tile position is its ID; generalized metadata is ignored. No rotations.
+ * Domain bit i refers to tileset[i], including bit 31 for a 32-tile set.
+ * Supports initial_domains and COLLECT_METRICS; canonical trace formats are
+ * intentionally not accepted for non-canonical tilesets. Borrowed inputs.
+ */
+#define WANG_RUNTIME_MAX_TILES 32u
+WangSolveStatus wang_solve_optimized_tileset(
+    const Region *region,
+    const WangTile *tileset,
+    size_t tileset_count,
+    const WangSolverOptions *options,
+    WangSolveResult *out_result
+);
+
+/* Enumerate distinct edge-color configurations using the optimized DFS.
+ * The visitor receives borrowed singleton domains and returns true to continue
+ * or false to stop. It may block to pause without losing the search stack.
+ * Duplicate edge tuples are collapsed per cell, respecting initial domains.
+ * Return: -1 error, 0 exhaustive completion, 1 visitor-requested stop.
+ * The caller owns any counter (so counting is not limited to uint64_t).
+ * No rotations. Inputs must remain immutable until this call returns.
+ */
+typedef bool (*WangSolutionVisitor)(
+    const uint32_t *domains, size_t cell_count,
+    const WangSolverMetrics *metrics, void *userdata
+);
+int wang_enumerate_optimized_tileset(
+    const Region *region, const WangTile *tileset, size_t tileset_count,
+    const WangSolverOptions *options, WangSolutionVisitor visitor,
+    void *userdata, WangSolverMetrics *metrics
+);
+
+/* Same runtime enumeration contract using the reference mechanisms. */
+int wang_enumerate_serial_tileset(
+    const Region *region, const WangTile *tileset, size_t tileset_count,
+    const WangSolverOptions *options, WangSolutionVisitor visitor,
+    void *userdata, WangSolverMetrics *metrics
+);
+
+/* Explicit reciprocal cell/side adjacency. -1 is an exterior side; otherwise
+ * neighbors[i * side_count + d] is the neighboring cell, and neighbor_sides
+ * gives its incident side. Dense edges are tile-major; boundary uses COLOR_NONE.
+ * Borrowed inputs, 1..6 sides, 1..4096 cells, 1..32 tiles. No rotations.
+ * Shares propagation, MRV, trail and DFS with square enumeration. */
+#define WANG_GRAPH_MAX_SIDES 6u
+typedef struct {
+    size_t cell_count;
+    size_t side_count;
+    const int32_t *neighbors;
+    const uint8_t *neighbor_sides;
+    const uint8_t *boundary;
+    const uint8_t *edges;
+} WangGraph;
+int wang_enumerate_graph(const WangGraph *graph, size_t tile_count,
+    const WangSolverOptions *options, bool reference, WangSolutionVisitor visitor,
+    void *userdata, WangSolverMetrics *metrics);
+
 /* Release the owned snapshot and reset every field. Accepts NULL. */
 void wang_solve_result_destroy(WangSolveResult *result);
 
