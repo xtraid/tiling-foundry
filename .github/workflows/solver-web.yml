@@ -54,7 +54,7 @@ jobs:
           cc -Iinclude -std=c17 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined tests/test_web_dynamic.c -o build/test_web_dynamic
           build/test_web_dynamic
       - name: Retain release archive briefly
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: solver-web
           path: |
