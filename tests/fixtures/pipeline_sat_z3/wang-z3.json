@@ -5,7 +5,7 @@
   "source_formula_sha256": "3caaa6b29ac988fb4f51cc7071202d83ea1591ba6170e683b6da449cb3641542",
   "region_sha256": "aad4dc7dcb46ed070995bf975248a7f2f0bf27d69db3eb653208d08c5826199a",
   "z3": {
-    "version": "5.1.0",
+    "version": "5.4.1",
     "parameters": {
       "random_seed": 0,
       "threads": 1
